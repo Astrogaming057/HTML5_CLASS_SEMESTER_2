@@ -1,0 +1,34 @@
+/*
+Name: Izaiah Niemuth
+Assignment: 3.1
+Date: February 24, 2026
+*/
+
+.container {
+    display: flex;
+    gap: 3%;
+    margin-top: 2%;
+}
+
+nav {
+    flex: 0 0 18%;
+    padding: 1.5%;
+    background-color: #f9f9f9;
+    border-right: 2px solid #ddd;
+}
+
+
+header{
+    margin-bottom: 2%;
+    border-bottom: 2px solid #333;
+    padding-bottom: 1.5%;
+}
+
+#footer {
+    clear: both;
+    margin-top: 3%;
+    text-align: center;
+    padding: 2%;
+    border-top: 2px solid #333;
+    color: #666;
+}
