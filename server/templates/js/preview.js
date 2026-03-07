@@ -63,6 +63,9 @@ require(['vs/editor/editor.main'], function() {
   // Setup drag and drop
   setupDragAndDrop();
   
+  // Setup terminal
+  setupTerminal();
+  
   // Setup WebSocket connection for sync
   setupWebSocket();
   
@@ -681,6 +684,8 @@ require(['vs/editor/editor.main'], function() {
     const wsUrl = protocol + '//' + window.location.host;
     ws = new WebSocket(wsUrl);
     
+    const serverOutput = document.getElementById('terminalServerOutput');
+    
     ws.onopen = () => {
       console.log('Preview WebSocket connected');
     };
@@ -698,6 +703,18 @@ require(['vs/editor/editor.main'], function() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Handle server logs
+        if (data.type === 'serverLog' && serverOutput) {
+          const line = document.createElement('div');
+          line.className = `terminal-line ${data.level || 'log'}`;
+          const metaStr = data.meta && Object.keys(data.meta).length > 0 
+            ? ' ' + JSON.stringify(data.meta) 
+            : '';
+          line.textContent = `[${new Date(data.timestamp).toLocaleTimeString()}] ${data.message}${metaStr}`;
+          serverOutput.appendChild(line);
+          serverOutput.scrollTop = serverOutput.scrollHeight;
+        }
         
         // Handle file system events
         if (data.type === 'fileAdded' || data.type === 'fileDeleted' || 
@@ -747,6 +764,219 @@ require(['vs/editor/editor.main'], function() {
       ws.close();
     }
   });
+  
+  function setupTerminal() {
+    const tabs = document.querySelectorAll('.terminal-tab');
+    const tabContents = document.querySelectorAll('.terminal-tab-content');
+    const clientInput = document.getElementById('terminalClientInput');
+    const powershellInput = document.getElementById('terminalPowerShellInput');
+    const clientOutput = document.getElementById('terminalClientOutput');
+    const serverOutput = document.getElementById('terminalServerOutput');
+    const powershellOutput = document.getElementById('terminalPowerShellOutput');
+    
+    // Ensure inputs are enabled and visible
+    if (clientInput) {
+      clientInput.disabled = false;
+      clientInput.style.pointerEvents = 'auto';
+    }
+    if (powershellInput) {
+      powershellInput.disabled = false;
+      powershellInput.style.pointerEvents = 'auto';
+    }
+    
+    // Tab switching
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+        
+        // Update active tab
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update active content
+        tabContents.forEach(content => {
+          content.classList.remove('active');
+          // Handle different tab name formats - match the actual IDs in HTML
+          let expectedId;
+          if (tabName === 'powershell') {
+            expectedId = 'terminalPowerShell';
+          } else if (tabName === 'client') {
+            expectedId = 'terminalClient';
+          } else if (tabName === 'server') {
+            expectedId = 'terminalServer';
+          } else {
+            expectedId = `terminal${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
+          }
+          
+          if (content.id === expectedId) {
+            content.classList.add('active');
+            content.style.display = 'flex';
+            
+            // Make sure input container is visible
+            const inputContainer = content.querySelector('.terminal-input-container');
+            if (inputContainer) {
+              inputContainer.style.display = 'flex';
+            }
+            
+            // Focus input if it exists
+            const input = content.querySelector('.terminal-input');
+            if (input) {
+              input.disabled = false;
+              input.style.pointerEvents = 'auto';
+              input.style.display = 'block';
+              setTimeout(() => {
+                input.focus();
+              }, 100);
+            }
+          } else {
+            content.style.display = 'none';
+          }
+        });
+      });
+    });
+    
+    // Client terminal - capture console logs
+    const originalLog = console.log;
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    
+    function addLogToTerminal(message, type = 'log') {
+      const line = document.createElement('div');
+      line.className = `terminal-line ${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      clientOutput.appendChild(line);
+      clientOutput.scrollTop = clientOutput.scrollHeight;
+    }
+    
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'log');
+    };
+    
+    console.info = function(...args) {
+      originalInfo.apply(console, args);
+      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'info');
+    };
+    
+    console.warn = function(...args) {
+      originalWarn.apply(console, args);
+      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'warn');
+    };
+    
+    console.error = function(...args) {
+      originalError.apply(console, args);
+      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'error');
+    };
+    
+    // Client terminal - execute JavaScript
+    if (clientInput) {
+      clientInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const command = clientInput.value.trim();
+          if (command) {
+            addLogToTerminal(`> ${command}`, 'log');
+            try {
+              const result = eval(command);
+              if (result !== undefined) {
+                addLogToTerminal(String(result), 'info');
+              }
+            } catch (err) {
+              addLogToTerminal(`Error: ${err.message}`, 'error');
+            }
+            clientInput.value = '';
+          }
+        }
+      });
+    }
+    
+    // PowerShell terminal - execute commands
+    if (powershellInput) {
+      powershellInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const command = powershellInput.value.trim();
+          if (command) {
+            addPowerShellLog(`PS> ${command}`, 'log');
+            powershellInput.value = '';
+            powershellInput.disabled = true;
+            
+            // Show loading indicator
+            const loadingLine = document.createElement('div');
+            loadingLine.className = 'terminal-line info';
+            loadingLine.textContent = 'Executing...';
+            loadingLine.id = 'powershell-loading';
+            powershellOutput.appendChild(loadingLine);
+            powershellOutput.scrollTop = powershellOutput.scrollHeight;
+            
+            // Execute command via API
+            fetch('/__api__/terminal', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ command: command, type: 'powershell' })
+            })
+            .then(res => res.json())
+            .then(data => {
+              // Remove loading indicator
+              const loading = document.getElementById('powershell-loading');
+              if (loading) loading.remove();
+              
+              if (data.success) {
+                // Display output (stdout)
+                if (data.output && data.output.trim()) {
+                  // Split multi-line output
+                  const lines = data.output.split('\n');
+                  lines.forEach(line => {
+                    if (line.trim()) {
+                      addPowerShellLog(line, 'info');
+                    }
+                  });
+                }
+                // Display errors (stderr) - PowerShell often writes to stderr even on success
+                if (data.error && data.error.trim()) {
+                  const errorLines = data.error.split('\n');
+                  errorLines.forEach(line => {
+                    if (line.trim() && !line.includes('Warning:')) {
+                      // Only show actual errors, not warnings
+                      if (line.toLowerCase().includes('error')) {
+                        addPowerShellLog(line, 'error');
+                      } else {
+                        addPowerShellLog(line, 'warn');
+                      }
+                    }
+                  });
+                }
+              } else {
+                addPowerShellLog(`Error: ${data.error}`, 'error');
+                if (data.stderr) {
+                  addPowerShellLog(data.stderr, 'error');
+                }
+              }
+            })
+            .catch(err => {
+              // Remove loading indicator
+              const loading = document.getElementById('powershell-loading');
+              if (loading) loading.remove();
+              
+              addPowerShellLog(`Network Error: ${err.message}`, 'error');
+            })
+            .finally(() => {
+              powershellInput.disabled = false;
+              powershellInput.focus();
+            });
+          }
+        }
+      });
+    }
+    
+    function addPowerShellLog(message, type = 'log') {
+      if (!powershellOutput) return;
+      const line = document.createElement('div');
+      line.className = `terminal-line ${type}`;
+      line.textContent = message;
+      powershellOutput.appendChild(line);
+      powershellOutput.scrollTop = powershellOutput.scrollHeight;
+    }
+  }
   
   function switchToFile(newPath) {
     if (newPath === filePath) return;

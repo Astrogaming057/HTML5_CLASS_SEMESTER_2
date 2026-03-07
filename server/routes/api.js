@@ -239,6 +239,79 @@ function setupAPI(baseDir) {
     }
   });
 
+  // Terminal command execution
+  router.post('/terminal', async (req, res) => {
+    try {
+      const { command, type } = req.body;
+      if (!command) {
+        return res.json({ success: false, error: 'No command provided' });
+      }
+
+      if (type === 'powershell') {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+        
+        logger.info('Executing PowerShell command', { command: command.substring(0, 100) });
+        
+        try {
+          // Execute command in PowerShell
+          const { stdout, stderr } = await execAsync(command, {
+            cwd: baseDir,
+            shell: 'powershell.exe',
+            encoding: 'utf8',
+            maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+            timeout: 30000 // 30 second timeout
+          });
+          
+          logger.info('PowerShell command executed successfully', { 
+            commandLength: command.length,
+            outputLength: stdout ? stdout.length : 0
+          });
+          
+          res.json({ 
+            success: true, 
+            output: stdout || '',
+            error: stderr || null
+          });
+        } catch (error) {
+          // execAsync throws an error even when command exits with non-zero code
+          // Check if it's just a non-zero exit code (which is normal for some commands)
+          const exitCode = error.code;
+          const hasOutput = error.stdout || error.stderr;
+          
+          logger.warn('PowerShell command execution', { 
+            command: command.substring(0, 100),
+            exitCode: exitCode,
+            hasOutput: hasOutput
+          });
+          
+          // If there's output (stdout or stderr), treat it as success
+          // Many PowerShell commands write to stderr even on success
+          if (hasOutput) {
+            res.json({ 
+              success: true, 
+              output: error.stdout || '',
+              error: error.stderr || null
+            });
+          } else {
+            res.json({ 
+              success: false, 
+              error: error.message || `Command failed with exit code ${exitCode}`,
+              output: error.stdout || '',
+              stderr: error.stderr || ''
+            });
+          }
+        }
+      } else {
+        return res.json({ success: false, error: 'Unsupported terminal type' });
+      }
+    } catch (error) {
+      logger.error('API: Error executing terminal command', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
   return router;
 }
 

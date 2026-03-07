@@ -14,6 +14,33 @@ class Logger {
       magenta: '\x1b[35m',
       cyan: '\x1b[36m'
     };
+    this.wsManager = null;
+  }
+  
+  /**
+   * Set WebSocket manager for broadcasting logs
+   * @param {Object} wsManager - WebSocket manager instance
+   */
+  setWebSocketManager(wsManager) {
+    this.wsManager = wsManager;
+  }
+  
+  /**
+   * Broadcast log message via WebSocket
+   * @param {string} level - Log level
+   * @param {string} message - Log message
+   * @param {Object} meta - Additional metadata
+   */
+  broadcastLog(level, message, meta = {}) {
+    if (this.wsManager) {
+      this.wsManager.broadcast({
+        type: 'serverLog',
+        level: level.toLowerCase(),
+        message: message,
+        meta: meta,
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 
   /**
@@ -45,6 +72,7 @@ class Logger {
   info(message, meta = {}) {
     const formatted = this.formatMessage('INFO', message, meta);
     console.log(`${this.colors.cyan}${formatted}${this.colors.reset}`);
+    this.broadcastLog('info', message, meta);
   }
 
   /**
@@ -55,6 +83,7 @@ class Logger {
   warn(message, meta = {}) {
     const formatted = this.formatMessage('WARN', message, meta);
     console.log(`${this.colors.yellow}${formatted}${this.colors.reset}`);
+    this.broadcastLog('warn', message, meta);
   }
 
   /**
@@ -68,6 +97,7 @@ class Logger {
       : error;
     const formatted = this.formatMessage('ERROR', message, meta);
     console.error(`${this.colors.red}${formatted}${this.colors.reset}`);
+    this.broadcastLog('error', message, meta);
   }
 
   /**

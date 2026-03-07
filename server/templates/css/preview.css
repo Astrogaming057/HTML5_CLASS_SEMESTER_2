@@ -158,6 +158,7 @@ body {
   overflow-y: auto;
   padding: 5px;
   font-size: 13px;
+  min-height: 0;
 }
 
 .file-tree-loading {
@@ -230,6 +231,157 @@ body {
 
 .file-tree-folder.expanded .file-tree-children {
   display: block;
+}
+
+/* Terminal Panel */
+.terminal-panel {
+  border-top: 1px solid #3e3e42;
+  background: #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  min-height: 200px;
+  height: 200px;
+}
+
+.terminal-tabs {
+  display: flex;
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+}
+
+.terminal-tab {
+  background: transparent;
+  border: none;
+  color: #858585;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.terminal-tab:hover {
+  color: #cccccc;
+  background: #2a2d2e;
+}
+
+.terminal-tab.active {
+  color: #ffffff;
+  border-bottom-color: #0e639c;
+  background: #1e1e1e;
+}
+
+.terminal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terminal-tab-content {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-tab-content.active {
+  display: flex !important;
+}
+
+.terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #cccccc;
+  background: #1e1e1e;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.terminal-output::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+.terminal-line {
+  margin: 2px 0;
+  line-height: 1.4;
+}
+
+.terminal-line.log {
+  color: #cccccc;
+}
+
+.terminal-line.info {
+  color: #4ec9b0;
+}
+
+.terminal-line.warn {
+  color: #dcdcaa;
+}
+
+.terminal-line.error {
+  color: #f48771;
+}
+
+.terminal-input-container {
+  display: flex !important;
+  align-items: center;
+  padding: 6px 8px;
+  background: #252526;
+  border-top: 1px solid #3e3e42;
+  flex-shrink: 0;
+  z-index: 10;
+  position: relative;
+  visibility: visible;
+  opacity: 1;
+}
+
+.terminal-prompt {
+  color: #4ec9b0;
+  margin-right: 8px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.terminal-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.terminal-input::placeholder {
+  color: #858585;
 }
 
 .editor-panel,

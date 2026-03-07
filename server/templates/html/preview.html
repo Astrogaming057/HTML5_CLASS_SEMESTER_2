@@ -32,6 +32,32 @@
       <div class="file-tree" id="fileTree">
         <div class="file-tree-loading">Loading...</div>
       </div>
+      <div class="terminal-panel" id="terminalPanel">
+        <div class="terminal-tabs">
+          <button class="terminal-tab active" data-tab="client">Client</button>
+          <button class="terminal-tab" data-tab="server">Server</button>
+          <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+        </div>
+        <div class="terminal-content">
+          <div class="terminal-tab-content active" id="terminalClient">
+            <div class="terminal-output" id="terminalClientOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">></span>
+              <input type="text" class="terminal-input" id="terminalClientInput" placeholder="Type JavaScript commands...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalServer">
+            <div class="terminal-output" id="terminalServerOutput"></div>
+          </div>
+          <div class="terminal-tab-content" id="terminalPowerShell">
+            <div class="terminal-output" id="terminalPowerShellOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">PS></span>
+              <input type="text" class="terminal-input" id="terminalPowerShellInput" placeholder="Type PowerShell commands...">
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="resizer resizer-explorer" id="resizerExplorer"></div>
     <div class="editor-panel" id="editorPanel">

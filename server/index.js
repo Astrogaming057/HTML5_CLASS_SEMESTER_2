@@ -23,6 +23,7 @@ logger.info('Initializing server...', { port: config.PORT, baseDir: config.BASE_
 // Setup WebSocket manager
 const wsManager = new WebSocketManager();
 wsManager.setup(server);
+logger.setWebSocketManager(wsManager); // Enable log broadcasting
 logger.info('WebSocket server initialized');
 
 // Setup file watcher
