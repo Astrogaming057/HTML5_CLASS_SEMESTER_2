@@ -14,15 +14,15 @@
       <span id="fileName">{{FILENAME}}</span>
     </div>
     <div class="preview-actions">
-      <button id="toggleExplorerBtn" class="btn btn-secondary" title="Toggle File Explorer (Ctrl+B)">📁 Explorer</button>
-      <button id="togglePreviewBtn" class="btn btn-secondary" title="Toggle Preview (Ctrl+P)">👁️ Preview</button>
       <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
-      <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh Preview</button>
       <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
       <span id="status" class="status">Ready</span>
     </div>
   </div>
   <div class="preview-container">
+    <div class="explorer-reopen-bar" id="explorerReopenBar" style="display: none;">
+      <button id="reopenExplorerBtn" class="panel-reopen-btn" title="Reopen Explorer">→ Explorer</button>
+    </div>
     <div class="file-explorer-panel" id="fileExplorerPanel">
       <div class="panel-header">
         <button id="backBtn" class="back-btn" title="Go Back">←</button>
@@ -32,11 +32,18 @@
       <div class="file-tree" id="fileTree">
         <div class="file-tree-loading">Loading...</div>
       </div>
+      <div class="terminal-reopen-bar" id="terminalReopenBar" style="display: none;">
+        <button id="reopenTerminalBtn" class="terminal-reopen-btn" title="Reopen Terminal">↑ Terminal</button>
+      </div>
+      <div class="resizer resizer-terminal" id="resizerTerminal"></div>
       <div class="terminal-panel" id="terminalPanel">
-        <div class="terminal-tabs">
-          <button class="terminal-tab active" data-tab="client">Client</button>
-          <button class="terminal-tab" data-tab="server">Server</button>
-          <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+        <div class="terminal-header">
+          <div class="terminal-tabs">
+            <button class="terminal-tab active" data-tab="client">Client</button>
+            <button class="terminal-tab" data-tab="server">Server</button>
+            <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+          </div>
+          <button id="toggleTerminal" class="terminal-toggle-btn" title="Toggle Terminal">−</button>
         </div>
         <div class="terminal-content">
           <div class="terminal-tab-content active" id="terminalClient">
@@ -67,10 +74,20 @@
     <div class="resizer resizer-editor" id="resizerEditor"></div>
     <div class="preview-panel" id="previewPanel">
       <div class="panel-header">
-        <span>Preview</span>
+        <span id="previewTitle">Preview</span>
+        <button id="backToPreviewBtn" class="back-btn" title="Back to HTML Preview" style="display: none;">← Back</button>
+        <button id="refreshBtn" class="toggle-btn" title="Refresh Preview">🔄</button>
         <button id="togglePreview" class="toggle-btn" title="Toggle Preview">◀</button>
       </div>
-      <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+      <div id="previewContainer">
+        <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+        <div id="imagePreview" style="display: none;">
+          <img id="previewImage" alt="Preview" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+        </div>
+      </div>
+    </div>
+    <div class="preview-reopen-bar" id="previewReopenBar" style="display: none;">
+      <button id="reopenPreviewBtn" class="panel-reopen-btn" title="Reopen Preview">← Preview</button>
     </div>
   </div>
   

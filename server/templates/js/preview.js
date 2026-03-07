@@ -31,14 +31,16 @@ require(['vs/editor/editor.main'], function() {
   const fileName = document.getElementById('fileName');
   previewFrame = document.getElementById('previewFrame');
   fileTree = document.getElementById('fileTree');
+  const imagePreview = document.getElementById('imagePreview');
+  const previewImage = document.getElementById('previewImage');
+  const previewTitle = document.getElementById('previewTitle');
+  const backToPreviewBtn = document.getElementById('backToPreviewBtn');
   const toggleExplorer = document.getElementById('toggleExplorer');
-  const toggleExplorerBtn = document.getElementById('toggleExplorerBtn');
   const fileExplorerPanel = document.getElementById('fileExplorerPanel');
   const backBtn = document.getElementById('backBtn');
   const editorPanel = document.getElementById('editorPanel');
   const previewPanel = document.getElementById('previewPanel');
   const togglePreview = document.getElementById('togglePreview');
-  const togglePreviewBtn = document.getElementById('togglePreviewBtn');
   const contextMenu = document.getElementById('contextMenu');
   const resizerEditor = document.getElementById('resizerEditor');
   
@@ -54,8 +56,45 @@ require(['vs/editor/editor.main'], function() {
   fileName.textContent = filePath.split('/').pop();
   const language = getLanguage(filePath);
   
-  // Setup file explorer
+  // Flag to prevent saving state during initialization (before restore)
+  let isRestoringState = true;
+  
+  // Check for saved state and restore directory BEFORE loading file tree
+  const savedState = localStorage.getItem('previewState');
+  if (savedState) {
+    try {
+      const state = JSON.parse(savedState);
+      // If saved directory exists and is different, use it
+      if (state.currentDir && state.currentDir !== currentDir) {
+        currentDir = state.currentDir;
+        console.log('Restored directory from state:', currentDir);
+      }
+    } catch (err) {
+      console.error('Error parsing saved state:', err);
+    }
+  }
+  
+  // Setup file explorer with potentially restored directory
   setupFileExplorer();
+  
+  // Restore full state from localStorage (after everything is initialized)
+  // Use requestAnimationFrame to ensure DOM is ready
+  // This MUST happen before any visibility updates to prevent resetting state
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      restoreState();
+      // After state is restored, ensure visibility is correct
+      // (restoreState already calls these, but this is a safety net)
+      updateExplorerVisibility();
+      updatePreviewVisibility();
+      if (terminalPanel) {
+        updateTerminalVisibility();
+      }
+      // Now allow saving state
+      isRestoringState = false;
+      console.log('State restoration complete - saving enabled');
+    }, 300);
+  });
   
   // Setup context menu
   setupContextMenu();
@@ -74,18 +113,8 @@ require(['vs/editor/editor.main'], function() {
     toggleFileExplorer();
   });
   
-  // Toggle explorer button (in header)
-  toggleExplorerBtn.addEventListener('click', () => {
-    toggleFileExplorer();
-  });
-  
   // Toggle preview button (in panel)
   togglePreview.addEventListener('click', () => {
-    togglePreviewPanel();
-  });
-  
-  // Toggle preview button (in header)
-  togglePreviewBtn.addEventListener('click', () => {
     togglePreviewPanel();
   });
   
@@ -102,25 +131,60 @@ require(['vs/editor/editor.main'], function() {
   
   function toggleFileExplorer() {
     const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
+    console.log('toggleFileExplorer called, current state:', isCollapsed);
     fileExplorerPanel.classList.toggle('collapsed');
-    toggleExplorer.textContent = isCollapsed ? '◀' : '▶';
+    const newState = fileExplorerPanel.classList.contains('collapsed');
+    console.log('toggleFileExplorer new state:', newState);
+    toggleExplorer.textContent = newState ? '▶' : '◀';
+    updateExplorerVisibility();
     updateBackButton();
+    saveState();
+  }
+  
+  function updateExplorerVisibility() {
+    const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
+    const explorerReopenBar = document.getElementById('explorerReopenBar');
+    const resizerExplorer = document.getElementById('resizerExplorer');
+    
+    console.log('updateExplorerVisibility, collapsed:', isCollapsed);
+    
+    if (explorerReopenBar) {
+      explorerReopenBar.style.display = isCollapsed ? 'flex' : 'none';
+      console.log('Explorer reopen bar display:', explorerReopenBar.style.display);
+    }
+    
+    if (resizerExplorer) {
+      resizerExplorer.style.display = isCollapsed ? 'none' : 'block';
+    }
   }
   
   function togglePreviewPanel() {
     const isCollapsed = previewPanel.classList.contains('collapsed');
+    console.log('togglePreviewPanel called, current state:', isCollapsed);
     previewPanel.classList.toggle('collapsed');
+    const newState = previewPanel.classList.contains('collapsed');
+    console.log('togglePreviewPanel new state:', newState);
+    
+    updatePreviewVisibility();
+    togglePreview.textContent = newState ? '▶' : '◀';
+    saveState();
+  }
+  
+  function updatePreviewVisibility() {
+    const isCollapsed = previewPanel.classList.contains('collapsed');
+    const previewReopenBar = document.getElementById('previewReopenBar');
+    
+    console.log('updatePreviewVisibility, collapsed:', isCollapsed);
     
     // Hide/show resizer based on preview state
     if (resizerEditor) {
-      if (previewPanel.classList.contains('collapsed')) {
-        resizerEditor.style.display = 'none';
-      } else {
-        resizerEditor.style.display = 'block';
-      }
+      resizerEditor.style.display = isCollapsed ? 'none' : 'block';
     }
     
-    togglePreview.textContent = isCollapsed ? '◀' : '▶';
+    if (previewReopenBar) {
+      previewReopenBar.style.display = isCollapsed ? 'flex' : 'none';
+      console.log('Preview reopen bar display:', previewReopenBar.style.display);
+    }
   }
   
   // Initialize resizer visibility
@@ -129,6 +193,75 @@ require(['vs/editor/editor.main'], function() {
       resizerEditor.style.display = 'none';
     }
   }
+  
+  // Terminal toggle
+  const toggleTerminal = document.getElementById('toggleTerminal');
+  const terminalPanel = document.getElementById('terminalPanel');
+  const resizerTerminal = document.getElementById('resizerTerminal');
+  const terminalReopenBar = document.getElementById('terminalReopenBar');
+  const reopenTerminalBtn = document.getElementById('reopenTerminalBtn');
+  
+  function updateTerminalVisibility() {
+    const isCollapsed = terminalPanel.classList.contains('collapsed');
+    
+    // Update toggle button
+    if (toggleTerminal) {
+      toggleTerminal.textContent = isCollapsed ? '+' : '−';
+    }
+    
+    // Update resizer visibility
+    if (resizerTerminal) {
+      resizerTerminal.style.display = isCollapsed ? 'none' : 'block';
+    }
+    
+    // Update reopen bar visibility
+    if (terminalReopenBar) {
+      terminalReopenBar.style.display = isCollapsed ? 'flex' : 'none';
+    }
+  }
+  
+  if (toggleTerminal && terminalPanel) {
+    toggleTerminal.addEventListener('click', () => {
+      terminalPanel.classList.toggle('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    });
+  }
+  
+  // Reopen terminal button
+  if (reopenTerminalBtn && terminalPanel) {
+    reopenTerminalBtn.addEventListener('click', () => {
+      terminalPanel.classList.remove('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    });
+  }
+  
+  // Reopen explorer button
+  const reopenExplorerBtn = document.getElementById('reopenExplorerBtn');
+  if (reopenExplorerBtn && fileExplorerPanel) {
+    reopenExplorerBtn.addEventListener('click', () => {
+      console.log('Reopen explorer clicked');
+      fileExplorerPanel.classList.remove('collapsed');
+      updateExplorerVisibility();
+      saveState();
+    });
+  }
+  
+  // Reopen preview button
+  const reopenPreviewBtn = document.getElementById('reopenPreviewBtn');
+  if (reopenPreviewBtn && previewPanel) {
+    reopenPreviewBtn.addEventListener('click', () => {
+      console.log('Reopen preview clicked');
+      previewPanel.classList.remove('collapsed');
+      updatePreviewVisibility();
+      togglePreview.textContent = '◀';
+      saveState();
+    });
+  }
+  
+  // Don't initialize visibility here - let restoreState() handle it
+  // This prevents resetting to defaults before state is restored
   
   // Back button
   backBtn.addEventListener('click', () => {
@@ -176,6 +309,28 @@ require(['vs/editor/editor.main'], function() {
     renderLineHighlight: 'all',
     bracketPairColorization: {
       enabled: true
+    }
+  });
+  
+  // Handle browser back/forward buttons
+  window.addEventListener('popstate', (e) => {
+    if (e.state && e.state.file) {
+      const newPath = e.state.file;
+      if (newPath !== filePath) {
+        // Don't check for unsaved changes on back/forward
+        filePath = newPath;
+        fileName.textContent = newPath.split('/').pop();
+        const newDir = newPath.split('/').slice(0, -1).join('/') || '';
+        if (newDir !== currentDir) {
+          currentDir = newDir;
+          loadFileTree(currentDir);
+        } else {
+          // Just update the active item if we're in the same directory
+          updateActiveFileTreeItem(newPath);
+        }
+        loadFile(newPath);
+        saveState();
+      }
     }
   });
   
@@ -234,6 +389,7 @@ require(['vs/editor/editor.main'], function() {
     // Update current directory
     currentDir = dir;
     updateBackButton();
+    saveState();
     
     // Fetch directory listing
     const apiPath = dir === '/' ? '/' : dir;
@@ -305,7 +461,7 @@ require(['vs/editor/editor.main'], function() {
       item.dataset.name = file.name;
       
       // Normalize paths for comparison
-      const normalizedCurrentPath = filePath.replace(/\/+/g, '/');
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
       const normalizedFilepath = file.path.replace(/\/+/g, '/');
       if (normalizedFilepath === normalizedCurrentPath) {
         item.classList.add('active');
@@ -832,6 +988,9 @@ require(['vs/editor/editor.main'], function() {
             content.style.display = 'none';
           }
         });
+        
+        // Save active tab
+        saveState();
       });
     });
     
@@ -978,6 +1137,29 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
+  function updateActiveFileTreeItem(path) {
+    // Remove active class from all items
+    const allItems = fileTree.querySelectorAll('.file-tree-item');
+    allItems.forEach(item => {
+      item.classList.remove('active');
+    });
+    
+    // Add active class to the current file
+    if (path) {
+      const normalizedPath = path.replace(/\/+/g, '/');
+      const activeItem = Array.from(allItems).find(item => {
+        const itemPath = item.dataset.path.replace(/\/+/g, '/');
+        return itemPath === normalizedPath;
+      });
+      
+      if (activeItem) {
+        activeItem.classList.add('active');
+        // Scroll into view if needed
+        activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }
+  
   function switchToFile(newPath) {
     if (newPath === filePath) return;
     
@@ -986,9 +1168,31 @@ require(['vs/editor/editor.main'], function() {
       return;
     }
     
-    // Update URL and reload
+    // Update file path
+    filePath = newPath;
+    
+    // Update URL without reloading (app-like navigation)
     const newUrl = '/__preview__?file=' + encodeURIComponent(newPath);
-    window.location.href = newUrl;
+    window.history.pushState({ file: newPath }, '', newUrl);
+    
+    // Update file name display
+    fileName.textContent = newPath.split('/').pop();
+    
+    // Update current directory
+    const newDir = newPath.split('/').slice(0, -1).join('/') || '';
+    if (newDir !== currentDir) {
+      currentDir = newDir;
+      loadFileTree(currentDir);
+    } else {
+      // Just update the active item if we're in the same directory
+      updateActiveFileTreeItem(newPath);
+    }
+    
+    // Load the new file
+    loadFile(newPath);
+    
+    // Save state
+    saveState();
   }
   
   function updateStatus() {
@@ -1003,27 +1207,62 @@ require(['vs/editor/editor.main'], function() {
   
   function loadFile(path) {
     status.textContent = 'Loading...';
+    status.className = 'status';
+    
+    // Check if it's an image file - images don't need to be loaded as text
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+    const isImage = imageExtensions.some(ext => path.toLowerCase().endsWith(ext));
+    
+    if (isImage) {
+      // For images, just show the preview (don't try to load as text)
+      showImagePreview(path);
+      status.textContent = 'Ready';
+      status.className = 'status';
+      // Clear editor or show a message
+      editor.setValue('// Image file - cannot be edited as text');
+      originalContent = '';
+      isDirty = false;
+      updateStatus();
+      return;
+    }
+    
     fetch('/__api__/files?path=' + encodeURIComponent(path))
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          editor.setValue(data.content);
+          // Set language based on file extension BEFORE setting value
+          const detectedLanguage = getLanguage(path);
+          const currentModel = editor.getModel();
+          
+          // Create or get model for this file
+          let model = monaco.editor.getModels().find(m => m.uri.path === '/' + path);
+          if (!model) {
+            // Create new model
+            const uri = monaco.Uri.parse('file:///' + path);
+            model = monaco.editor.createModel(data.content, detectedLanguage, uri);
+          } else {
+            // Update existing model
+            model.setValue(data.content);
+            monaco.editor.setModelLanguage(model, detectedLanguage);
+          }
+          
+          // Switch editor to this model
+          editor.setModel(model);
+          
           originalContent = data.content;
           isDirty = false;
           updateStatus();
           
+          // Show HTML preview for non-image files
+          showHtmlPreview();
           // Load initial preview via preview content route
-          const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path);
+          const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&t=' + Date.now();
           previewFrame.src = previewUrl;
           
           // Setup link interception after iframe loads
           previewFrame.onload = () => {
             interceptPreviewLinks();
           };
-          
-          // Set language based on file extension
-          const detectedLanguage = getLanguage(path);
-          monaco.editor.setModelLanguage(editor.getModel(), detectedLanguage);
         } else {
           status.textContent = 'Error: ' + data.error;
           status.className = 'status error';
@@ -1069,10 +1308,73 @@ require(['vs/editor/editor.main'], function() {
     }, 300); // Debounce 300ms
   }
   
+  function showImagePreview(imagePath) {
+    // Hide iframe, show image preview
+    previewFrame.style.display = 'none';
+    imagePreview.style.display = 'flex';
+    
+    // Load image
+    const imageUrl = '/' + imagePath.replace(/^\/+/, '');
+    previewImage.src = imageUrl;
+    previewImage.onerror = () => {
+      previewImage.alt = 'Error loading image';
+    };
+    
+    // Update title and show back button
+    previewTitle.textContent = 'Image: ' + imagePath.split('/').pop();
+    backToPreviewBtn.style.display = 'block';
+  }
+  
+  function showHtmlPreview() {
+    // Hide image preview, show iframe
+    imagePreview.style.display = 'none';
+    previewFrame.style.display = 'block';
+    
+    // Update title and hide back button
+    previewTitle.textContent = 'Preview';
+    backToPreviewBtn.style.display = 'none';
+  }
+  
+  // Back to HTML preview button
+  if (backToPreviewBtn) {
+    backToPreviewBtn.addEventListener('click', () => {
+      showHtmlPreview();
+    });
+  }
+  
   function interceptPreviewLinks() {
     try {
       const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
       if (!iframeDoc) return;
+      
+      // Intercept image clicks
+      iframeDoc.addEventListener('click', (e) => {
+        const img = e.target.closest('img[src]');
+        if (img) {
+          const src = img.getAttribute('src');
+          if (src && !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Resolve relative path
+            let imagePath = src;
+            if (!src.startsWith('/')) {
+              const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
+              const basePath = fileDir ? fileDir + '/' : '';
+              imagePath = basePath + src;
+            }
+            imagePath = imagePath.replace(/\/+/g, '/').replace(/^\/+/, '');
+            
+            // Check if it's an image
+            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+            const isImage = imageExtensions.some(ext => imagePath.toLowerCase().endsWith(ext));
+            
+            if (isImage) {
+              showImagePreview(imagePath);
+            }
+          }
+        }
+      }, true);
       
       // Intercept link clicks
       iframeDoc.addEventListener('click', (e) => {
@@ -1084,10 +1386,14 @@ require(['vs/editor/editor.main'], function() {
           return; // Allow anchor links, mailto, tel
         }
         
-        // If it's an external link, let it open normally
-        if (href.startsWith('http://') || href.startsWith('https://')) {
+        // If it's an external link or has target="_blank", let it open normally
+        if (href.startsWith('http://') || href.startsWith('https://') || link.getAttribute('target') === '_blank') {
           return;
         }
+        
+        // Always prevent default for internal links to keep it app-like
+        e.preventDefault();
+        e.stopPropagation();
         
         // Intercept internal links
         e.preventDefault();
@@ -1095,25 +1401,35 @@ require(['vs/editor/editor.main'], function() {
         // Resolve relative path
         let targetPath = href;
         if (!href.startsWith('/')) {
-          // Relative path - resolve from current directory
-          const baseDir = currentDir || '/';
-          targetPath = baseDir + '/' + href;
-          targetPath = targetPath.replace(/\/+/g, '/');
+          // Relative path - resolve from current file's directory
+          const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
+          const basePath = fileDir ? fileDir + '/' : '';
+          targetPath = basePath + href;
         }
         
-        // Remove leading slash for API
-        if (targetPath.startsWith('/')) {
-          targetPath = targetPath.substring(1);
-        }
+        // Normalize path (remove double slashes, etc.)
+        targetPath = targetPath.replace(/\/+/g, '/').replace(/^\/+/, '');
         
-        // Check if it's an HTML file
-        if (targetPath.match(/\.(html|htm)$/i)) {
-          // Switch to that file in the editor
+        // Check if it's an editable file that should be opened in editor
+        const editableExtensions = ['.html', '.htm', '.css', '.js', '.json', '.md', '.txt', '.xml', '.yaml', '.yml'];
+        const isEditable = editableExtensions.some(ext => targetPath.toLowerCase().endsWith(ext));
+        
+        if (isEditable) {
+          // Switch to the file in the editor (app-like, no reload)
           switchToFile(targetPath);
         } else {
-          // For other files, just update preview
-          const previewUrl = '/__preview-content__?file=' + encodeURIComponent(targetPath);
-          previewFrame.src = previewUrl;
+          // Check if it's an image file
+          const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+          const isImage = imageExtensions.some(ext => targetPath.toLowerCase().endsWith(ext));
+          
+          if (isImage) {
+            // Display image in preview
+            showImagePreview(targetPath);
+          } else {
+            // For other files (PDFs, etc.), update preview iframe
+            const previewUrl = '/__preview-content__?file=' + encodeURIComponent(targetPath) + '&t=' + Date.now();
+            previewFrame.src = previewUrl;
+          }
         }
       }, true);
     } catch (err) {
@@ -1256,7 +1572,325 @@ require(['vs/editor/editor.main'], function() {
         isResizingEditor = false;
         document.removeEventListener('mousemove', handleEditorResize);
         document.removeEventListener('mouseup', stopEditorResize);
+        saveState();
+      }
+    }
+    
+    // Resizer between file tree and terminal
+    const resizerTerminal = document.getElementById('resizerTerminal');
+    const terminalPanel = document.getElementById('terminalPanel');
+    
+    if (resizerTerminal && terminalPanel) {
+      let isResizingTerminal = false;
+      
+      resizerTerminal.addEventListener('mousedown', (e) => {
+        isResizingTerminal = true;
+        document.addEventListener('mousemove', handleTerminalResize);
+        document.addEventListener('mouseup', stopTerminalResize);
+        e.preventDefault();
+      });
+      
+      function handleTerminalResize(e) {
+        if (!isResizingTerminal || terminalPanel.classList.contains('collapsed')) return;
+        
+        const fileExplorerPanel = document.getElementById('fileExplorerPanel');
+        const explorerRect = fileExplorerPanel.getBoundingClientRect();
+        
+        // Calculate terminal height based on mouse position relative to the explorer panel bottom
+        const mouseY = e.clientY;
+        const explorerBottom = explorerRect.bottom;
+        const newTerminalHeight = mouseY - explorerBottom;
+        
+        // Constrain terminal height
+        if (newTerminalHeight >= 100 && newTerminalHeight <= 500) {
+          terminalPanel.style.height = newTerminalHeight + 'px';
+        }
+      }
+      
+      function stopTerminalResize() {
+        isResizingTerminal = false;
+        document.removeEventListener('mousemove', handleTerminalResize);
+        document.removeEventListener('mouseup', stopTerminalResize);
+        saveState();
+      }
+      
+      // Hide resizer if terminal is collapsed
+      if (terminalPanel.classList.contains('collapsed')) {
+        resizerTerminal.style.display = 'none';
       }
     }
   }
+  
+  // State management
+  function saveState() {
+    // Don't save during initialization/restoration
+    if (isRestoringState) {
+      console.log('saveState() called during restoration - skipping');
+      return;
+    }
+    
+    const terminalPanel = document.getElementById('terminalPanel');
+    const toggleTerminal = document.getElementById('toggleTerminal');
+    
+    const explorerCollapsed = fileExplorerPanel.classList.contains('collapsed');
+    const previewCollapsed = previewPanel.classList.contains('collapsed');
+    const terminalCollapsed = terminalPanel ? terminalPanel.classList.contains('collapsed') : false;
+    
+    console.log('=== SAVING STATE ===');
+    console.log('Explorer collapsed:', explorerCollapsed);
+    console.log('Preview collapsed:', previewCollapsed);
+    console.log('Terminal collapsed:', terminalCollapsed);
+    
+    const state = {
+      filePath: filePath,
+      currentDir: currentDir,
+      explorerCollapsed: explorerCollapsed,
+      previewCollapsed: previewCollapsed,
+      terminalCollapsed: terminalCollapsed,
+      terminalHeight: terminalPanel ? (terminalPanel.style.height || '200px') : '200px',
+      explorerWidth: fileExplorerPanel.style.width || '250px',
+      editorWidth: editorPanel.style.width || '',
+      previewWidth: previewPanel.style.width || '',
+      activeTerminalTab: document.querySelector('.terminal-tab.active')?.dataset.tab || 'client'
+    };
+    
+    console.log('Saving state object:', state);
+    
+    try {
+      localStorage.setItem('previewState', JSON.stringify(state));
+      console.log('State saved successfully');
+    } catch (err) {
+      console.error('Error saving state:', err);
+    }
+  }
+  
+  function restoreState() {
+    try {
+      const savedState = localStorage.getItem('previewState');
+      if (!savedState) {
+        console.log('No saved state found - initializing with defaults');
+        // Initialize visibility with default state (all open)
+        updateExplorerVisibility();
+        updatePreviewVisibility();
+        if (terminalPanel) {
+          updateTerminalVisibility();
+        }
+        return;
+      }
+      
+      const state = JSON.parse(savedState);
+      console.log('Restoring state:', state);
+      
+      const terminalPanel = document.getElementById('terminalPanel');
+      const resizerTerminal = document.getElementById('resizerTerminal');
+      const toggleTerminal = document.getElementById('toggleTerminal');
+      
+      // Restore file path - switch if different (without reload)
+      if (state.filePath && state.filePath !== filePath) {
+        console.log('Switching to saved file:', state.filePath);
+        // Use switchToFile but skip the unsaved changes check during restore
+        filePath = state.filePath;
+        fileName.textContent = state.filePath.split('/').pop();
+        const newDir = state.filePath.split('/').slice(0, -1).join('/') || '';
+        if (newDir !== currentDir) {
+          currentDir = newDir;
+          loadFileTree(currentDir);
+        }
+        loadFile(state.filePath);
+        // Update URL without reload
+        const newUrl = '/__preview__?file=' + encodeURIComponent(state.filePath);
+        window.history.replaceState({ file: state.filePath }, '', newUrl);
+        // Continue with restoring other state
+      }
+      
+      // Restore explorer state
+      if (state.explorerCollapsed !== undefined) {
+        console.log('=== RESTORING EXPLORER STATE ===');
+        console.log('Saved state explorerCollapsed:', state.explorerCollapsed);
+        console.log('Current explorer has collapsed class:', fileExplorerPanel.classList.contains('collapsed'));
+        
+        // Clear any existing state first
+        fileExplorerPanel.classList.remove('collapsed');
+        console.log('After removing collapsed class, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
+        
+        if (state.explorerCollapsed) {
+          fileExplorerPanel.classList.add('collapsed');
+          toggleExplorer.textContent = '▶';
+          console.log('Added collapsed class, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
+        } else {
+          fileExplorerPanel.classList.remove('collapsed'); // Ensure it's removed
+          toggleExplorer.textContent = '◀';
+          console.log('Explorer should be open, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
+        }
+        
+        // Update visibility AFTER state is set
+        updateExplorerVisibility();
+        
+        // Force reflow and verify
+        requestAnimationFrame(() => {
+          const height = fileExplorerPanel.offsetHeight;
+          const width = window.getComputedStyle(fileExplorerPanel).width;
+          console.log('Explorer panel offsetHeight:', height);
+          console.log('Explorer panel computed width:', width);
+          console.log('Explorer panel final collapsed state:', fileExplorerPanel.classList.contains('collapsed'));
+        });
+      } else {
+        console.log('No explorer collapsed state in saved state');
+      }
+      if (state.explorerWidth) {
+        console.log('Restoring explorer width:', state.explorerWidth);
+        fileExplorerPanel.style.width = state.explorerWidth;
+      }
+      
+      // Restore preview state
+      if (state.previewCollapsed !== undefined) {
+        console.log('=== RESTORING PREVIEW STATE ===');
+        console.log('Saved state previewCollapsed:', state.previewCollapsed);
+        console.log('Current preview has collapsed class:', previewPanel.classList.contains('collapsed'));
+        
+        // Clear any existing state first
+        previewPanel.classList.remove('collapsed');
+        console.log('After removing collapsed class, has collapsed:', previewPanel.classList.contains('collapsed'));
+        
+        if (state.previewCollapsed) {
+          previewPanel.classList.add('collapsed');
+          togglePreview.textContent = '▶';
+          console.log('Added collapsed class, has collapsed:', previewPanel.classList.contains('collapsed'));
+        } else {
+          previewPanel.classList.remove('collapsed'); // Ensure it's removed
+          togglePreview.textContent = '◀';
+          console.log('Preview should be open, has collapsed:', previewPanel.classList.contains('collapsed'));
+        }
+        
+        // Update visibility AFTER state is set
+        updatePreviewVisibility();
+        
+        // Force reflow and verify
+        requestAnimationFrame(() => {
+          const height = previewPanel.offsetHeight;
+          const width = window.getComputedStyle(previewPanel).width;
+          console.log('Preview panel offsetHeight:', height);
+          console.log('Preview panel computed width:', width);
+          console.log('Preview panel final collapsed state:', previewPanel.classList.contains('collapsed'));
+        });
+      } else {
+        console.log('No preview collapsed state in saved state');
+      }
+      
+      // Restore panel widths
+      if (state.editorWidth) {
+        editorPanel.style.width = state.editorWidth;
+        editorPanel.style.flex = 'none';
+      }
+      if (state.previewWidth) {
+        previewPanel.style.width = state.previewWidth;
+        previewPanel.style.flex = 'none';
+      }
+      
+      // Restore terminal state
+      if (terminalPanel) {
+        if (state.terminalCollapsed !== undefined) {
+          console.log('Restoring terminal collapsed:', state.terminalCollapsed);
+          if (state.terminalCollapsed) {
+            terminalPanel.classList.add('collapsed');
+          } else {
+            terminalPanel.classList.remove('collapsed');
+            // Restore height only if not collapsed
+            if (state.terminalHeight) {
+              console.log('Restoring terminal height:', state.terminalHeight);
+              terminalPanel.style.height = state.terminalHeight;
+            }
+          }
+          // Update visibility after state is set
+          updateTerminalVisibility();
+          // Force reflow
+          terminalPanel.offsetHeight;
+        } else if (state.terminalHeight) {
+          // If collapsed state not saved, just restore height
+          console.log('Restoring terminal height (no collapsed state):', state.terminalHeight);
+          terminalPanel.style.height = state.terminalHeight;
+        }
+      }
+      
+      // Restore active terminal tab (must happen after terminal is visible and setup)
+      if (state.activeTerminalTab) {
+        console.log('Restoring active terminal tab:', state.activeTerminalTab);
+        // Wait for terminal setup to complete
+        setTimeout(() => {
+          const tab = document.querySelector(`.terminal-tab[data-tab="${state.activeTerminalTab}"]`);
+          if (tab) {
+            console.log('Switching to terminal tab:', tab);
+            // Manually trigger the tab switch logic
+            const tabName = tab.dataset.tab;
+            const tabs = document.querySelectorAll('.terminal-tab');
+            const tabContents = document.querySelectorAll('.terminal-tab-content');
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active content
+            tabContents.forEach(content => {
+              content.classList.remove('active');
+              let expectedId;
+              if (tabName === 'powershell') {
+                expectedId = 'terminalPowerShell';
+              } else if (tabName === 'client') {
+                expectedId = 'terminalClient';
+              } else if (tabName === 'server') {
+                expectedId = 'terminalServer';
+              }
+              
+              if (content.id === expectedId) {
+                content.classList.add('active');
+                // Focus input if it exists
+                const input = content.querySelector('.terminal-input');
+                if (input) {
+                  input.disabled = false;
+                  input.style.pointerEvents = 'auto';
+                  input.style.display = 'block';
+                  setTimeout(() => {
+                    input.focus();
+                  }, 100);
+                }
+              } else {
+                content.style.display = 'none';
+              }
+            });
+          } else {
+            console.warn('Terminal tab not found:', state.activeTerminalTab);
+          }
+        }, 300);
+      }
+      
+      // Restore current directory (only if it's different and file tree is already loaded)
+      if (state.currentDir && state.currentDir !== currentDir) {
+        console.log('Restoring directory:', state.currentDir);
+        currentDir = state.currentDir;
+        // Only reload if file tree is already loaded
+        if (fileTree && fileTree.innerHTML !== '<div class="file-tree-loading">Loading...</div>') {
+          loadFileTree(currentDir);
+        }
+      }
+      
+      console.log('State restored successfully');
+      console.log('Current directory after restore:', currentDir);
+      console.log('Explorer collapsed:', fileExplorerPanel.classList.contains('collapsed'));
+      console.log('Preview collapsed:', previewPanel.classList.contains('collapsed'));
+      console.log('Terminal collapsed:', terminalPanel ? terminalPanel.classList.contains('collapsed') : 'N/A');
+    } catch (err) {
+      console.error('Error restoring state:', err);
+    }
+  }
+  
+  // Save state on various events
+  window.addEventListener('beforeunload', () => {
+    saveState();
+    if (ws) {
+      ws.close();
+    }
+  });
+  
+  // Save state periodically as well
+  setInterval(saveState, 5000); // Save every 5 seconds
 });
