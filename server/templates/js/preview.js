@@ -63,6 +63,12 @@ require(['vs/editor/editor.main'], function() {
   
   let isRestoringState = true;
   
+  const receivedLogIds = new Set();
+  
+  function generateLogId(message, logType, timestamp) {
+    return `${message}_${logType}_${timestamp}`;
+  }
+  
   const savedState = localStorage.getItem('previewState');
   if (savedState) {
     try {
@@ -811,7 +817,9 @@ require(['vs/editor/editor.main'], function() {
   loadFile(filePath);
   
   // Track changes and update preview
-    editor.onDidChangeModelContent(() => {
+  let saveToEditorTimeout = null;
+  
+  editor.onDidChangeModelContent(() => {
       // Sync to popout windows
       syncChannel.postMessage({
         type: 'editor-content',
@@ -834,6 +842,32 @@ require(['vs/editor/editor.main'], function() {
     isDirty = currentContent !== originalContent;
     updateStatus();
     updatePreview(currentContent);
+    
+    // Save to ide_editor_cache folder for live preview
+    if (saveToEditorTimeout) {
+      clearTimeout(saveToEditorTimeout);
+    }
+    saveToEditorTimeout = setTimeout(() => {
+      if (!filePath) {
+        console.error('Cannot save to ide_editor_cache folder: filePath is not set');
+        return;
+      }
+      
+      fetch('/__api__/files/editor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: currentContent })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          console.error('Error saving to ide_editor_cache folder:', data.error);
+        }
+      })
+      .catch(err => {
+        console.error('Error saving to ide_editor_cache folder:', err);
+      });
+    }, 50);
   });
   
   // Save on Ctrl+S
@@ -1061,6 +1095,9 @@ require(['vs/editor/editor.main'], function() {
       fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
       return;
     }
+    
+    // Filter out ide_editor_cache folder
+    files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
     
     // Sort: folders first, then files
     files.sort((a, b) => {
@@ -1747,6 +1784,17 @@ require(['vs/editor/editor.main'], function() {
           });
         }
         
+        // Handle preview logs from WebSocket
+        if (data.type === 'preview-log') {
+          const { message, logType, timestamp } = data;
+          const logId = generateLogId(message, logType || 'log', timestamp || new Date().toISOString());
+          
+          if (!receivedLogIds.has(logId)) {
+            receivedLogIds.add(logId);
+            addPreviewLog(message, logType || 'log');
+          }
+        }
+        
         // Handle server update notifications
         if (data.type === 'serverUpdateAvailable') {
           showServerUpdateNotification();
@@ -1992,8 +2040,22 @@ require(['vs/editor/editor.main'], function() {
     window.addEventListener('message', (event) => {
       // Security: only accept messages from same origin
       if (event.data && event.data.type === 'preview-log') {
-        const { message, logType } = event.data;
-        addPreviewLog(message, logType || 'log');
+        const { message, logType, timestamp } = event.data;
+        const logId = generateLogId(message, logType || 'log', timestamp || new Date().toISOString());
+        
+        if (!receivedLogIds.has(logId)) {
+          receivedLogIds.add(logId);
+          addPreviewLog(message, logType || 'log');
+          
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'preview-log',
+              message: message,
+              logType: logType || 'log',
+              timestamp: timestamp || new Date().toISOString()
+            }));
+          }
+        }
       }
     });
   }
@@ -2353,7 +2415,7 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  function loadFile(path) {
+  async function loadFile(path) {
     status.textContent = 'Loading...';
     status.className = 'status';
     
@@ -2374,58 +2436,156 @@ require(['vs/editor/editor.main'], function() {
       return;
     }
     
-    fetch('/__api__/files?path=' + encodeURIComponent(path))
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          // Set language based on file extension BEFORE setting value
-          const detectedLanguage = getLanguage(path);
-          const currentModel = editor.getModel();
+    try {
+      // Check for cache first
+      const cacheResponse = await fetch('/__api__/files/editor?path=' + encodeURIComponent(path));
+      const cacheData = await cacheResponse.json();
+      
+      // Load actual file
+      const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(path));
+      const fileData = await fileResponse.json();
+      
+      if (!fileData.success) {
+        status.textContent = 'Error: ' + fileData.error;
+        status.className = 'status error';
+        return;
+      }
+      
+      // If cache exists and is different from actual file, prompt user
+      if (cacheData.success && cacheData.exists && cacheData.content !== fileData.content) {
+        const choice = await customCacheDialog('Unsaved changes found in cache. What would you like to do?');
+        
+        if (choice === 'pull') {
+          // Load from cache
+          fileData.content = cacheData.content;
+        } else if (choice === 'discard') {
+          // Delete cache and reset preview
+          await fetch('/__api__/files/editor', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+          });
           
-          // Create or get model for this file
-          let model = monaco.editor.getModels().find(m => m.uri.path === '/' + path);
-          if (!model) {
-            // Create new model
-            const uri = monaco.Uri.parse('file:///' + path);
-            model = monaco.editor.createModel(data.content, detectedLanguage, uri);
-          } else {
-            // Update existing model
-            model.setValue(data.content);
-            monaco.editor.setModelLanguage(model, detectedLanguage);
-          }
-          
-          // Switch editor to this model
-          editor.setModel(model);
-          
-          originalContent = data.content;
-          isDirty = false;
-          updateStatus();
-          
-          // Show HTML preview for non-image files
-          showHtmlPreview();
-          // Load initial preview via preview content route
+          // Reset preview
           const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&t=' + Date.now();
           previewFrame.src = previewUrl;
-          
-          // Setup link interception after iframe loads
-          previewFrame.onload = () => {
-            interceptPreviewLinks();
-            setTimeout(() => {
-              if (setupPreviewLogInterception) {
-                setupPreviewLogInterception();
-              }
-            }, 100);
-          };
         } else {
-          status.textContent = 'Error: ' + data.error;
-          status.className = 'status error';
+          // User cancelled, don't load
+          status.textContent = 'Ready';
+          status.className = 'status';
+          return;
         }
-      })
-      .catch(err => {
-        status.textContent = 'Error loading file';
-        status.className = 'status error';
-        console.error(err);
-      });
+      }
+      
+      // Set language based on file extension BEFORE setting value
+      const detectedLanguage = getLanguage(path);
+      const currentModel = editor.getModel();
+      
+      // Create or get model for this file
+      let model = monaco.editor.getModels().find(m => m.uri.path === '/' + path);
+      if (!model) {
+        // Create new model
+        const uri = monaco.Uri.parse('file:///' + path);
+        model = monaco.editor.createModel(fileData.content, detectedLanguage, uri);
+      } else {
+        // Update existing model
+        model.setValue(fileData.content);
+        monaco.editor.setModelLanguage(model, detectedLanguage);
+      }
+      
+      // Switch editor to this model
+      editor.setModel(model);
+      
+      originalContent = fileData.content;
+      isDirty = false;
+      updateStatus();
+      
+      // Show HTML preview for non-image files
+      showHtmlPreview();
+      // Load initial preview via preview content route
+      const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&t=' + Date.now();
+      previewFrame.src = previewUrl;
+      
+      // Setup link interception after iframe loads
+      previewFrame.onload = () => {
+        interceptPreviewLinks();
+        setTimeout(() => {
+          if (setupPreviewLogInterception) {
+            setupPreviewLogInterception();
+          }
+        }, 100);
+      };
+    } catch (err) {
+      status.textContent = 'Error loading file';
+      status.className = 'status error';
+      console.error(err);
+    }
+  }
+  
+  function customCacheDialog(message) {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('customConfirmDialog');
+      const messageEl = document.getElementById('customConfirmMessage');
+      const okBtn = document.getElementById('customConfirmOk');
+      const cancelBtn = document.getElementById('customConfirmCancel');
+      const closeBtn = document.getElementById('customConfirmClose');
+      
+      // Change button labels
+      const originalOkText = okBtn.textContent;
+      const originalCancelText = cancelBtn.textContent;
+      okBtn.textContent = 'Pull from Cache';
+      cancelBtn.textContent = 'Discard';
+      
+      messageEl.textContent = message;
+      dialog.style.display = 'flex';
+      okBtn.focus();
+      
+      const cleanup = () => {
+        dialog.style.display = 'none';
+        okBtn.textContent = originalOkText;
+        cancelBtn.textContent = originalCancelText;
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        closeBtn.onclick = null;
+        dialog.onkeydown = null;
+      };
+      
+      const handlePull = () => {
+        cleanup();
+        resolve('pull');
+      };
+      
+      const handleDiscard = () => {
+        cleanup();
+        resolve('discard');
+      };
+      
+      const handleCancel = () => {
+        cleanup();
+        resolve('cancel');
+      };
+      
+      okBtn.onclick = handlePull;
+      cancelBtn.onclick = handleDiscard;
+      closeBtn.onclick = handleCancel;
+      
+      // Handle keyboard
+      const handleKeydown = (e) => {
+        if (e.key === 'Enter') {
+          handlePull();
+        } else if (e.key === 'Escape') {
+          handleCancel();
+        }
+      };
+      dialog.onkeydown = handleKeydown;
+      
+      // Close on background click
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          handleCancel();
+        }
+      };
+    });
   }
   
   let previewUpdateTimeout = null;
@@ -2632,6 +2792,11 @@ require(['vs/editor/editor.main'], function() {
     const content = editor.getValue();
     status.textContent = 'Saving...';
     status.className = 'status saving';
+    
+    if (saveToEditorTimeout) {
+      clearTimeout(saveToEditorTimeout);
+      saveToEditorTimeout = null;
+    }
     
     fetch('/__api__/files', {
       method: 'PUT',

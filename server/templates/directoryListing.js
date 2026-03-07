@@ -42,6 +42,7 @@ async function generateDirectoryListing(dirPath, requestPath, baseDir) {
 
   for (const file of files) {
     if (file.name.startsWith('.')) continue;
+    if (file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory()) continue;
     
     const fullPath = path.join(dirPath, file.name);
     const stats = await fs.stat(fullPath);

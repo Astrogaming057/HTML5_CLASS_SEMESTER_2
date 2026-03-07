@@ -17,6 +17,22 @@ class WebSocketManager {
       };
       logger.info('WebSocket client connected', clientInfo);
 
+      ws.on('message', (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          if (message.type === 'preview-log') {
+            this.broadcast({
+              type: 'preview-log',
+              message: message.message,
+              logType: message.logType || 'log',
+              timestamp: message.timestamp || new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          logger.debug('Error parsing WebSocket message', error);
+        }
+      });
+
       ws.on('close', () => {
         this.clients.delete(ws);
         logger.info('WebSocket client disconnected', { 

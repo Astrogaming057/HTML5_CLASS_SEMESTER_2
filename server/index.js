@@ -69,7 +69,7 @@ logger.info('Editor routes configured');
 app.use('/__preview__', setupPreviewRoutes(config.BASE_DIR));
 logger.info('Preview routes configured');
 
-app.use('/__preview-content__', setupPreviewContentRoutes(config.BASE_DIR));
+app.use('/__preview-content__', setupPreviewContentRoutes(config.BASE_DIR, wsManager));
 logger.info('Preview content routes configured');
 
 app.use('/__popout__', popoutsRouter);

@@ -114,6 +114,8 @@ require(['vs/editor/editor.main'], function() {
   
   setupWebSocket();
   
+  let saveToEditorTimeout = null;
+  
   editor.onDidChangeModelContent(() => {
     if (isApplyingExternalChange) return;
     
@@ -122,6 +124,26 @@ require(['vs/editor/editor.main'], function() {
     updateStatus();
     
     debounceBroadcastChange(currentContent);
+    
+    if (saveToEditorTimeout) {
+      clearTimeout(saveToEditorTimeout);
+    }
+    saveToEditorTimeout = setTimeout(() => {
+      fetch('/__api__/files/editor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: currentContent })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          console.error('Error saving to ide_editor_cache folder:', data.error);
+        }
+      })
+      .catch(err => {
+        console.error('Error saving to ide_editor_cache folder:', err);
+      });
+    }, 50);
   });
   
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -154,35 +176,146 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  function loadFile(path) {
+  async function loadFile(path) {
     status.textContent = 'Loading...';
-    fetch('/__api__/files?path=' + encodeURIComponent(path))
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          editor.setValue(data.content);
-          originalContent = data.content;
-          isDirty = false;
-          updateStatus();
-          
-          const detectedLanguage = getLanguage(path);
-          monaco.editor.setModelLanguage(editor.getModel(), detectedLanguage);
-        } else {
-          status.textContent = 'Error: ' + data.error;
-          status.className = 'status error';
-        }
-      })
-      .catch(err => {
-        status.textContent = 'Error loading file';
+    
+    try {
+      // Check for cache first
+      const cacheResponse = await fetch('/__api__/files/editor?path=' + encodeURIComponent(path));
+      const cacheData = await cacheResponse.json();
+      
+      // Load actual file
+      const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(path));
+      const fileData = await fileResponse.json();
+      
+      if (!fileData.success) {
+        status.textContent = 'Error: ' + fileData.error;
         status.className = 'status error';
-        console.error(err);
-      });
+        return;
+      }
+      
+      // If cache exists and is different from actual file, prompt user
+      if (cacheData.success && cacheData.exists && cacheData.content !== fileData.content) {
+        const choice = await customCacheDialog('Unsaved changes found in cache. What would you like to do?');
+        
+        if (choice === 'pull') {
+          // Load from cache
+          fileData.content = cacheData.content;
+        } else if (choice === 'discard') {
+          // Delete cache
+          await fetch('/__api__/files/editor', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+          });
+        } else {
+          // User cancelled, don't load
+          status.textContent = 'Ready';
+          status.className = 'status';
+          return;
+        }
+      }
+      
+      editor.setValue(fileData.content);
+      originalContent = fileData.content;
+      isDirty = false;
+      updateStatus();
+      
+      const detectedLanguage = getLanguage(path);
+      monaco.editor.setModelLanguage(editor.getModel(), detectedLanguage);
+    } catch (err) {
+      status.textContent = 'Error loading file';
+      status.className = 'status error';
+      console.error(err);
+    }
+  }
+  
+  function customCacheDialog(message) {
+    return new Promise((resolve) => {
+      // Create a simple dialog
+      const dialog = document.createElement('div');
+      dialog.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+      
+      const content = document.createElement('div');
+      content.style.cssText = 'background: #2d2d2d; padding: 20px; border-radius: 8px; min-width: 400px; max-width: 500px;';
+      
+      const messageEl = document.createElement('p');
+      messageEl.textContent = message;
+      messageEl.style.cssText = 'margin: 0 0 20px 0; color: #cccccc;';
+      
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
+      
+      const pullBtn = document.createElement('button');
+      pullBtn.textContent = 'Pull from Cache';
+      pullBtn.className = 'btn btn-primary';
+      pullBtn.style.cssText = 'padding: 8px 16px; cursor: pointer;';
+      
+      const discardBtn = document.createElement('button');
+      discardBtn.textContent = 'Discard';
+      discardBtn.className = 'btn btn-secondary';
+      discardBtn.style.cssText = 'padding: 8px 16px; cursor: pointer;';
+      
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.className = 'btn btn-secondary';
+      cancelBtn.style.cssText = 'padding: 8px 16px; cursor: pointer;';
+      
+      buttonContainer.appendChild(pullBtn);
+      buttonContainer.appendChild(discardBtn);
+      buttonContainer.appendChild(cancelBtn);
+      
+      content.appendChild(messageEl);
+      content.appendChild(buttonContainer);
+      dialog.appendChild(content);
+      document.body.appendChild(dialog);
+      
+      pullBtn.focus();
+      
+      const cleanup = () => {
+        document.body.removeChild(dialog);
+      };
+      
+      pullBtn.onclick = () => {
+        cleanup();
+        resolve('pull');
+      };
+      
+      discardBtn.onclick = () => {
+        cleanup();
+        resolve('discard');
+      };
+      
+      cancelBtn.onclick = () => {
+        cleanup();
+        resolve('cancel');
+      };
+      
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          cleanup();
+          resolve('cancel');
+        }
+      };
+      
+      dialog.onkeydown = (e) => {
+        if (e.key === 'Escape') {
+          cleanup();
+          resolve('cancel');
+        }
+      };
+    });
   }
   
   function saveFile() {
     const content = editor.getValue();
     status.textContent = 'Saving...';
     status.className = 'status saving';
+    
+    if (saveToEditorTimeout) {
+      clearTimeout(saveToEditorTimeout);
+      saveToEditorTimeout = null;
+    }
     
     fetch('/__api__/files', {
       method: 'PUT',

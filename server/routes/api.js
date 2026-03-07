@@ -50,6 +50,10 @@ function setupAPI(baseDir) {
         const files = [];
         
         for (const entry of entries) {
+          if (entry.name.toLowerCase() === 'ide_editor_cache' && entry.isDirectory()) {
+            continue;
+          }
+          
           const entryPath = path.join(filePath === '/' ? '' : filePath, entry.name);
           files.push({
             name: entry.name,
@@ -127,6 +131,73 @@ function setupAPI(baseDir) {
       res.json({ success: true });
     } catch (error) {
       logger.error('API: Error creating file/folder', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/files/editor', async (req, res) => {
+    try {
+      const filePath = req.query.path;
+      
+      if (!filePath) {
+        return res.json({ success: false, error: 'Missing file path' });
+      }
+
+      const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const editorPath = path.join(editorDir, normalizedPath);
+      const resolvedEditorPath = path.resolve(editorPath);
+
+      if (!isPathSafe(resolvedEditorPath, baseDir)) {
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+
+      try {
+        const stats = await fs.stat(resolvedEditorPath);
+        if (stats.isDirectory()) {
+          return res.json({ success: false, exists: false });
+        }
+        const content = await fs.readFile(resolvedEditorPath, 'utf-8');
+        return res.json({ success: true, exists: true, content });
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.json({ success: true, exists: false });
+        }
+        throw error;
+      }
+    } catch (error) {
+      logger.error('API: Error checking ide_editor_cache', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.post('/files/editor', async (req, res) => {
+    try {
+      const { path: filePath, content } = req.body;
+      
+      if (!filePath || content === undefined) {
+        logger.warn('API: Missing required fields for ide_editor_cache save', { filePath: !!filePath, content: content !== undefined });
+        return res.json({ success: false, error: 'Missing required fields' });
+      }
+
+      const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const editorPath = path.join(editorDir, normalizedPath);
+      const resolvedEditorPath = path.resolve(editorPath);
+      const resolvedEditorDir = path.resolve(editorDir);
+
+      if (!isPathSafe(resolvedEditorPath, baseDir) || !isPathSafe(resolvedEditorDir, baseDir)) {
+        logger.warn('API: Forbidden path access', { path: filePath, normalizedPath, resolvedEditorPath });
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+
+      await fs.mkdir(path.dirname(resolvedEditorPath), { recursive: true });
+      await fs.writeFile(resolvedEditorPath, content, 'utf-8');
+      logger.info('API: File saved to ide_editor_cache folder', { path: filePath, normalizedPath, size: content.length });
+      
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: Error saving to ide_editor_cache folder', { error: error.message, stack: error.stack, filePath: req.body.path });
       res.json({ success: false, error: error.message });
     }
   });
@@ -220,9 +291,57 @@ function setupAPI(baseDir) {
       await fs.writeFile(resolvedPath, content, 'utf-8');
       logger.info('API: File saved', { path: filePath, size: content.length });
       
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const editorPath = path.join(editorDir, filePath);
+      const resolvedEditorPath = path.resolve(editorPath);
+      
+      try {
+        if (isPathSafe(resolvedEditorPath, baseDir)) {
+          await fs.unlink(resolvedEditorPath).catch(() => {});
+        }
+      } catch (error) {
+      }
+      
+      if (wsManager) {
+        wsManager.notifyFileChange(filePath, 'change');
+      }
+      
       res.json({ success: true });
     } catch (error) {
       logger.error('API: Error updating file', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.delete('/files/editor', async (req, res) => {
+    try {
+      const { path: filePath } = req.body;
+      
+      if (!filePath) {
+        return res.json({ success: false, error: 'Missing file path' });
+      }
+
+      const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const editorPath = path.join(editorDir, normalizedPath);
+      const resolvedEditorPath = path.resolve(editorPath);
+
+      if (!isPathSafe(resolvedEditorPath, baseDir)) {
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+
+      try {
+        await fs.unlink(resolvedEditorPath);
+        logger.info('API: Cache file deleted', { path: filePath });
+        return res.json({ success: true });
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.json({ success: true });
+        }
+        throw error;
+      }
+    } catch (error) {
+      logger.error('API: Error deleting cache file', error);
       res.json({ success: false, error: error.message });
     }
   });

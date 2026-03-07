@@ -87,6 +87,25 @@ channel.addEventListener('message', (event) => {
     if (outputEl) {
       outputEl.textContent = '';
     }
+  } else if (event.data.type === 'preview-log') {
+    const logOutput = document.getElementById('terminalLogOutput');
+    if (logOutput) {
+      const message = event.data.message || '';
+      const logType = event.data.logType || 'log';
+      const timestamp = event.data.timestamp ? new Date(event.data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+      
+      const cleanMessage = cleanAnsiCodes(message);
+      const lines = cleanMessage.split('\n').filter(line => line.trim());
+      
+      lines.forEach(lineText => {
+        const line = document.createElement('div');
+        line.className = `terminal-line ${logType}`;
+        line.textContent = `[${timestamp}] ${lineText}`;
+        logOutput.appendChild(line);
+      });
+      
+      logOutput.scrollTop = logOutput.scrollHeight;
+    }
   }
 });
 
@@ -149,6 +168,25 @@ function setupWebSocket() {
         let message = data.message || '';
         message = message.replace(/\u001b\[[0-9;]*m/g, '');
         addTerminalLine(serverOutput, message, 'log');
+      } else if (data.type === 'preview-log') {
+        const logOutput = document.getElementById('terminalLogOutput');
+        if (logOutput) {
+          const message = data.message || '';
+          const logType = data.logType || 'log';
+          const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+          
+          const cleanMessage = cleanAnsiCodes(message);
+          const lines = cleanMessage.split('\n').filter(line => line.trim());
+          
+          lines.forEach(lineText => {
+            const line = document.createElement('div');
+            line.className = `terminal-line ${logType}`;
+            line.textContent = `[${timestamp}] ${lineText}`;
+            logOutput.appendChild(line);
+          });
+          
+          logOutput.scrollTop = logOutput.scrollHeight;
+        }
       }
     } catch (err) {
       if (typeof event.data === 'string' && event.data.trim().startsWith('{')) {
