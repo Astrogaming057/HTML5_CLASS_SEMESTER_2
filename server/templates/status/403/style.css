@@ -1,0 +1,71 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background: #081b36;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.bokeh {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bokeh span {
+  position: absolute;
+  display: block;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  animation: float 15s linear infinite;
+  filter: blur(40px);
+}
+
+.bokeh span:nth-child(1){top:10%; left:20%; background: rgba(59,130,246,0.2); animation-duration:12s;}
+.bokeh span:nth-child(2){top:50%; left:70%; background: rgba(96,165,250,0.25); animation-duration:18s;}
+.bokeh span:nth-child(3){top:80%; left:40%; background: rgba(147,197,253,0.15); animation-duration:20s;}
+.bokeh span:nth-child(4){top:30%; left:90%; background: rgba(37,99,235,0.2); animation-duration:16s;}
+.bokeh span:nth-child(5){top:60%; left:10%; background: rgba(147,197,253,0.2); animation-duration:14s;}
+
+@keyframes float {
+  0% {transform: translateY(0) translateX(0) scale(1); opacity:0.5;}
+  50% {transform: translateY(-50px) translateX(50px) scale(1.2); opacity:0.7;}
+  100% {transform: translateY(0) translateX(0) scale(1); opacity:0.5;}
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+h1 {
+  font-size: 100px;
+  margin: 0;
+  color: #60a5fa;
+  text-shadow: 0 0 15px rgba(96,165,250,0.7);
+}
+
+h2 {
+  font-size: 28px;
+  font-weight: normal;
+  margin: 10px 0 20px;
+  color: #93c5fd;
+}
+
+p {
+  font-size: 16px;
+  color: #cbd5e1;
+  max-width: 400px;
+  margin: 0 auto 20px;
+}

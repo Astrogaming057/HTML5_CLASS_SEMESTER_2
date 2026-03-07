@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 class WebSocketManager {
   constructor() {
     this.clients = new Set();
+    this.connectionListeners = new Set();
   }
 
   setup(server) {
@@ -16,6 +17,8 @@ class WebSocketManager {
         totalClients: this.clients.size 
       };
       logger.info('WebSocket client connected', clientInfo);
+      
+      this.notifyConnectionListeners();
 
       ws.on('message', (data) => {
         try {
@@ -101,6 +104,23 @@ class WebSocketManager {
       type: messageType,
       path: filePath,
       eventType: eventType
+    });
+  }
+
+  onConnection(callback) {
+    this.connectionListeners.add(callback);
+    return () => {
+      this.connectionListeners.delete(callback);
+    };
+  }
+
+  notifyConnectionListeners() {
+    this.connectionListeners.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        logger.error('Error in connection listener', error);
+      }
     });
   }
 }

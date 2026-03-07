@@ -5,6 +5,7 @@ const mime = require('mime-types');
 const { generateDirectoryListing } = require('../templates/directoryListing');
 const { injectHTML } = require('../middleware/htmlInjector');
 const { isPathSafe } = require('../utils/pathUtils');
+const { getStatusPage } = require('../templates/status/statusHandler');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -24,7 +25,8 @@ function setupFileServer(baseDir) {
         const responseTime = Date.now() - startTime;
         logger.warn('Forbidden path access attempt', { path: requestPath, resolvedPath });
         logger.http('GET', requestPath, 403, responseTime);
-        return res.status(403).send('Forbidden');
+        const statusPage = await getStatusPage(403);
+        return res.status(403).send(statusPage || 'Forbidden');
       }
       
       const stats = await fs.stat(resolvedPath);
@@ -65,11 +67,13 @@ function setupFileServer(baseDir) {
       if (error.code === 'ENOENT') {
         logger.warn('File not found', { path: req.path, error: error.message });
         logger.http('GET', req.path, 404, responseTime);
-        res.status(404).send('File not found');
+        const statusPage = await getStatusPage(404);
+        res.status(404).send(statusPage || 'File not found');
       } else {
         logger.error('Error serving file', error);
         logger.http('GET', req.path, 500, responseTime);
-        res.status(500).send('Internal server error');
+        const statusPage = await getStatusPage(500);
+        res.status(500).send(statusPage || 'Internal server error');
       }
     }
   });

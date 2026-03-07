@@ -9,6 +9,8 @@ const { setupPreviewRoutes, setupPreviewContentRoutes } = require('./routes/prev
 const popoutsRouter = require('./routes/popouts');
 const { setupFileWatcher } = require('./watcher/fileWatcher');
 const WebSocketManager = require('./websocket/websocketHandler');
+const AutoLauncher = require('./browser/autoLauncher');
+const { setupStatusRoutes } = require('./templates/status/statusHandler');
 const logger = require('./utils/logger');
 
 const app = express();
@@ -75,6 +77,8 @@ logger.info('Preview content routes configured');
 app.use('/__popout__', popoutsRouter);
 logger.info('Popout routes configured');
 
+setupStatusRoutes(app);
+
 app.use(setupFileServer(config.BASE_DIR));
 logger.info('File server routes configured');
 
@@ -83,6 +87,9 @@ server.listen(config.PORT, () => {
     url: `http://localhost:${config.PORT}`,
     baseDir: config.BASE_DIR
   });
+
+  const autoLauncher = new AutoLauncher(config.PORT, wsManager);
+  autoLauncher.setup();
 });
 
 const shutdown = () => {

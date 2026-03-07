@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
+const { getStatusPage } = require('../templates/status/statusHandler');
 const logger = require('../utils/logger');
 
 let htmlTemplate = null;

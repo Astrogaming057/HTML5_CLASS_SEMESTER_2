@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
+const { getStatusPage } = require('../templates/status/statusHandler');
 const logger = require('../utils/logger');
 
 let htmlTemplate = null;
@@ -71,13 +72,15 @@ function setupPreviewRoutes(baseDir) {
     try {
       const filePath = req.query.file;
       if (!filePath) {
-        return res.status(400).send('No file specified');
+        const statusPage = await getStatusPage(400);
+        return res.status(400).send(statusPage || 'No file specified');
       }
       const html = await servePreview(baseDir, filePath);
       res.send(html);
     } catch (error) {
       logger.error('Error serving preview', error);
-      res.status(500).send('Error: ' + error.message);
+      const statusPage = await getStatusPage(500);
+      res.status(500).send(statusPage || 'Error: ' + error.message);
     }
   });
   
@@ -91,7 +94,8 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
     try {
       const filePath = req.query.file;
       if (!filePath) {
-        return res.status(400).send('No file specified');
+        const statusPage = await getStatusPage(400);
+        return res.status(400).send(statusPage || 'No file specified');
       }
 
       const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
@@ -126,13 +130,15 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
           const resolvedPath = path.resolve(fullPath);
 
           if (!isPathSafe(resolvedPath, baseDir)) {
-            return res.status(403).send('Forbidden');
+            const statusPage = await getStatusPage(403);
+            return res.status(403).send(statusPage || 'Forbidden');
           }
 
           try {
             const stats = await fs.stat(resolvedPath);
             if (stats.isDirectory()) {
-              return res.status(400).send('Cannot preview directory');
+              const statusPage = await getStatusPage(400);
+              return res.status(400).send(statusPage || 'Cannot preview directory');
             }
             content = await fs.readFile(resolvedPath, 'utf-8');
           } catch (error) {
@@ -381,7 +387,8 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       res.send(modifiedContent);
     } catch (error) {
       logger.error('Error serving preview content', error);
-      res.status(500).send('Error: ' + error.message);
+      const statusPage = await getStatusPage(500);
+      res.status(500).send(statusPage || 'Error: ' + error.message);
     }
   });
   
