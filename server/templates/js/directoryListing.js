@@ -1,16 +1,13 @@
-// Editable file extensions
 const EDITABLE_EXTENSIONS = ['json', 'css', 'js', 'md', 'html', 'htm', 'txt', 'xml', 'yaml', 'yml', 'ts', 'jsx', 'tsx', 'vue', 'sass', 'scss', 'less', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'sh', 'bat', 'ps1'];
 
-// Settings with defaults
 let settings = {
-  clickBehavior: 'open', // 'open' or 'editor'
-  previewMode: 'editor', // 'editor' or 'preview'
+  clickBehavior: 'open',
+  previewMode: 'editor',
   autoRefresh: true,
   showHidden: false,
   sizeFormat: 'human'
 };
 
-// Load settings from localStorage
 function loadSettings() {
   const saved = localStorage.getItem('fileExplorerSettings');
   if (saved) {
@@ -23,12 +20,10 @@ function loadSettings() {
   applySettings();
 }
 
-// Save settings to localStorage
 function saveSettingsToStorage() {
   localStorage.setItem('fileExplorerSettings', JSON.stringify(settings));
 }
 
-// Apply settings to UI
 function applySettings() {
   if (document.getElementById('clickBehavior')) {
     document.getElementById('clickBehavior').value = settings.clickBehavior;
@@ -47,7 +42,6 @@ function applySettings() {
   }
 }
 
-// WebSocket connection
 let ws = null;
 let wsStatusIndicator = null;
 
@@ -56,7 +50,6 @@ function setupWebSocket() {
   const wsUrl = protocol + '//' + window.location.host;
   ws = new WebSocket(wsUrl);
   
-  // Create status indicator
   if (!wsStatusIndicator) {
     wsStatusIndicator = document.createElement('div');
     wsStatusIndicator.className = 'ws-status';
@@ -72,7 +65,6 @@ function setupWebSocket() {
   ws.onclose = () => {
     wsStatusIndicator.textContent = 'Disconnected';
     wsStatusIndicator.className = 'ws-status disconnected';
-    // Reconnect after 2 seconds
     setTimeout(setupWebSocket, 2000);
   };
   
@@ -92,14 +84,12 @@ function setupWebSocket() {
       const changedPath = data.path.replace(/\\/g, '/');
       const normalizedCurrentPath = currentPath.replace(/^\/+/, '');
       
-      // Check if the event affects the current directory
       const affectsCurrentDir = 
         changedPath.startsWith(normalizedCurrentPath) || 
         normalizedCurrentPath === '' ||
         currentPath === '/';
       
       if (affectsCurrentDir) {
-        // Handle different event types
         if (data.type === 'fileChanged') {
           console.log('File changed, reloading...', changedPath);
           location.reload();
@@ -122,7 +112,6 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
     return;
 
   var root = document.location.pathname;
-  // Normalize root path - remove trailing slashes and double slashes
   root = root.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
   if (root !== '/' && !root.endsWith('/'))
     root += "/";
@@ -139,12 +128,10 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
     url = url + "/";
     size = 0;
     size_string = "";
-    // Folders always open normally, regardless of settings
   } else {
     link.draggable = "true";
     link.addEventListener("dragstart", onDragStart, false);
     
-    // Add click handler based on settings
     const ext = name.split('.').pop().toLowerCase();
     const isEditable = EDITABLE_EXTENSIONS.includes(ext);
     
@@ -153,13 +140,10 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
       
       link.addEventListener('click', function(e) {
         if (settings.clickBehavior === 'editor') {
-          // Click opens editor/preview, Ctrl+Click opens file normally
           if (e.ctrlKey || e.metaKey) {
-            // Let default behavior happen (open file)
             return;
           } else {
             e.preventDefault();
-            // For HTML files, check preview mode
             if (isHTML && settings.previewMode === 'preview') {
               openPreview(root + url.replace(/\/$/, ''));
             } else {
@@ -167,17 +151,14 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
             }
           }
         } else {
-          // Click opens file, Ctrl+Click opens editor/preview
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            // For HTML files, check preview mode
             if (isHTML && settings.previewMode === 'preview') {
               openPreview(root + url.replace(/\/$/, ''));
             } else {
               openEditor(root + url.replace(/\/$/, ''));
             }
           }
-          // Otherwise, let default behavior happen (open file)
         }
       });
       link.style.cursor = 'pointer';
@@ -199,7 +180,6 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
   link.innerText = name;
   link.href = root + url;
 
-  // Add right-click context menu
   row.addEventListener('contextmenu', function(e) {
     e.preventDefault();
     e.stopPropagation(); // Prevent document-level handler from firing
@@ -252,7 +232,6 @@ function onHasParentDirectory() {
   box.style.display = "block";
 
   var root = document.location.pathname;
-  // Normalize path - remove trailing slashes and double slashes
   root = root.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
   if (root !== '/' && !root.endsWith("/"))
     root += "/";
@@ -284,7 +263,6 @@ function sortTable(column) {
       return a > b ? newOrder : a < b ? oldOrder : 0;
     }
 
-    // Column 0 is text.
     if (a > b)
       return newOrder;
     if (a < b)
@@ -292,13 +270,11 @@ function sortTable(column) {
     return 0;
   });
 
-  // Appending an existing child again just moves it.
   for (i = 0; i < list.length; i++) {
     tbody.appendChild(list[i]);
   }
 }
 
-// Add event handlers to column headers.
 function addHandlers(element, column) {
   element.onclick = (e) => sortTable(column);
   element.onkeydown = (e) => {
@@ -309,23 +285,19 @@ function addHandlers(element, column) {
   };
 }
 
-// Context menu functionality
 let contextMenu = null;
 
 function showContextMenu(e, name, isdir, path) {
-  // Remove existing context menu
   if (contextMenu) {
     contextMenu.remove();
   }
-
-  // Create context menu
+  
   contextMenu = document.createElement('div');
   contextMenu.id = 'contextMenu';
   contextMenu.style.cssText = 'position: fixed; background: #ffffff; border: 1px solid #d0d0d0; box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 10000; padding: 4px 0; min-width: 180px; border-radius: 4px;';
   
   const currentDir = document.location.pathname.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
   
-  // If no name provided, this is empty space - only show create options
   if (!name) {
     const newFileItem = createMenuItem('📄 New File', () => {
       const fileName = prompt('Enter file name:');
@@ -364,7 +336,6 @@ function showContextMenu(e, name, isdir, path) {
     return;
   }
   
-  // Check if file is editable
   const isEditable = !isdir && isEditableFile(name);
   
   if (!isdir) {
@@ -433,7 +404,6 @@ function showContextMenu(e, name, isdir, path) {
   contextMenu.style.left = e.pageX + 'px';
   contextMenu.style.top = e.pageY + 'px';
   
-  // Close menu on click outside
   setTimeout(() => {
     document.addEventListener('click', function closeMenu() {
       if (contextMenu) {

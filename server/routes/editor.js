@@ -64,6 +64,28 @@ async function serveEditor(baseDir, filePath) {
   return html;
 }
 
+function setupEditorRoutes(baseDir) {
+  const express = require('express');
+  const router = express.Router();
+  
+  router.get('/', async (req, res) => {
+    try {
+      const filePath = req.query.file;
+      if (!filePath) {
+        return res.status(400).send('No file specified');
+      }
+      const html = await serveEditor(baseDir, filePath);
+      res.send(html);
+    } catch (error) {
+      logger.error('Error serving editor', error);
+      res.status(500).send('Error: ' + error.message);
+    }
+  });
+  
+  return router;
+}
+
 module.exports = {
-  serveEditor
+  serveEditor,
+  setupEditorRoutes
 };

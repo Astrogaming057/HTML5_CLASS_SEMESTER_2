@@ -1,8 +1,6 @@
-// Get file path from URL
 const urlParams = new URLSearchParams(window.location.search);
 const filePath = urlParams.get('file');
 
-// Generate unique session ID for this editor tab
 const sessionId = 'editor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 
 let editor = null;
@@ -12,15 +10,13 @@ let ws = null;
 let isApplyingExternalChange = false;
 let lastSavedContent = '';
 let lastSaveTime = 0;
-const IGNORE_EXTERNAL_CHANGES_MS = 2000; // Ignore file watcher notifications for 2 seconds after save
+const IGNORE_EXTERNAL_CHANGES_MS = 2000;
 
-// Merge dialog state
 let mergeCurrentEditor = null;
 let mergeExternalEditor = null;
 let mergeResultEditor = null;
 let pendingExternalContent = null;
 
-// Language mapping
 function getLanguage(filePath) {
   const ext = filePath.split('.').pop().toLowerCase();
   const languages = {
@@ -63,7 +59,6 @@ function getLanguage(filePath) {
   return languages[ext] || 'plaintext';
 }
 
-// Initialize Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
 require(['vs/editor/editor.main'], function() {
@@ -82,7 +77,6 @@ require(['vs/editor/editor.main'], function() {
   fileName.textContent = filePath.split('/').pop();
   const language = getLanguage(filePath);
   
-  // Create Monaco Editor instance
   editor = monaco.editor.create(editorContainer, {
     value: '',
     language: language,
@@ -116,13 +110,10 @@ require(['vs/editor/editor.main'], function() {
     wordBasedSuggestions: 'matchingDocuments'
   });
   
-  // Load file content
   loadFile(filePath);
   
-  // Setup WebSocket connection for sync
   setupWebSocket();
   
-  // Track changes
   editor.onDidChangeModelContent(() => {
     if (isApplyingExternalChange) return;
     
@@ -130,28 +121,23 @@ require(['vs/editor/editor.main'], function() {
     isDirty = currentContent !== originalContent;
     updateStatus();
     
-    // Broadcast changes to other editors (debounced)
     debounceBroadcastChange(currentContent);
   });
   
-  // Save on Ctrl+S
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
     saveFile();
   });
   
-  // Save button
   saveBtn.addEventListener('click', saveFile);
   
-  // Close button
   closeBtn.addEventListener('click', () => {
     if (isDirty && !confirm('You have unsaved changes. Are you sure you want to close?')) {
       return;
     }
-    window.close();
-  });
-  
-  // Warn before closing with unsaved changes
-  window.addEventListener('beforeunload', (e) => {
+      window.close();
+    });
+    
+    window.addEventListener('beforeunload', (e) => {
     if (isDirty) {
       e.preventDefault();
       e.returnValue = '';
@@ -179,7 +165,6 @@ require(['vs/editor/editor.main'], function() {
           isDirty = false;
           updateStatus();
           
-          // Set language based on file extension
           const detectedLanguage = getLanguage(path);
           monaco.editor.setModelLanguage(editor.getModel(), detectedLanguage);
         } else {
@@ -209,12 +194,11 @@ require(['vs/editor/editor.main'], function() {
       if (data.success) {
         originalContent = content;
         lastSavedContent = content;
-        lastSaveTime = Date.now(); // Track when we saved
+        lastSaveTime = Date.now();
         isDirty = false;
         status.textContent = 'Saved';
         status.className = 'status saved';
         
-        // Broadcast save to other editors (with our session ID so we can ignore our own)
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'editorSave',
@@ -249,7 +233,6 @@ require(['vs/editor/editor.main'], function() {
     
     ws.onopen = () => {
       console.log('Editor WebSocket connected');
-      // Register this editor with session ID
       ws.send(JSON.stringify({
         type: 'editorOpen',
         path: filePath,
@@ -261,7 +244,6 @@ require(['vs/editor/editor.main'], function() {
       console.log('Editor WebSocket disconnected');
       status.textContent = 'Disconnected - Reconnecting...';
       status.className = 'status error';
-      // Reconnect after 2 seconds
       setTimeout(setupWebSocket, 2000);
     };
     
@@ -274,18 +256,14 @@ require(['vs/editor/editor.main'], function() {
         const data = JSON.parse(event.data);
         
         if (data.type === 'fileChanged') {
-          // File was changed externally (by file watcher)
           handleExternalFileChange(data.path);
         } else if (data.type === 'editorSave') {
-          // Another editor tab saved the file
           if (data.path === filePath) {
-            // Ignore if this is our own save (check session ID)
             if (data.sessionId === sessionId) {
               console.log('Ignoring editorSave (our own save, sessionId:', sessionId, ')');
               return;
             }
             
-            // Ignore if no sessionId and we just saved (likely from API broadcast of our own save)
             if (!data.sessionId) {
               const timeSinceSave = Date.now() - lastSaveTime;
               if (timeSinceSave < 1000 && data.content === lastSavedContent) {
@@ -294,15 +272,11 @@ require(['vs/editor/editor.main'], function() {
               }
             }
             
-            // This is a save from another editor tab
-            // Only handle if content is actually different
             if (data.content !== lastSavedContent) {
               handleExternalSave(data.content);
             }
           }
         } else if (data.type === 'editorChange') {
-          // Another editor tab made changes (optional - for real-time sync)
-          // This could be used for collaborative editing in the future
         }
       } catch (err) {
         console.error('Error parsing WebSocket message:', err);
@@ -311,21 +285,17 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function handleExternalFileChange(changedPath) {
-    // Normalize paths for comparison
     const normalizePath = (p) => p.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
     const currentPathNormalized = normalizePath(filePath);
     const changedPathNormalized = normalizePath(changedPath);
     
     if (currentPathNormalized === changedPathNormalized) {
-      // Ignore file watcher notifications if we just saved (within last 2 seconds)
       const timeSinceSave = Date.now() - lastSaveTime;
       if (timeSinceSave < IGNORE_EXTERNAL_CHANGES_MS) {
-        // This is likely from our own save, ignore it
         console.log('Ignoring file watcher notification (recent save)');
         return;
       }
       
-      // Check if the file content actually changed by fetching it
       fetch('/__api__/files?path=' + encodeURIComponent(filePath))
         .then(res => res.json())
         .then(data => {
@@ -333,19 +303,15 @@ require(['vs/editor/editor.main'], function() {
             const currentContent = editor.getValue();
             const fileContent = data.content;
             
-            // If content matches what we have, ignore (might be from our save)
             if (fileContent === currentContent || fileContent === lastSavedContent) {
               console.log('File content matches, ignoring external change notification');
               return;
             }
             
-            // Content is actually different - this is a real external change
             if (isDirty) {
-              // User has unsaved changes - show merge dialog
               pendingExternalContent = fileContent;
               showMergeDialog(currentContent, fileContent);
             } else {
-              // No unsaved changes, just reload
               loadFile(filePath);
               status.textContent = 'File reloaded';
               status.className = 'status saved';
@@ -365,7 +331,6 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function handleExternalSave(content) {
-    // Double-check this isn't our own save that got delayed
     const timeSinceSave = Date.now() - lastSaveTime;
     if (timeSinceSave < 1000 && content === lastSavedContent) {
       console.log('Ignoring external save (matches our recent save)');
@@ -373,11 +338,9 @@ require(['vs/editor/editor.main'], function() {
     }
     
     if (isDirty) {
-      // We have unsaved changes, but another editor saved - show merge dialog
       pendingExternalContent = content;
       showMergeDialog(editor.getValue(), content);
     } else {
-      // No unsaved changes, just sync
       isApplyingExternalChange = true;
       editor.setValue(content);
       originalContent = content;
@@ -397,7 +360,6 @@ require(['vs/editor/editor.main'], function() {
   
   let broadcastTimeout = null;
   function debounceBroadcastChange(content) {
-    // Debounce broadcasts to avoid too many messages
     clearTimeout(broadcastTimeout);
     broadcastTimeout = setTimeout(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -410,14 +372,12 @@ require(['vs/editor/editor.main'], function() {
     }, 500); // Wait 500ms after last change
   }
   
-  // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (ws) {
       ws.close();
     }
   });
   
-  // Merge dialog functions
   function showMergeDialog(currentContent, externalContent) {
     const dialog = document.getElementById('mergeDialog');
     dialog.style.display = 'flex';
@@ -430,7 +390,6 @@ require(['vs/editor/editor.main'], function() {
     const mergeView = document.getElementById('mergeView');
     mergeView.style.display = 'none';
     
-    // Cleanup merge editors
     if (mergeCurrentEditor) {
       mergeCurrentEditor.dispose();
       mergeCurrentEditor = null;
@@ -447,12 +406,10 @@ require(['vs/editor/editor.main'], function() {
   
   window.handleMergeChoice = function(choice) {
     if (choice === 'keep') {
-      // Keep current changes, ignore external
       closeMergeDialog();
       status.textContent = 'Modified (external change ignored)';
       status.className = 'status';
     } else if (choice === 'accept') {
-      // Accept external changes, discard current
       isApplyingExternalChange = true;
       editor.setValue(pendingExternalContent);
       originalContent = pendingExternalContent;
@@ -471,15 +428,12 @@ require(['vs/editor/editor.main'], function() {
         }
       }, 2000);
     } else if (choice === 'merge') {
-      // Show merge view
       const mergeView = document.getElementById('mergeView');
       mergeView.style.display = 'block';
       
-      // Initialize merge editors
       const currentContent = editor.getValue();
       const externalContent = pendingExternalContent;
       
-      // Create editors for comparison
       if (!mergeCurrentEditor) {
         mergeCurrentEditor = monaco.editor.create(document.getElementById('mergeCurrent'), {
           value: currentContent,
@@ -519,7 +473,6 @@ require(['vs/editor/editor.main'], function() {
         mergeResultEditor.setValue(currentContent);
       }
       
-      // Sync scrolling
       mergeCurrentEditor.onDidScrollChange(() => {
         const scrollTop = mergeCurrentEditor.getScrollTop();
         const scrollLeft = mergeCurrentEditor.getScrollLeft();

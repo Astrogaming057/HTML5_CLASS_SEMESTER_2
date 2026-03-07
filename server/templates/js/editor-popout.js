@@ -1,4 +1,3 @@
-// Get file path from URL
 const urlParams = new URLSearchParams(window.location.search);
 const filePath = urlParams.get('file');
 const originalUrl = urlParams.get('original');
@@ -7,10 +6,8 @@ let editor = null;
 let originalContent = '';
 let isDirty = false;
 
-// BroadcastChannel for cross-window communication
 const channel = new BroadcastChannel('preview-sync');
 
-// Language mapping
 function getLanguage(filePath) {
   const ext = filePath.split('.').pop().toLowerCase();
   const langMap = {
@@ -42,14 +39,12 @@ function getLanguage(filePath) {
   return langMap[ext] || 'plaintext';
 }
 
-// Initialize Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
 require(['vs/editor/editor.main'], function() {
   const editorContainer = document.getElementById('editor');
   const language = getLanguage(filePath);
   
-  // Load file content
   fetch(`/__api__/files?path=${encodeURIComponent(filePath)}`)
     .then(res => res.json())
     .then(data => {
@@ -65,18 +60,15 @@ require(['vs/editor/editor.main'], function() {
         wordWrap: 'on'
       });
       
-      // Listen for content changes from main window
       channel.addEventListener('message', (event) => {
         if (event.data.type === 'editor-content' && event.data.filePath === filePath) {
           const currentValue = editor.getValue();
           if (currentValue !== event.data.content) {
-            // Prevent infinite loop by checking if content actually changed
             const position = editor.getPosition();
             const scrollTop = editor.getScrollTop();
             editor.setValue(event.data.content);
             originalContent = event.data.content;
             isDirty = event.data.isDirty || false;
-            // Restore position
             if (position) {
               editor.setPosition(position);
               editor.setScrollTop(scrollTop);
@@ -91,7 +83,6 @@ require(['vs/editor/editor.main'], function() {
         }
       });
       
-      // Send content changes to main window (with debounce to prevent spam)
       let changeTimeout = null;
       editor.onDidChangeModelContent(() => {
         isDirty = editor.getValue() !== originalContent;
@@ -107,7 +98,6 @@ require(['vs/editor/editor.main'], function() {
         }, 100);
       });
       
-      // Send cursor position changes
       editor.onDidChangeCursorPosition((e) => {
         channel.postMessage({
           type: 'editor-cursor',
@@ -116,7 +106,6 @@ require(['vs/editor/editor.main'], function() {
         });
       });
       
-      // Save on Ctrl+S
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         saveFile();
       });
@@ -160,12 +149,10 @@ function saveFile() {
   });
 }
 
-// Close button
 document.getElementById('closePopout').addEventListener('click', () => {
   window.close();
 });
 
-// Handle window close
 window.addEventListener('beforeunload', () => {
   channel.postMessage({
     type: 'popout-closed',

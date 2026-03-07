@@ -149,7 +149,7 @@ body {
 .file-explorer-panel {
   width: 250px;
   min-width: 150px;
-  max-width: calc(100% - 420px); /* Ensure editor (200px) + preview (200px) + resizers (20px) remain visible */
+  max-width: calc(100% - 420px);
   display: flex;
   flex-direction: column;
   border-right: 1px solid #3e3e42;
@@ -323,7 +323,6 @@ body {
   display: block;
 }
 
-/* Panel Reopen Bars */
 .explorer-reopen-bar,
 .preview-reopen-bar,
 .terminal-reopen-bar {
@@ -382,7 +381,6 @@ body {
   color: #ffffff;
 }
 
-/* Terminal Panel */
 .resizer-terminal {
   display: block;
   width: 100%;
@@ -666,7 +664,6 @@ body.resizing .preview-panel * {
   will-change: width;
 }
 
-/* Disable pointer events on iframe and preview container during resize so mouse events pass through */
 body.resizing #previewContainer,
 body.resizing #previewFrame,
 body.resizing #previewContainer * {
@@ -726,7 +723,6 @@ body.resizing .resizer {
   display: block;
 }
 
-/* Context Menu */
 .context-menu {
   position: fixed;
   background: #252526;
@@ -759,7 +755,6 @@ body.resizing .resizer {
   margin: 4px 0;
 }
 
-/* Custom Prompt Dialog */
 .custom-prompt-dialog {
   position: fixed;
   top: 0;
@@ -845,7 +840,6 @@ body.resizing .resizer {
   gap: 10px;
 }
 
-/* Rename input */
 .file-tree-item-rename {
   background: #1e1e1e;
   border: 1px solid #0e639c;
@@ -889,7 +883,6 @@ body.resizing .resizer {
   height: -webkit-fill-available;
 }
 
-/* Server Update Notification */
 .server-update-notification {
   position: fixed;
   bottom: 20px;
@@ -954,7 +947,6 @@ body.resizing .resizer {
   font-size: 12px;
 }
 
-/* Restart Overlay */
 .restart-overlay {
   position: fixed;
   top: 0;

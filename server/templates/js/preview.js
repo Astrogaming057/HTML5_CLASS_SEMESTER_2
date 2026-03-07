@@ -1,4 +1,3 @@
-// Get file path from URL
 const urlParams = new URLSearchParams(window.location.search);
 let filePath = urlParams.get('file');
 let currentDir = '';
@@ -10,28 +9,23 @@ let previewFrame = null;
 let fileTree = null;
 let ws = null;
 
-// Popout windows
 let editorPopout = null;
 let previewPopout = null;
 let terminalPopout = null;
 
-// BroadcastChannel for cross-window communication
 const syncChannel = new BroadcastChannel('preview-sync');
 
-// Language mapping
 function getLanguage(filePath) {
   const ext = filePath.split('.').pop().toLowerCase();
   if (ext === 'html' || ext === 'htm') {
     return 'html';
   }
-  return 'html'; // Default to HTML for preview
+  return 'html';
 }
 
-// Initialize Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
 require(['vs/editor/editor.main'], function() {
-  // Set up message listener flag (declare at top to avoid TDZ issues)
   let logMessageListenerSetup = false;
   
   const editorContainer = document.getElementById('editor');
@@ -62,21 +56,17 @@ require(['vs/editor/editor.main'], function() {
     return;
   }
   
-  // Calculate current directory
   currentDir = filePath.split('/').slice(0, -1).join('/') || '';
   
   fileName.textContent = filePath.split('/').pop();
   const language = getLanguage(filePath);
   
-  // Flag to prevent saving state during initialization (before restore)
   let isRestoringState = true;
   
-  // Check for saved state and restore directory BEFORE loading file tree
   const savedState = localStorage.getItem('previewState');
   if (savedState) {
     try {
       const state = JSON.parse(savedState);
-      // If saved directory exists and is different, use it
       if (state.currentDir && state.currentDir !== currentDir) {
         currentDir = state.currentDir;
         console.log('Restored directory from state:', currentDir);
@@ -86,56 +76,41 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  // Setup file explorer with potentially restored directory
   setupFileExplorer();
   
-  // Restore full state from localStorage (after everything is initialized)
-  // Use requestAnimationFrame to ensure DOM is ready
-  // This MUST happen before any visibility updates to prevent resetting state
   requestAnimationFrame(() => {
     setTimeout(() => {
       restoreState();
-      // After state is restored, ensure visibility is correct
-      // (restoreState already calls these, but this is a safety net)
       updateExplorerVisibility();
       updatePreviewVisibility();
       if (terminalPanel) {
         updateTerminalVisibility();
       }
-      // Now allow saving state
       isRestoringState = false;
       console.log('State restoration complete - saving enabled');
     }, 300);
   });
   
-  // Setup context menu
   setupContextMenu();
   
-  // Setup drag and drop
   setupDragAndDrop();
   
-  // Setup terminal
   setupTerminal();
   
-  // Setup WebSocket connection for sync
   setupWebSocket();
   
-  // Setup BroadcastChannel listeners for popout synchronization
   syncChannel.addEventListener('message', (event) => {
     const data = event.data;
     
-    // Handle editor content sync from popout
     if (data.type === 'editor-content' && data.filePath === filePath && editor) {
       const currentValue = editor.getValue();
       if (currentValue !== data.content) {
-        // Prevent infinite loop by checking if content actually changed
         const position = editor.getPosition();
         const scrollTop = editor.getScrollTop();
         editor.setValue(data.content);
         originalContent = data.content;
         isDirty = data.isDirty || false;
         updateStatus();
-        // Restore position
         if (position) {
           editor.setPosition(position);
           editor.setScrollTop(scrollTop);
@@ -143,7 +118,6 @@ require(['vs/editor/editor.main'], function() {
       }
     }
     
-    // Handle editor cursor sync from popout
     if (data.type === 'editor-cursor' && data.filePath === filePath && editor) {
       const pos = data.position;
       if (pos) {
@@ -152,17 +126,14 @@ require(['vs/editor/editor.main'], function() {
       }
     }
     
-    // Handle preview updates from popout
     if (data.type === 'preview-refresh-request') {
       if (previewFrame && previewFrame.style.display !== 'none') {
         previewFrame.src = previewFrame.src;
       }
     }
     
-    // Handle terminal output sync from popout
     if (data.type === 'terminal-output') {
       const { tab, output, append } = data;
-      // Handle tab name capitalization correctly
       let tabName = tab;
       if (tab === 'powershell') {
         tabName = 'PowerShell';
@@ -180,10 +151,8 @@ require(['vs/editor/editor.main'], function() {
       }
     }
     
-    // Handle terminal clear from popout
     if (data.type === 'terminal-clear') {
       const { tab } = data;
-      // Handle tab name capitalization correctly
       let tabName = tab;
       if (tab === 'powershell') {
         tabName = 'PowerShell';
@@ -196,33 +165,27 @@ require(['vs/editor/editor.main'], function() {
       }
     }
     
-    // Handle terminal commands from popout
     if (data.type === 'terminal-command') {
       handleTerminalCommand(data.tab, data.command);
     }
     
-    // Handle popout closed
     if (data.type === 'popout-closed') {
       if (data.popoutType === 'editor') {
         editorPopout = null;
-        // Show editor panel again
         if (editorPanel) {
           editorPanel.classList.remove('collapsed');
         }
       } else if (data.popoutType === 'preview') {
         previewPopout = null;
-        // Show preview panel again
         if (previewPanel) {
           previewPanel.classList.remove('collapsed');
           updatePreviewVisibility();
         }
       } else if (data.popoutType === 'terminal') {
         terminalPopout = null;
-        // Show terminal panel again
         const terminalPanelEl = document.getElementById('terminalPanel');
         if (terminalPanelEl) {
           terminalPanelEl.classList.remove('collapsed');
-          // Manually update visibility
           const toggleTerminalBtn = document.getElementById('toggleTerminal');
           if (toggleTerminalBtn) {
             toggleTerminalBtn.textContent = '−';
@@ -274,7 +237,6 @@ require(['vs/editor/editor.main'], function() {
       return;
     }
     
-    // Hide preview panel on main page
     if (previewPanel) {
       previewPanel.classList.add('collapsed');
       updatePreviewVisibility();
@@ -298,11 +260,9 @@ require(['vs/editor/editor.main'], function() {
       return;
     }
     
-    // Hide terminal panel on main page
     const terminalPanelEl = document.getElementById('terminalPanel');
     if (terminalPanelEl) {
       terminalPanelEl.classList.add('collapsed');
-      // Manually update visibility
       const toggleTerminalBtn = document.getElementById('toggleTerminal');
       if (toggleTerminalBtn) {
         toggleTerminalBtn.textContent = '+';
@@ -319,8 +279,6 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function handleTerminalCommand(tab, command) {
-    // Handle terminal commands from popout windows
-    // Handle tab name capitalization correctly
     let tabName = tab;
     if (tab === 'powershell') {
       tabName = 'PowerShell';
@@ -343,7 +301,6 @@ require(['vs/editor/editor.main'], function() {
       }
       outputEl.scrollTop = outputEl.scrollHeight;
       
-      // Sync back to popout
       syncChannel.postMessage({
         type: 'terminal-output',
         tab: tab,
@@ -351,7 +308,6 @@ require(['vs/editor/editor.main'], function() {
         append: false
       });
     } else if (tab === 'powershell') {
-      // Execute PowerShell command via API
       fetch('/__api__/terminal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -359,14 +315,12 @@ require(['vs/editor/editor.main'], function() {
       })
       .then(res => res.json())
       .then(data => {
-        // Add command prompt
         const commandLine = document.createElement('div');
         commandLine.className = 'terminal-line log';
         commandLine.textContent = `PS> ${command}`;
         outputEl.appendChild(commandLine);
         
         if (data.success) {
-          // Display output (stdout)
           if (data.output && data.output.trim()) {
             const lines = data.output.split('\n');
             lines.forEach(line => {
@@ -376,7 +330,6 @@ require(['vs/editor/editor.main'], function() {
                 lineEl.textContent = line;
                 outputEl.appendChild(lineEl);
                 
-                // Sync to popout
                 syncChannel.postMessage({
                   type: 'terminal-output',
                   tab: tab,
@@ -387,13 +340,11 @@ require(['vs/editor/editor.main'], function() {
               }
             });
           }
-          // Display errors (stderr) - PowerShell often writes to stderr even on success
           if (data.error && data.error.trim()) {
             const errorLines = data.error.split('\n');
             errorLines.forEach(line => {
               if (line.trim()) {
                 let lineType = 'warn';
-                // Detect error vs warning
                 if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
                   lineType = 'error';
                 } else if (line.toLowerCase().includes('warning')) {
@@ -405,7 +356,6 @@ require(['vs/editor/editor.main'], function() {
                 lineEl.textContent = line;
                 outputEl.appendChild(lineEl);
                 
-                // Sync to popout
                 syncChannel.postMessage({
                   type: 'terminal-output',
                   tab: tab,
@@ -417,7 +367,6 @@ require(['vs/editor/editor.main'], function() {
             });
           }
         } else {
-          // Command failed
           const errorLine = document.createElement('div');
           errorLine.className = 'terminal-line error';
           errorLine.textContent = `Error: ${data.error || 'Command failed'}`;
@@ -429,7 +378,6 @@ require(['vs/editor/editor.main'], function() {
             stderrLine.textContent = data.stderr;
             outputEl.appendChild(stderrLine);
             
-            // Sync stderr to popout
             syncChannel.postMessage({
               type: 'terminal-output',
               tab: tab,
@@ -439,7 +387,6 @@ require(['vs/editor/editor.main'], function() {
             });
           }
           
-          // Sync error to popout
           syncChannel.postMessage({
             type: 'terminal-output',
             tab: tab,
@@ -451,7 +398,6 @@ require(['vs/editor/editor.main'], function() {
         
         outputEl.scrollTop = outputEl.scrollHeight;
         
-        // Sync command prompt to popout
         syncChannel.postMessage({
           type: 'terminal-output',
           tab: tab,
@@ -464,11 +410,10 @@ require(['vs/editor/editor.main'], function() {
         const errorLine = document.createElement('div');
         errorLine.className = 'terminal-line error';
         errorLine.textContent = `Network Error: ${err.message}`;
-        outputEl.appendChild(errorLine);
-        outputEl.scrollTop = outputEl.scrollHeight;
-        
-        // Sync error to popout
-        syncChannel.postMessage({
+          outputEl.appendChild(errorLine);
+          outputEl.scrollTop = outputEl.scrollHeight;
+          
+          syncChannel.postMessage({
           type: 'terminal-output',
           tab: tab,
           output: `Network Error: ${err.message}\n`,
@@ -477,7 +422,6 @@ require(['vs/editor/editor.main'], function() {
         });
       });
     } else if (tab === 'log') {
-      // Execute in preview context
       if (previewFrame && previewFrame.contentWindow) {
         try {
           const result = previewFrame.contentWindow.eval(command);
@@ -485,10 +429,9 @@ require(['vs/editor/editor.main'], function() {
         } catch (err) {
           outputEl.textContent += `> ${command}\nError: ${err.message}\n`;
         }
-        outputEl.scrollTop = outputEl.scrollHeight;
-        
-        // Sync back to popout
-        syncChannel.postMessage({
+      outputEl.scrollTop = outputEl.scrollHeight;
+      
+      syncChannel.postMessage({
           type: 'terminal-output',
           tab: tab,
           output: outputEl.textContent,
@@ -498,22 +441,18 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  // Toggle explorer button (in panel)
   toggleExplorer.addEventListener('click', () => {
     toggleFileExplorer();
   });
   
-  // Toggle preview button (in panel)
   togglePreview.addEventListener('click', () => {
     togglePreviewPanel();
   });
   
-  // Popout buttons
   const popoutEditorBtn = document.getElementById('popoutEditor');
   const popoutPreviewBtn = document.getElementById('popoutPreview');
   const popoutTerminalBtn = document.getElementById('popoutTerminal');
   
-  // Disable editor popout for now
   if (popoutEditorBtn) {
     popoutEditorBtn.disabled = true;
     popoutEditorBtn.style.opacity = '0.5';
@@ -539,7 +478,6 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
       e.preventDefault();
@@ -598,7 +536,6 @@ require(['vs/editor/editor.main'], function() {
     
     console.log('updatePreviewVisibility, collapsed:', isCollapsed);
     
-    // Hide/show resizer based on preview state
     if (resizerEditor) {
       resizerEditor.style.display = isCollapsed ? 'none' : 'block';
     }
@@ -608,7 +545,6 @@ require(['vs/editor/editor.main'], function() {
       console.log('Preview reopen bar display:', previewReopenBar.style.display);
     }
     
-    // Add/remove class on container to help with CSS targeting
     if (container) {
       if (isCollapsed) {
         container.classList.add('preview-collapsed');
@@ -617,41 +553,31 @@ require(['vs/editor/editor.main'], function() {
       }
     }
     
-    // When preview is collapsed, make editor expand to fill space
     if (isCollapsed) {
-      // Remove any fixed width from editor to let it expand
-      // Store current width if it exists and isn't empty
       const currentWidth = editorPanel.style.width;
       if (currentWidth && currentWidth !== '') {
-        // Temporarily store it, but let flex take over
         editorPanel.dataset.previousWidth = currentWidth;
       }
-      // Let editor expand to fill available space
       editorPanel.style.flex = '1 1 auto';
       editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
-      // Clear width to let flex work
       editorPanel.style.width = '';
     } else {
-      // When preview is expanded, restore previous width if it existed
       if (editorPanel.dataset.previousWidth) {
         editorPanel.style.width = editorPanel.dataset.previousWidth;
         editorPanel.style.flex = 'none';
         delete editorPanel.dataset.previousWidth;
       } else if (!editorPanel.style.width || editorPanel.style.width === '') {
-        // No previous width, use flex
         editorPanel.style.flex = '1 1 auto';
       }
     }
   }
   
-  // Initialize resizer visibility
   if (resizerEditor && previewPanel) {
     if (previewPanel.classList.contains('collapsed')) {
       resizerEditor.style.display = 'none';
     }
   }
   
-  // Terminal toggle
   const toggleTerminal = document.getElementById('toggleTerminal');
   const terminalPanel = document.getElementById('terminalPanel');
   const resizerTerminal = document.getElementById('resizerTerminal');
@@ -667,17 +593,14 @@ require(['vs/editor/editor.main'], function() {
     if (!terminalPanel) return;
     const isCollapsed = terminalPanel.classList.contains('collapsed');
     
-    // Update toggle button
     if (toggleTerminal) {
       toggleTerminal.textContent = isCollapsed ? '+' : '−';
     }
     
-    // Update resizer visibility
     if (resizerTerminal) {
       resizerTerminal.style.display = isCollapsed ? 'none' : 'block';
     }
     
-    // Update reopen bar visibility
     if (terminalReopenBar) {
       terminalReopenBar.style.display = isCollapsed ? 'flex' : 'none';
     }
@@ -695,20 +618,16 @@ require(['vs/editor/editor.main'], function() {
   function moveTerminalToBottomPosition() {
     if (!terminalPanel || !container || !fileExplorerPanel) return;
     
-    // Remove from file explorer
     const fileTree = document.getElementById('fileTree');
     if (fileTree && terminalPanel.parentNode === fileExplorerPanel) {
-      // Resizer is now inside terminal panel, so just remove terminal panel
       fileExplorerPanel.removeChild(terminalPanel);
     }
     
-    // Create wrapper for main content if it doesn't exist
     let mainContentWrapper = container.querySelector('.main-content-wrapper');
     if (!mainContentWrapper) {
       mainContentWrapper = document.createElement('div');
       mainContentWrapper.className = 'main-content-wrapper';
       
-      // Move all panels except terminal into wrapper
       const children = Array.from(container.children);
       children.forEach(child => {
         if (child !== terminalPanel && 
@@ -720,10 +639,8 @@ require(['vs/editor/editor.main'], function() {
       container.appendChild(mainContentWrapper);
     }
     
-    // Add terminal to bottom of container (resizer is inside terminal panel)
     container.appendChild(terminalPanel);
     
-    // Update classes
     terminalPanel.classList.add('at-bottom');
     container.classList.add('terminal-at-bottom');
     terminalAtBottom = true;
@@ -735,7 +652,6 @@ require(['vs/editor/editor.main'], function() {
   function moveTerminalToExplorerPosition() {
     if (!terminalPanel || !container || !fileExplorerPanel) return;
     
-    // Remove wrapper and restore children to container
     const mainContentWrapper = container.querySelector('.main-content-wrapper');
     if (mainContentWrapper) {
       const children = Array.from(mainContentWrapper.children);
@@ -745,12 +661,10 @@ require(['vs/editor/editor.main'], function() {
       container.removeChild(mainContentWrapper);
     }
     
-    // Remove from container
     if (terminalPanel.parentNode === container) {
       container.removeChild(terminalPanel);
     }
     
-    // Add back to file explorer (after file tree, resizer is inside terminal panel)
     const fileTree = document.getElementById('fileTree');
     if (fileTree) {
       fileExplorerPanel.insertBefore(terminalReopenBar, fileTree.nextSibling);
@@ -760,7 +674,6 @@ require(['vs/editor/editor.main'], function() {
       fileExplorerPanel.appendChild(terminalPanel);
     }
     
-    // Update classes
     terminalPanel.classList.remove('at-bottom');
     container.classList.remove('terminal-at-bottom');
     terminalAtBottom = false;
@@ -777,21 +690,18 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  // Move terminal to bottom button
   if (moveTerminalToBottom && terminalPanel) {
     moveTerminalToBottom.addEventListener('click', () => {
       moveTerminalToBottomPosition();
     });
   }
   
-  // Move terminal to explorer button
   if (moveTerminalToExplorer && terminalPanel) {
     moveTerminalToExplorer.addEventListener('click', () => {
       moveTerminalToExplorerPosition();
     });
   }
   
-  // Reopen terminal button
   if (reopenTerminalBtn && terminalPanel) {
     reopenTerminalBtn.addEventListener('click', () => {
       terminalPanel.classList.remove('collapsed');
@@ -800,10 +710,8 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  // Initialize button visibility
   updateTerminalPositionButtons();
   
-  // Reopen explorer button
   const reopenExplorerBtn = document.getElementById('reopenExplorerBtn');
   if (reopenExplorerBtn && fileExplorerPanel) {
     reopenExplorerBtn.addEventListener('click', () => {
@@ -814,7 +722,6 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  // Reopen preview button
   const reopenPreviewBtn = document.getElementById('reopenPreviewBtn');
   if (reopenPreviewBtn && previewPanel) {
     reopenPreviewBtn.addEventListener('click', () => {

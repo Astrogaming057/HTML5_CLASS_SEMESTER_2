@@ -1,5 +1,4 @@
 (function() {
-  // Create navigation bar
   const navBar = document.createElement('div');
   navBar.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: #f0f0f0; padding: 10px; border-bottom: 1px solid #ccc; z-index: 10000; display: flex; gap: 10px; align-items: center;';
   
@@ -28,11 +27,9 @@
   navBar.appendChild(refreshBtn);
   navBar.appendChild(statusDiv);
   
-  // Add padding to body to account for fixed nav
   document.body.style.paddingTop = '50px';
   document.body.insertBefore(navBar, document.body.firstChild);
   
-  // WebSocket connection for auto-refresh
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = protocol + '//' + window.location.host;
   const ws = new WebSocket(wsUrl);
@@ -58,7 +55,6 @@
       const currentPath = window.location.pathname.replace(/^\/+/, '').replace(/\\/g, '/');
       const changedPath = data.path.replace(/\\/g, '/');
       
-      // Normalize paths - remove leading/trailing slashes
       const normalizePath = (p) => {
         p = p.replace(/^\/+/, '').replace(/\/+$/, '');
         return p.toLowerCase();
@@ -67,7 +63,6 @@
       const currentNormalized = normalizePath(currentPath);
       const changedNormalized = normalizePath(changedPath);
       
-      // Get directory paths
       const getDir = (p) => {
         const lastSlash = p.lastIndexOf('/');
         return lastSlash >= 0 ? p.substring(0, lastSlash) : '';
@@ -76,9 +71,6 @@
       const currentDir = getDir(currentNormalized);
       const changedDir = getDir(changedNormalized);
       
-      // Refresh if:
-      // 1. The changed file is the current file
-      // 2. The changed file is in the same directory (for CSS/JS assets)
       const isCurrentFile = currentNormalized === changedNormalized;
       const isSameDirectory = currentDir && currentDir === changedDir;
       
@@ -92,7 +84,6 @@
     }
   };
   
-  // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     ws.close();
   });
