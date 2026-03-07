@@ -15,6 +15,33 @@ function setWebSocketManager(manager) {
   wsManager = manager;
 }
 
+/**
+ * Recursively copy a directory
+ * @param {string} src - Source directory path
+ * @param {string} dest - Destination directory path
+ */
+async function copyDirectory(src, dest) {
+  // Create destination directory
+  await fs.mkdir(dest, { recursive: true });
+  
+  // Read source directory
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  
+  // Copy each entry
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      // Recursively copy subdirectories
+      await copyDirectory(srcPath, destPath);
+    } else {
+      // Copy files
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+}
+
 const router = express.Router();
 
 /**
@@ -156,7 +183,59 @@ function setupAPI(baseDir) {
           return res.json({ success: false, error: 'Forbidden' });
         }
 
-        await fs.rename(resolvedPath, newResolvedPath);
+        // Check if source exists
+        const sourceStats = await fs.stat(resolvedPath).catch(() => null);
+        if (!sourceStats) {
+          return res.json({ success: false, error: 'Source file/folder does not exist' });
+        }
+
+        // Check if destination already exists
+        const destExists = await fs.stat(newResolvedPath).catch(() => null);
+        if (destExists) {
+          return res.json({ success: false, error: 'Destination already exists' });
+        }
+
+        // For directories on Windows, use a more robust approach
+        if (sourceStats.isDirectory()) {
+          // Try rename first (fastest)
+          try {
+            await fs.rename(resolvedPath, newResolvedPath);
+          } catch (renameError) {
+            // If rename fails (e.g., EPERM on Windows), use copy + delete
+            if (renameError.code === 'EPERM' || renameError.code === 'EBUSY') {
+              logger.info('API: Rename failed, using copy+delete for directory', { path: filePath, newPath, error: renameError.code });
+              
+              // Copy directory recursively
+              await copyDirectory(resolvedPath, newResolvedPath);
+              
+              // Delete original directory with retry logic
+              let deleted = false;
+              for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                  await fs.rm(resolvedPath, { recursive: true, force: true });
+                  deleted = true;
+                  break;
+                } catch (deleteError) {
+                  if (attempt < 4) {
+                    // Wait before retry (Windows file locking can be delayed)
+                    await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+                  } else {
+                    // If we can't delete, at least the copy succeeded
+                    logger.warn('API: Could not delete original directory after copy', { path: filePath, error: deleteError.message });
+                    // Continue anyway - the move is effectively done
+                    deleted = true;
+                  }
+                }
+              }
+            } else {
+              throw renameError;
+            }
+          }
+        } else {
+          // For files, use regular rename
+          await fs.rename(resolvedPath, newResolvedPath);
+        }
+        
         logger.info('API: File/folder renamed', { path: filePath, newPath });
         
         // Broadcast rename (delete old, add new)
@@ -235,6 +314,70 @@ function setupAPI(baseDir) {
       res.json({ success: true });
     } catch (error) {
       logger.error('API: Error deleting file/folder', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // Server restart endpoint
+  router.post('/restart', async (req, res) => {
+    try {
+      logger.info('Server restart requested');
+      // Send response immediately before shutting down
+      res.json({ success: true, message: 'Server restarting...' });
+      
+      // Give time for response to be sent
+      setTimeout(() => {
+        const { spawn } = require('child_process');
+        const path = require('path');
+        const fs = require('fs');
+        
+        
+        // Determine restart command based on platform
+        const isWindows = process.platform === 'win32';
+        const serverDir = path.join(__dirname, '../..');
+        const serverFile = path.join(__dirname, '../index.js');
+        
+        if (isWindows) {
+          // On Windows, use start command to open in new window
+          // This ensures the new server process runs independently
+          const startBat = path.join(serverDir, 'start.bat');
+          if (fs.existsSync(startBat)) {
+            // Spawn new process using start.bat in a new window
+            // Use proper path escaping for Windows
+            // Add a delay before starting to let old server shut down
+            spawn('cmd.exe', ['/c', 'timeout', '/t', '2', '/nobreak', '>', 'nul', '&&', 'start', 'cmd.exe', '/k', startBat], {
+              cwd: serverDir,
+              detached: true,
+              stdio: 'ignore',
+              shell: true
+            });
+          } else {
+            // Fallback: spawn node directly in new window
+            const serverPath = path.join(__dirname, '..');
+            spawn('cmd.exe', ['/c', 'timeout', '/t', '2', '/nobreak', '>', 'nul', '&&', 'start', 'cmd.exe', '/k', 'cd', '/d', serverPath, '&&', 'node', 'index.js'], {
+              cwd: serverDir,
+              detached: true,
+              stdio: 'ignore',
+              shell: true
+            });
+          }
+        } else {
+          // On Unix-like systems, use nohup or similar
+          const newProcess = spawn('node', [serverFile], {
+            cwd: path.join(__dirname, '..'),
+            detached: true,
+            stdio: 'ignore'
+          });
+          newProcess.unref(); // Allow parent to exit
+        }
+        
+        // Give the new process time to start, then exit
+        setTimeout(() => {
+          process.exit(0);
+        }, 2000);
+      }, 100);
+    } catch (error) {
+      logger.error('API: Error restarting server', error);
       res.json({ success: false, error: error.message });
     }
   });

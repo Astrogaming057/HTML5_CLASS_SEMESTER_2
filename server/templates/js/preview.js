@@ -508,17 +508,21 @@ require(['vs/editor/editor.main'], function() {
   });
   
   // Close button
-  closeBtn.addEventListener('click', () => {
-    if (isDirty && !confirm('You have unsaved changes. Are you sure you want to close?')) {
+  closeBtn.addEventListener('click', async () => {
+    if (isDirty) {
+      const confirmed = await customConfirm('You have unsaved changes. Are you sure you want to close?');
+      if (!confirmed) {
       return;
+      }
     }
     window.close();
   });
   
   // Reset settings button
   if (resetSettingsBtn) {
-    resetSettingsBtn.addEventListener('click', () => {
-      if (confirm('Are you sure you want to reset all settings? This will clear panel sizes, positions, and preferences.')) {
+    resetSettingsBtn.addEventListener('click', async () => {
+      const confirmed = await customConfirm('Are you sure you want to reset all settings? This will clear panel sizes, positions, and preferences.');
+      if (confirmed) {
         resetSettings();
       }
     });
@@ -539,6 +543,116 @@ require(['vs/editor/editor.main'], function() {
   function setupFileExplorer() {
     // Load file tree for current directory
     loadFileTree(currentDir || '/');
+  }
+  
+  // Custom prompt function (replaces browser prompt which doesn't work in sandboxed iframe)
+  function customPrompt(title, defaultValue = '') {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('customPromptDialog');
+      const input = document.getElementById('customPromptInput');
+      const titleEl = document.getElementById('customPromptTitle');
+      const okBtn = document.getElementById('customPromptOk');
+      const cancelBtn = document.getElementById('customPromptCancel');
+      const closeBtn = document.getElementById('customPromptClose');
+      
+      titleEl.textContent = title;
+      input.value = defaultValue;
+      dialog.style.display = 'flex';
+      input.focus();
+      input.select();
+      
+      const cleanup = () => {
+        dialog.style.display = 'none';
+        input.value = '';
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        closeBtn.onclick = null;
+        input.onkeydown = null;
+      };
+      
+      const handleOk = () => {
+        const value = input.value.trim();
+        cleanup();
+        resolve(value || null);
+      };
+      
+      const handleCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+      
+      okBtn.onclick = handleOk;
+      cancelBtn.onclick = handleCancel;
+      closeBtn.onclick = handleCancel;
+      
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          handleOk();
+        } else if (e.key === 'Escape') {
+          handleCancel();
+        }
+      };
+      
+      // Close on background click
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          handleCancel();
+        }
+      };
+    });
+  }
+  
+  function customConfirm(message) {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('customConfirmDialog');
+      const messageEl = document.getElementById('customConfirmMessage');
+      const okBtn = document.getElementById('customConfirmOk');
+      const cancelBtn = document.getElementById('customConfirmCancel');
+      const closeBtn = document.getElementById('customConfirmClose');
+      
+      messageEl.textContent = message;
+      dialog.style.display = 'flex';
+      okBtn.focus();
+      
+      const cleanup = () => {
+        dialog.style.display = 'none';
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        closeBtn.onclick = null;
+        dialog.onkeydown = null;
+      };
+      
+      const handleOk = () => {
+        cleanup();
+        resolve(true);
+      };
+      
+      const handleCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+      
+      okBtn.onclick = handleOk;
+      cancelBtn.onclick = handleCancel;
+      closeBtn.onclick = handleCancel;
+      
+      // Handle keyboard
+      const handleKeydown = (e) => {
+        if (e.key === 'Enter') {
+          handleOk();
+        } else if (e.key === 'Escape') {
+          handleCancel();
+        }
+      };
+      dialog.onkeydown = handleKeydown;
+      
+      // Close on background click
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          handleCancel();
+        }
+      };
+    });
   }
   
   function loadFileTree(dir) {
@@ -638,15 +752,98 @@ require(['vs/editor/editor.main'], function() {
       item.appendChild(icon);
       item.appendChild(name);
       
-      // Left click
+      // Make files and folders draggable FIRST (before click handlers)
+      // Set both attribute and property to ensure it works
+      item.setAttribute('draggable', 'true');
+      item.draggable = true;
+      
+      // Track if we're dragging to prevent click navigation
+      let isDragging = false;
+      let dragStartTime = 0;
+      let mouseDownTime = 0;
+      let mouseDownPos = { x: 0, y: 0 };
+      
+      // Track mousedown to detect drag vs click
+      // Don't prevent default or stop propagation - it might interfere with drag
+      item.addEventListener('mousedown', (e) => {
+        mouseDownTime = Date.now();
+        mouseDownPos = { x: e.clientX, y: e.clientY };
+        // Don't prevent default or stop propagation - let drag start naturally
+      });
+      
+      item.addEventListener('dragstart', (e) => {
+        // Ensure dataTransfer is available
+        if (!e.dataTransfer) {
+          console.error('dataTransfer not available in dragstart');
+          e.preventDefault();
+          return false;
+        }
+        
+        isDragging = true;
+        dragStartTime = Date.now();
+        
+        // Set effectAllowed BEFORE setting data
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // Use the full path from dataset - ensure it's the absolute path
+        const fullPath = file.path;
+        
+        // Set data - must be done synchronously in dragstart
+        // Only set text/plain - some browsers have issues with multiple types
+        try {
+          e.dataTransfer.setData('text/plain', fullPath);
+        } catch (err) {
+          console.error('Error setting drag data:', err);
+          e.preventDefault();
+          return false;
+        }
+        
+        item.classList.add('dragging');
+        
+        // Don't prevent default or stop propagation - let the drag happen naturally
+        // CRITICAL: Don't return false or preventDefault here - it will cancel the drag
+        
+        // Show parent folder drop zone AFTER a small delay to avoid interfering with drag
+        setTimeout(() => {
+          showParentFolderDropZone(dir);
+        }, 0);
+      });
+      
+      item.addEventListener('dragend', (e) => {
+        item.classList.remove('dragging');
+        hideParentFolderDropZone();
+        // Remove drag-over classes from all items
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        // Reset dragging flag after a short delay to allow click to be ignored
+        setTimeout(() => {
+          isDragging = false;
+        }, 100);
+      });
+      
+      // Left click - check if we just dragged
       if (file.isDirectory) {
         item.addEventListener('click', (e) => {
+          // Don't navigate if we just finished dragging
+          if (isDragging || item.classList.contains('dragging')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.stopPropagation();
           // Navigate to folder
           loadFileTree(file.path);
         });
       } else {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+          // Don't switch file if we just finished dragging
+          if (isDragging || item.classList.contains('dragging')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.stopPropagation();
           switchToFile(file.path);
         });
       }
@@ -664,28 +861,51 @@ require(['vs/editor/editor.main'], function() {
         renameFile(file.path, file.name, file.isDirectory);
       });
       
-      // Drag and drop for folders
+      // Drag and drop for folders (accept file and folder drops)
       if (file.isDirectory) {
         item.addEventListener('dragover', (e) => {
+          // Only allow if dragging a file/folder (not external files)
+          const hasTextPlain = e.dataTransfer.types.includes('text/plain');
+          if (hasTextPlain) {
           e.preventDefault();
           e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
           item.classList.add('drag-over');
-        });
+          }
+        }, false);
         
         item.addEventListener('dragleave', (e) => {
+          // Only remove drag-over if we're actually leaving the item (not just moving to a child)
+          if (!item.contains(e.relatedTarget)) {
           e.preventDefault();
           e.stopPropagation();
           item.classList.remove('drag-over');
+          }
         });
         
         item.addEventListener('drop', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          item.classList.remove('drag-over');
           
+          // Clear all drag-over classes
+          document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+          });
+          
+          const draggedFilePath = e.dataTransfer.getData('text/plain');
+          
+          if (draggedFilePath && draggedFilePath.trim()) {
+            // Don't allow dropping on itself or its children
+            if (draggedFilePath !== file.path && !file.path.startsWith(draggedFilePath + '/')) {
+              // Move file/folder to this folder
+              moveFileToFolder(draggedFilePath, file.path);
+            }
+          } else {
+            // Handle external file drops
           const files = e.dataTransfer.files;
           if (files.length > 0) {
             handleFileDrop(files, file.path);
+            }
           }
         });
       }
@@ -694,24 +914,165 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
+  // Show parent folder drop zone ("...")
+  function showParentFolderDropZone(currentDir) {
+    if (!currentDir || currentDir === '/') return; // Already at root
+    
+    // Check if parent folder already exists
+    let parentItem = fileTree.querySelector('.file-tree-item[data-path="__parent__"]');
+    if (!parentItem) {
+      parentItem = document.createElement('div');
+      parentItem.className = 'file-tree-item file-tree-folder file-tree-parent';
+      parentItem.dataset.path = '__parent__';
+      parentItem.dataset.isDirectory = 'true';
+      parentItem.dataset.name = '...';
+      
+      //const icon = document.createElement('span');
+      //icon.className = 'file-tree-item-icon';
+      //icon.textContent = '📁';
+      
+      const name = document.createElement('span');
+      name.className = 'file-tree-item-name';
+      name.textContent = '...';
+      
+      //parentItem.appendChild(icon);
+      parentItem.appendChild(name);
+      
+      // Add drop handlers
+      parentItem.addEventListener('dragover', (e) => {
+        const hasTextPlain = e.dataTransfer.types.includes('text/plain');
+        if (hasTextPlain) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          parentItem.classList.add('drag-over');
+        }
+      }, false);
+      
+      parentItem.addEventListener('dragleave', (e) => {
+        // Only remove drag-over if we're actually leaving the item
+        if (!parentItem.contains(e.relatedTarget)) {
+          e.preventDefault();
+          e.stopPropagation();
+          parentItem.classList.remove('drag-over');
+        }
+      });
+      
+      parentItem.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Clear all drag-over classes
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        
+        const draggedFilePath = e.dataTransfer.getData('text/plain');
+        
+        if (draggedFilePath && draggedFilePath.trim()) {
+          // Get parent directory
+          const parentDir = currentDir.split('/').slice(0, -1).join('/') || '/';
+          moveFileToFolder(draggedFilePath, parentDir);
+        }
+      });
+      
+      // Insert at the beginning
+      fileTree.insertBefore(parentItem, fileTree.firstChild);
+    }
+  }
+  
+  // Hide parent folder drop zone
+  function hideParentFolderDropZone() {
+    const parentItem = fileTree.querySelector('.file-tree-item[data-path="__parent__"]');
+    if (parentItem) {
+      parentItem.remove();
+    }
+  }
+  
+  // Move file or folder to a folder
+  function moveFileToFolder(filePath, targetFolderPath) {
+    const fileName = filePath.split('/').pop();
+    const newPath = targetFolderPath === '/' ? fileName : targetFolderPath + '/' + fileName;
+    
+    // Don't move if it's the same location
+    const currentDir = filePath.split('/').slice(0, -1).join('/') || '/';
+    if (currentDir === targetFolderPath) {
+      return;
+    }
+    
+    // Determine if it's a directory by checking if it exists in the file tree
+    const item = document.querySelector(`.file-tree-item[data-path="${filePath}"]`);
+    const isDirectory = item ? item.dataset.isDirectory === 'true' : false;
+    
+    fetch('/__api__/files', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        path: filePath, 
+        newPath: newPath, 
+        isDirectory: isDirectory 
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        // Reload file tree
+        loadFileTree(currentDir);
+        // If this was the current file, switch to new path
+        if (filePath === filePath) {
+          switchToFile(newPath);
+        }
+        // Reload target directory if different (to show the moved file)
+        if (targetFolderPath !== currentDir) {
+          // Reload after a short delay to ensure move completed
+          setTimeout(() => {
+            // Only reload if we're viewing that directory
+            if (currentDir === targetFolderPath) {
+              loadFileTree(targetFolderPath);
+            }
+          }, 100);
+        }
+        status.textContent = `Moved ${fileName}`;
+        status.className = 'status saved';
+        setTimeout(() => {
+          if (!isDirty) {
+            status.textContent = 'Ready';
+            status.className = 'status';
+          }
+        }, 2000);
+      } else {
+        alert('Error: ' + data.error);
+      }
+    })
+    .catch(err => {
+      alert('Error moving file: ' + err.message);
+    });
+  }
+  
   function setupDragAndDrop() {
-    // Enable drag and drop on file tree
+    // Enable drag and drop on file tree for external files
     fileTree.addEventListener('dragover', (e) => {
+      // Only prevent default for external file drops (has files)
+      // For internal drags (text/plain), let the folder items handle it
+      if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       e.stopPropagation();
       fileTree.classList.add('drag-over');
+      }
     });
     
     fileTree.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
       // Only remove class if we're leaving the file tree entirely
       if (!fileTree.contains(e.relatedTarget)) {
+        e.preventDefault();
+        e.stopPropagation();
         fileTree.classList.remove('drag-over');
       }
     });
     
     fileTree.addEventListener('drop', (e) => {
+      // Only handle external file drops here
+      if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault();
       e.stopPropagation();
       fileTree.classList.remove('drag-over');
@@ -726,6 +1087,7 @@ require(['vs/editor/editor.main'], function() {
         } else {
           // Drop into current directory
           handleFileDrop(files, currentDir || '/');
+          }
         }
       }
     });
@@ -887,8 +1249,8 @@ require(['vs/editor/editor.main'], function() {
     document.querySelector('.context-menu-divider').style.display = onlyCreate ? 'none' : 'block';
   }
   
-  function createNewFile() {
-    const fileName = prompt('Enter file name:');
+  async function createNewFile() {
+    const fileName = await customPrompt('Enter file name:');
     if (!fileName) return;
     
     const newPath = currentDir ? currentDir + '/' + fileName : fileName;
@@ -913,8 +1275,8 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  function createNewFolder() {
-    const folderName = prompt('Enter folder name:');
+  async function createNewFolder() {
+    const folderName = await customPrompt('Enter folder name:');
     if (!folderName) return;
     
     const newPath = currentDir ? currentDir + '/' + folderName : folderName;
@@ -937,8 +1299,8 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  function renameFile(path, oldName, isDirectory) {
-    const newName = prompt('Enter new name:', oldName);
+  async function renameFile(path, oldName, isDirectory) {
+    const newName = await customPrompt('Enter new name:', oldName);
     if (!newName || newName === oldName) return;
     
     const parentDir = path.split('/').slice(0, -1).join('/') || '';
@@ -966,8 +1328,9 @@ require(['vs/editor/editor.main'], function() {
     });
   }
   
-  function deleteFile(path, isDirectory) {
-    if (!confirm(`Are you sure you want to delete ${isDirectory ? 'folder' : 'file'} "${path.split('/').pop()}"?`)) {
+  async function deleteFile(path, isDirectory) {
+    const confirmed = await customConfirm(`Are you sure you want to delete ${isDirectory ? 'folder' : 'file'} "${path.split('/').pop()}"?`);
+    if (!confirmed) {
       return;
     }
     
@@ -1029,6 +1392,12 @@ require(['vs/editor/editor.main'], function() {
           serverOutput.appendChild(line);
           serverOutput.scrollTop = serverOutput.scrollHeight;
         }
+        
+        // Handle server update notifications
+        if (data.type === 'serverUpdateAvailable') {
+          showServerUpdateNotification();
+        }
+        
         
         // Handle file system events
         if (data.type === 'fileAdded' || data.type === 'fileDeleted' || 
@@ -1567,12 +1936,15 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  function switchToFile(newPath) {
+  async function switchToFile(newPath) {
     if (newPath === filePath) return;
     
     // Check for unsaved changes
-    if (isDirty && !confirm('You have unsaved changes. Switch file anyway?')) {
+    if (isDirty) {
+      const confirmed = await customConfirm('You have unsaved changes. Switch file anyway?');
+      if (!confirmed) {
       return;
+      }
     }
     
     // Update file path
@@ -1951,8 +2323,8 @@ require(['vs/editor/editor.main'], function() {
         e.preventDefault();
       }
       e.stopPropagation();
-      
-      const containerRect = container.getBoundingClientRect();
+        
+        const containerRect = container.getBoundingClientRect();
       
       switch (activeResizer) {
         case 'explorer':
@@ -1969,7 +2341,7 @@ require(['vs/editor/editor.main'], function() {
     
     function handleGlobalMouseUp(e) {
       if (!activeResizer) return;
-      
+        
       // Clean up global state - remove all listeners
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -1992,7 +2364,7 @@ require(['vs/editor/editor.main'], function() {
       const previewCollapsed = previewPanel.classList.contains('collapsed');
       const deltaX = e.clientX - startX;
       let newWidth = startWidth + deltaX;
-      
+        
       // Calculate constraints based on preview state
       const minWidth = MIN_EXPLORER_WIDTH;
       let maxWidth;
@@ -2031,9 +2403,9 @@ require(['vs/editor/editor.main'], function() {
     // Editor resizer handler
     function handleEditorResize(e, containerRect) {
       const previewCollapsed = previewPanel.classList.contains('collapsed');
-      
+        
       // Cache explorer width to avoid repeated DOM reads
-      const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
+        const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
       const explorerResizerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : RESIZER_WIDTH;
       const editorResizerWidth = RESIZER_WIDTH;
       const availableWidth = containerRect.width - explorerWidth - explorerResizerWidth - (previewCollapsed ? 0 : editorResizerWidth);
@@ -2058,11 +2430,11 @@ require(['vs/editor/editor.main'], function() {
           const constrainedPreviewWidth = MIN_PREVIEW_WIDTH;
           const constrainedEditorWidth = availableWidth - constrainedPreviewWidth;
           if (constrainedEditorWidth >= MIN_EDITOR_WIDTH) {
-            editorPanel.style.flex = 'none';
-            previewPanel.style.flex = 'none';
+          editorPanel.style.flex = 'none';
+          previewPanel.style.flex = 'none';
             editorPanel.style.width = constrainedEditorWidth + 'px';
             previewPanel.style.width = constrainedPreviewWidth + 'px';
-          }
+        }
         } else {
           // Both panels meet minimum requirements
           editorPanel.style.flex = 'none';
@@ -2527,4 +2899,229 @@ require(['vs/editor/editor.main'], function() {
   
   // Save state periodically as well
   setInterval(saveState, 5000); // Save every 5 seconds
+  
+  // Server update notification
+  let serverUpdateNotificationShown = false;
+  
+  function showServerUpdateNotification() {
+    if (serverUpdateNotificationShown) return;
+    serverUpdateNotificationShown = true;
+    
+    const notification = document.getElementById('serverUpdateNotification');
+    if (!notification) return;
+    
+    notification.style.display = 'block';
+    
+    // Setup buttons
+    const updateNowBtn = document.getElementById('serverUpdateNow');
+    const skipBtn = document.getElementById('serverUpdateSkip');
+    
+    if (updateNowBtn) {
+      updateNowBtn.onclick = () => {
+        notification.style.display = 'none';
+        restartServer();
+      };
+    }
+    
+    if (skipBtn) {
+      skipBtn.onclick = () => {
+        notification.style.display = 'none';
+        serverUpdateNotificationShown = false;
+      };
+    }
+  }
+  
+  async function restartServer() {
+    // Show overlay and freeze screen
+    const overlay = document.getElementById('restartOverlay');
+    const statusEl = document.getElementById('restartStatus');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+    
+    // Save current editor state to temp
+    let savedState = null;
+    try {
+      if (editor && editor.getModel()) {
+        const currentContent = editor.getModel().getValue();
+        const currentPath = filePath;
+        savedState = {
+          filePath: currentPath,
+          content: currentContent,
+          cursorPosition: editor.getPosition(),
+          scrollPosition: editor.getScrollTop(),
+          viewState: editor.saveViewState()
+        };
+        // Save to localStorage as temp
+        localStorage.setItem('tempEditorState', JSON.stringify(savedState));
+      }
+    } catch (err) {
+      console.error('Error saving editor state:', err);
+    }
+    
+    // Update status
+    if (statusEl) statusEl.textContent = 'Saving current work...';
+    
+    // Save file if dirty
+    if (isDirty && editor && editor.getModel()) {
+      try {
+        await saveFile();
+      } catch (err) {
+        console.error('Error saving file before restart:', err);
+      }
+    }
+    
+    // Update status
+    if (statusEl) statusEl.textContent = 'Restarting server...';
+    
+    // Close current WebSocket connection
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    
+    // Call restart endpoint
+    try {
+      const response = await fetch('/__api__/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to restart server');
+      }
+      
+      if (statusEl) statusEl.textContent = 'Waiting for server to restart...';
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      if (statusEl) statusEl.textContent = 'Waiting for server to bind port...';
+      
+      await waitForHttpServer();
+      
+      if (statusEl) statusEl.textContent = 'Waiting for WebSocket connection';
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      if (statusEl) statusEl.textContent = 'Connecting to WebSocket...';
+      
+      await waitForWebSocket();
+      
+      if (statusEl) statusEl.textContent = 'Server restarted! Reloading...';
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      window.location.reload();
+    } catch (err) {
+      console.error('Error restarting server:', err);
+      if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+      if (overlay) {
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          document.body.style.overflow = '';
+        }, 3000);
+      }
+    }
+  }
+  
+  
+  async function waitForHttpServer(maxAttempts = 30, delay = 1000) {
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const response = await fetch('/__api__/files?path=/&list=true', {
+          method: 'GET',
+          signal: AbortSignal.timeout(2000)
+        });
+        if (response.ok) {
+          return true;
+        }
+      } catch (err) {
+      }
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    throw new Error('HTTP server did not restart in time');
+  }
+  
+  async function waitForWebSocket(maxAttempts = 60, delay = 500) {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      let resolved = false;
+      
+      const checkConnection = () => {
+        attempts++;
+        
+        if (attempts > maxAttempts) {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('WebSocket did not reconnect in time'));
+          }
+          return;
+        }
+        
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = protocol + '//' + window.location.host;
+        const testWs = new WebSocket(wsUrl);
+        
+        testWs.onopen = () => {
+          if (!resolved) {
+            resolved = true;
+            testWs.close();
+            resolve(true);
+          }
+        };
+        
+        testWs.onerror = () => {
+          testWs.close();
+          if (!resolved) {
+            setTimeout(checkConnection, delay);
+          }
+        };
+        
+        testWs.onclose = (event) => {
+          if (!resolved && testWs.readyState === WebSocket.CLOSED && event.code !== 1000) {
+            setTimeout(checkConnection, delay);
+          }
+        };
+      };
+      
+      checkConnection();
+    });
+  }
+  
+  function restoreTempEditorState() {
+    try {
+      const tempState = localStorage.getItem('tempEditorState');
+      if (tempState) {
+        const state = JSON.parse(tempState);
+        localStorage.removeItem('tempEditorState');
+        
+        if (state.filePath === filePath && editor && editor.getModel()) {
+          editor.getModel().setValue(state.content);
+          
+          if (state.cursorPosition) {
+            editor.setPosition(state.cursorPosition);
+            editor.revealPositionInCenter(state.cursorPosition);
+          }
+          
+          if (state.scrollPosition !== undefined) {
+            editor.setScrollTop(state.scrollPosition);
+          }
+          
+          if (state.viewState) {
+            editor.restoreViewState(state.viewState);
+          }
+          
+          isDirty = false;
+          updateStatus();
+        }
+      }
+    } catch (err) {
+      console.error('Error restoring temp editor state:', err);
+    }
+  }
+  
+  setTimeout(() => {
+    restoreTempEditorState();
+  }, 1000);
 });

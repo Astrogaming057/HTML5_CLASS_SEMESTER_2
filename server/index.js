@@ -26,7 +26,7 @@ wsManager.setup(server);
 logger.setWebSocketManager(wsManager); // Enable log broadcasting
 logger.info('WebSocket server initialized');
 
-// Setup file watcher
+// Setup file watcher for base directory
 let watcher;
 try {
   watcher = setupFileWatcher(
@@ -40,6 +40,30 @@ try {
   logger.info('File watcher initialized', { watching: config.BASE_DIR });
 } catch (error) {
   logger.error('Failed to initialize file watcher', error);
+}
+
+// Setup separate file watcher for server directory
+let serverWatcher;
+try {
+  const serverDir = path.join(__dirname);
+  serverWatcher = setupFileWatcher(
+    serverDir,
+    { ...config.WATCH_OPTIONS, ignored: /(^|[\/\\])(node_modules|\.git)([\/\\]|$)/ },
+    (filePath, eventType) => {
+      // Only notify for actual server code files, not temp files
+      if (filePath.endsWith('.js') || filePath.endsWith('.json')) {
+        logger.info('Server file changed', { filePath, eventType });
+        wsManager.broadcast({
+          type: 'serverUpdateAvailable',
+          filePath: filePath,
+          eventType: eventType
+        });
+      }
+    }
+  );
+  logger.info('Server file watcher initialized', { watching: serverDir });
+} catch (error) {
+  logger.error('Failed to initialize server file watcher', error);
 }
 
 // Setup API routes (before file server to avoid conflicts)
@@ -244,10 +268,14 @@ const shutdown = () => {
   // Close WebSocket connections
   wsManager.close();
   
-  // Close file watcher
+  // Close file watchers
   if (watcher && typeof watcher.close === 'function') {
     watcher.close();
     logger.info('File watcher closed');
+  }
+  if (serverWatcher && typeof serverWatcher.close === 'function') {
+    serverWatcher.close();
+    logger.info('Server file watcher closed');
   }
   
   // Close HTTP server
