@@ -281,7 +281,7 @@ require(['vs/editor/editor.main'], function() {
     // Remove from file explorer
     const fileTree = document.getElementById('fileTree');
     if (fileTree && terminalPanel.parentNode === fileExplorerPanel) {
-      fileExplorerPanel.removeChild(resizerTerminal);
+      // Resizer is now inside terminal panel, so just remove terminal panel
       fileExplorerPanel.removeChild(terminalPanel);
     }
     
@@ -294,7 +294,7 @@ require(['vs/editor/editor.main'], function() {
       // Move all panels except terminal into wrapper
       const children = Array.from(container.children);
       children.forEach(child => {
-        if (child !== terminalPanel && child !== resizerTerminal && 
+        if (child !== terminalPanel && 
             !child.classList.contains('main-content-wrapper')) {
           mainContentWrapper.appendChild(child);
         }
@@ -303,8 +303,7 @@ require(['vs/editor/editor.main'], function() {
       container.appendChild(mainContentWrapper);
     }
     
-    // Add terminal to bottom of container
-    container.appendChild(resizerTerminal);
+    // Add terminal to bottom of container (resizer is inside terminal panel)
     container.appendChild(terminalPanel);
     
     // Update classes
@@ -331,19 +330,16 @@ require(['vs/editor/editor.main'], function() {
     
     // Remove from container
     if (terminalPanel.parentNode === container) {
-      container.removeChild(resizerTerminal);
       container.removeChild(terminalPanel);
     }
     
-    // Add back to file explorer (after file tree)
+    // Add back to file explorer (after file tree, resizer is inside terminal panel)
     const fileTree = document.getElementById('fileTree');
     if (fileTree) {
       fileExplorerPanel.insertBefore(terminalReopenBar, fileTree.nextSibling);
-      fileExplorerPanel.insertBefore(resizerTerminal, terminalReopenBar.nextSibling);
-      fileExplorerPanel.insertBefore(terminalPanel, resizerTerminal.nextSibling);
+      fileExplorerPanel.insertBefore(terminalPanel, terminalReopenBar.nextSibling);
     } else {
       fileExplorerPanel.appendChild(terminalReopenBar);
-      fileExplorerPanel.appendChild(resizerTerminal);
       fileExplorerPanel.appendChild(terminalPanel);
     }
     
@@ -1949,6 +1945,13 @@ require(['vs/editor/editor.main'], function() {
     function handleGlobalMouseMove(e) {
       if (!activeResizer) return;
       
+      // Prevent default to ensure smooth tracking
+      // Don't prevent default if we're over an iframe - let pointer-events handle it
+      if (e.target && e.target.tagName !== 'IFRAME') {
+        e.preventDefault();
+      }
+      e.stopPropagation();
+      
       const containerRect = container.getBoundingClientRect();
       
       switch (activeResizer) {
@@ -1967,15 +1970,17 @@ require(['vs/editor/editor.main'], function() {
     function handleGlobalMouseUp(e) {
       if (!activeResizer) return;
       
-      // Clean up global state
+      // Clean up global state - remove all listeners
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       document.body.classList.remove('resizing');
-      document.removeEventListener('mousemove', handleGlobalMouseMove);
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
-      document.removeEventListener('mouseleave', handleGlobalMouseUp);
-      window.removeEventListener('blur', handleGlobalMouseUp);
+      window.removeEventListener('mousemove', handleGlobalMouseMove, true);
+      window.removeEventListener('mouseup', handleGlobalMouseUp, true);
+      document.removeEventListener('mousemove', handleGlobalMouseMove, true);
+      document.removeEventListener('mouseup', handleGlobalMouseUp, true);
+      window.removeEventListener('blur', handleGlobalMouseUp, true);
       
+      // Reset active resizer
       activeResizer = null;
       saveState();
     }
@@ -2027,6 +2032,7 @@ require(['vs/editor/editor.main'], function() {
     function handleEditorResize(e, containerRect) {
       const previewCollapsed = previewPanel.classList.contains('collapsed');
       
+      // Cache explorer width to avoid repeated DOM reads
       const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
       const explorerResizerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : RESIZER_WIDTH;
       const editorResizerWidth = RESIZER_WIDTH;
@@ -2045,8 +2051,20 @@ require(['vs/editor/editor.main'], function() {
         newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth - MIN_PREVIEW_WIDTH));
         const newPreviewWidth = availableWidth - newEditorWidth;
         
-        // Only apply if both panels meet minimum requirements
-        if (newPreviewWidth >= MIN_PREVIEW_WIDTH) {
+        // Always apply updates for smoother dragging - don't skip if preview would be too small
+        // Instead, constrain both panels to their minimums
+        if (newPreviewWidth < MIN_PREVIEW_WIDTH) {
+          // If preview would be too small, set it to minimum and adjust editor
+          const constrainedPreviewWidth = MIN_PREVIEW_WIDTH;
+          const constrainedEditorWidth = availableWidth - constrainedPreviewWidth;
+          if (constrainedEditorWidth >= MIN_EDITOR_WIDTH) {
+            editorPanel.style.flex = 'none';
+            previewPanel.style.flex = 'none';
+            editorPanel.style.width = constrainedEditorWidth + 'px';
+            previewPanel.style.width = constrainedPreviewWidth + 'px';
+          }
+        } else {
+          // Both panels meet minimum requirements
           editorPanel.style.flex = 'none';
           previewPanel.style.flex = 'none';
           editorPanel.style.width = newEditorWidth + 'px';
@@ -2088,14 +2106,16 @@ require(['vs/editor/editor.main'], function() {
         startX = e.clientX;
         startWidth = fileExplorerPanel.offsetWidth;
         
-        // Setup global handlers
+        // Setup global handlers - use window for better tracking when mouse moves fast
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         document.body.classList.add('resizing');
-        document.addEventListener('mousemove', handleGlobalMouseMove);
-        document.addEventListener('mouseup', handleGlobalMouseUp);
-        document.addEventListener('mouseleave', handleGlobalMouseUp);
-        window.addEventListener('blur', handleGlobalMouseUp);
+        window.addEventListener('mousemove', handleGlobalMouseMove, true);
+        window.addEventListener('mouseup', handleGlobalMouseUp, true);
+        window.addEventListener('blur', handleGlobalMouseUp, true);
+        // Also listen on document as fallback
+        document.addEventListener('mousemove', handleGlobalMouseMove, true);
+        document.addEventListener('mouseup', handleGlobalMouseUp, true);
       });
     }
     
@@ -2111,14 +2131,16 @@ require(['vs/editor/editor.main'], function() {
         startX = e.clientX;
         startWidth = editorPanel.offsetWidth;
         
-        // Setup global handlers
+        // Setup global handlers - use window for better tracking when mouse moves fast
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         document.body.classList.add('resizing');
-        document.addEventListener('mousemove', handleGlobalMouseMove);
-        document.addEventListener('mouseup', handleGlobalMouseUp);
-        document.addEventListener('mouseleave', handleGlobalMouseUp);
-        window.addEventListener('blur', handleGlobalMouseUp);
+        window.addEventListener('mousemove', handleGlobalMouseMove, true);
+        window.addEventListener('mouseup', handleGlobalMouseUp, true);
+        window.addEventListener('blur', handleGlobalMouseUp, true);
+        // Also listen on document as fallback
+        document.addEventListener('mousemove', handleGlobalMouseMove, true);
+        document.addEventListener('mouseup', handleGlobalMouseUp, true);
       });
     }
     
@@ -2134,14 +2156,16 @@ require(['vs/editor/editor.main'], function() {
         startY = e.clientY;
         startHeight = terminalPanel.offsetHeight;
         
-        // Setup global handlers
+        // Setup global handlers - use window for better tracking when mouse moves fast
         document.body.style.cursor = 'row-resize';
         document.body.style.userSelect = 'none';
         document.body.classList.add('resizing');
-        document.addEventListener('mousemove', handleGlobalMouseMove);
-        document.addEventListener('mouseup', handleGlobalMouseUp);
-        document.addEventListener('mouseleave', handleGlobalMouseUp);
-        window.addEventListener('blur', handleGlobalMouseUp);
+        window.addEventListener('mousemove', handleGlobalMouseMove, true);
+        window.addEventListener('mouseup', handleGlobalMouseUp, true);
+        window.addEventListener('blur', handleGlobalMouseUp, true);
+        // Also listen on document as fallback
+        document.addEventListener('mousemove', handleGlobalMouseMove, true);
+        document.addEventListener('mouseup', handleGlobalMouseUp, true);
       });
       
       // Hide resizer if terminal is collapsed
