@@ -23,6 +23,9 @@ function getLanguage(filePath) {
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
 require(['vs/editor/editor.main'], function() {
+  // Set up message listener flag (declare at top to avoid TDZ issues)
+  let logMessageListenerSetup = false;
+  
   const editorContainer = document.getElementById('editor');
   const saveBtn = document.getElementById('saveBtn');
   const refreshBtn = document.getElementById('refreshBtn');
@@ -174,6 +177,7 @@ require(['vs/editor/editor.main'], function() {
   function updatePreviewVisibility() {
     const isCollapsed = previewPanel.classList.contains('collapsed');
     const previewReopenBar = document.getElementById('previewReopenBar');
+    const container = document.querySelector('.preview-container');
     
     console.log('updatePreviewVisibility, collapsed:', isCollapsed);
     
@@ -185,6 +189,41 @@ require(['vs/editor/editor.main'], function() {
     if (previewReopenBar) {
       previewReopenBar.style.display = isCollapsed ? 'flex' : 'none';
       console.log('Preview reopen bar display:', previewReopenBar.style.display);
+    }
+    
+    // Add/remove class on container to help with CSS targeting
+    if (container) {
+      if (isCollapsed) {
+        container.classList.add('preview-collapsed');
+      } else {
+        container.classList.remove('preview-collapsed');
+      }
+    }
+    
+    // When preview is collapsed, make editor expand to fill space
+    if (isCollapsed) {
+      // Remove any fixed width from editor to let it expand
+      // Store current width if it exists and isn't empty
+      const currentWidth = editorPanel.style.width;
+      if (currentWidth && currentWidth !== '') {
+        // Temporarily store it, but let flex take over
+        editorPanel.dataset.previousWidth = currentWidth;
+      }
+      // Let editor expand to fill available space
+      editorPanel.style.flex = '1 1 auto';
+      editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
+      // Clear width to let flex work
+      editorPanel.style.width = '';
+    } else {
+      // When preview is expanded, restore previous width if it existed
+      if (editorPanel.dataset.previousWidth) {
+        editorPanel.style.width = editorPanel.dataset.previousWidth;
+        editorPanel.style.flex = 'none';
+        delete editorPanel.dataset.previousWidth;
+      } else if (!editorPanel.style.width || editorPanel.style.width === '') {
+        // No previous width, use flex
+        editorPanel.style.flex = '1 1 auto';
+      }
     }
   }
   
@@ -201,8 +240,14 @@ require(['vs/editor/editor.main'], function() {
   const resizerTerminal = document.getElementById('resizerTerminal');
   const terminalReopenBar = document.getElementById('terminalReopenBar');
   const reopenTerminalBtn = document.getElementById('reopenTerminalBtn');
+  const moveTerminalToBottom = document.getElementById('moveTerminalToBottom');
+  const moveTerminalToExplorer = document.getElementById('moveTerminalToExplorer');
+  const container = document.querySelector('.preview-container');
+  
+  let terminalAtBottom = false;
   
   function updateTerminalVisibility() {
+    if (!terminalPanel) return;
     const isCollapsed = terminalPanel.classList.contains('collapsed');
     
     // Update toggle button
@@ -221,11 +266,115 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
+  function updateTerminalPositionButtons() {
+    if (moveTerminalToBottom) {
+      moveTerminalToBottom.style.display = terminalAtBottom ? 'none' : 'inline-block';
+    }
+    if (moveTerminalToExplorer) {
+      moveTerminalToExplorer.style.display = terminalAtBottom ? 'inline-block' : 'none';
+    }
+  }
+  
+  function moveTerminalToBottomPosition() {
+    if (!terminalPanel || !container || !fileExplorerPanel) return;
+    
+    // Remove from file explorer
+    const fileTree = document.getElementById('fileTree');
+    if (fileTree && terminalPanel.parentNode === fileExplorerPanel) {
+      fileExplorerPanel.removeChild(resizerTerminal);
+      fileExplorerPanel.removeChild(terminalPanel);
+    }
+    
+    // Create wrapper for main content if it doesn't exist
+    let mainContentWrapper = container.querySelector('.main-content-wrapper');
+    if (!mainContentWrapper) {
+      mainContentWrapper = document.createElement('div');
+      mainContentWrapper.className = 'main-content-wrapper';
+      
+      // Move all panels except terminal into wrapper
+      const children = Array.from(container.children);
+      children.forEach(child => {
+        if (child !== terminalPanel && child !== resizerTerminal && 
+            !child.classList.contains('main-content-wrapper')) {
+          mainContentWrapper.appendChild(child);
+        }
+      });
+      
+      container.appendChild(mainContentWrapper);
+    }
+    
+    // Add terminal to bottom of container
+    container.appendChild(resizerTerminal);
+    container.appendChild(terminalPanel);
+    
+    // Update classes
+    terminalPanel.classList.add('at-bottom');
+    container.classList.add('terminal-at-bottom');
+    terminalAtBottom = true;
+    
+    updateTerminalPositionButtons();
+    saveState();
+  }
+  
+  function moveTerminalToExplorerPosition() {
+    if (!terminalPanel || !container || !fileExplorerPanel) return;
+    
+    // Remove wrapper and restore children to container
+    const mainContentWrapper = container.querySelector('.main-content-wrapper');
+    if (mainContentWrapper) {
+      const children = Array.from(mainContentWrapper.children);
+      children.forEach(child => {
+        container.insertBefore(child, mainContentWrapper);
+      });
+      container.removeChild(mainContentWrapper);
+    }
+    
+    // Remove from container
+    if (terminalPanel.parentNode === container) {
+      container.removeChild(resizerTerminal);
+      container.removeChild(terminalPanel);
+    }
+    
+    // Add back to file explorer (after file tree)
+    const fileTree = document.getElementById('fileTree');
+    if (fileTree) {
+      fileExplorerPanel.insertBefore(terminalReopenBar, fileTree.nextSibling);
+      fileExplorerPanel.insertBefore(resizerTerminal, terminalReopenBar.nextSibling);
+      fileExplorerPanel.insertBefore(terminalPanel, resizerTerminal.nextSibling);
+    } else {
+      fileExplorerPanel.appendChild(terminalReopenBar);
+      fileExplorerPanel.appendChild(resizerTerminal);
+      fileExplorerPanel.appendChild(terminalPanel);
+    }
+    
+    // Update classes
+    terminalPanel.classList.remove('at-bottom');
+    container.classList.remove('terminal-at-bottom');
+    terminalAtBottom = false;
+    
+    updateTerminalPositionButtons();
+    saveState();
+  }
+  
   if (toggleTerminal && terminalPanel) {
     toggleTerminal.addEventListener('click', () => {
       terminalPanel.classList.toggle('collapsed');
       updateTerminalVisibility();
       saveState();
+    });
+  }
+  
+  // Move terminal to bottom button
+  if (moveTerminalToBottom && terminalPanel) {
+    moveTerminalToBottom.addEventListener('click', () => {
+      moveTerminalToBottomPosition();
+    });
+  }
+  
+  // Move terminal to explorer button
+  if (moveTerminalToExplorer && terminalPanel) {
+    moveTerminalToExplorer.addEventListener('click', () => {
+      moveTerminalToExplorerPosition();
     });
   }
   
@@ -237,6 +386,9 @@ require(['vs/editor/editor.main'], function() {
       saveState();
     });
   }
+  
+  // Initialize button visibility
+  updateTerminalPositionButtons();
   
   // Reopen explorer button
   const reopenExplorerBtn = document.getElementById('reopenExplorerBtn');
@@ -931,11 +1083,208 @@ require(['vs/editor/editor.main'], function() {
     }
   });
   
+  // Handle window resize to adjust panel sizes
+  let resizeTimeout;
+  const RESIZER_WIDTH = 4;
+  const MIN_EXPLORER_WIDTH = 150;
+  const MIN_EDITOR_WIDTH = 200;
+  const MIN_PREVIEW_WIDTH = 200;
+  
+  function handleWindowResize() {
+    // Debounce resize events
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      adjustPanelsOnResize();
+    }, 100);
+  }
+  
+  function adjustPanelsOnResize() {
+    const container = document.querySelector('.preview-container');
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    
+    const explorerCollapsed = fileExplorerPanel.classList.contains('collapsed');
+    const previewCollapsed = previewPanel.classList.contains('collapsed');
+    
+    // Calculate available width
+    const explorerResizerWidth = explorerCollapsed ? 0 : RESIZER_WIDTH;
+    const editorResizerWidth = previewCollapsed ? 0 : RESIZER_WIDTH;
+    const availableWidth = containerWidth - explorerResizerWidth - editorResizerWidth;
+    
+    // Get current panel widths
+    const currentExplorerWidth = explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth;
+    const currentEditorWidth = editorPanel.offsetWidth;
+    const currentPreviewWidth = previewCollapsed ? 0 : previewPanel.offsetWidth;
+    const totalCurrentWidth = currentExplorerWidth + currentEditorWidth + currentPreviewWidth + explorerResizerWidth + editorResizerWidth;
+    
+    // If panels exceed container width, adjust them proportionally
+    if (totalCurrentWidth > containerWidth) {
+      const scale = (containerWidth - explorerResizerWidth - editorResizerWidth) / (totalCurrentWidth - explorerResizerWidth - editorResizerWidth);
+      
+      // Adjust explorer width if not collapsed
+      if (!explorerCollapsed && fileExplorerPanel.style.width) {
+        const explorerStyleWidth = parseInt(fileExplorerPanel.style.width) || currentExplorerWidth;
+        const newExplorerWidth = Math.max(MIN_EXPLORER_WIDTH, Math.min(explorerStyleWidth * scale, containerWidth - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2)));
+        fileExplorerPanel.style.width = newExplorerWidth + 'px';
+      }
+      
+      // Adjust editor and preview widths
+      if (previewCollapsed) {
+        // When preview is collapsed, editor takes all available space
+        const newEditorWidth = Math.max(MIN_EDITOR_WIDTH, availableWidth - (explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth));
+        editorPanel.style.flex = 'none';
+        editorPanel.style.width = newEditorWidth + 'px';
+      } else {
+        // When preview is visible, adjust both proportionally
+        if (editorPanel.style.width && previewPanel.style.width) {
+          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
+          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
+          
+          const newEditorWidth = Math.max(MIN_EDITOR_WIDTH, editorStyleWidth * scale);
+          const newPreviewWidth = Math.max(MIN_PREVIEW_WIDTH, previewStyleWidth * scale);
+          
+          // Ensure they fit
+          const totalNeeded = newEditorWidth + newPreviewWidth;
+          const actualAvailable = availableWidth - (explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth);
+          if (totalNeeded > actualAvailable) {
+            const editorRatio = newEditorWidth / totalNeeded;
+            const previewRatio = newPreviewWidth / totalNeeded;
+            editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, actualAvailable * editorRatio) + 'px';
+            previewPanel.style.width = Math.max(MIN_PREVIEW_WIDTH, actualAvailable * previewRatio) + 'px';
+          } else {
+            editorPanel.style.width = newEditorWidth + 'px';
+            previewPanel.style.width = newPreviewWidth + 'px';
+          }
+          
+          editorPanel.style.flex = 'none';
+          previewPanel.style.flex = 'none';
+        } else {
+          // If no fixed widths, let flex handle it
+          editorPanel.style.flex = '1 1 auto';
+          previewPanel.style.flex = '1 1 auto';
+        }
+      }
+    } else {
+      // Panels don't exceed container - expand to fill available space
+      const extraSpace = containerWidth - totalCurrentWidth;
+      
+      if (previewCollapsed) {
+        // When preview is collapsed, editor expands to fill space
+        if (editorPanel.style.width && editorPanel.style.width !== '') {
+          // Expand editor by the extra space
+          const currentEditorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
+          const newEditorWidth = currentEditorStyleWidth + extraSpace;
+          editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, newEditorWidth) + 'px';
+          editorPanel.style.flex = 'none';
+        } else {
+          // Let flex handle expansion
+          editorPanel.style.flex = '1 1 auto';
+          editorPanel.style.width = '';
+        }
+      } else {
+        // When preview is visible, expand both proportionally
+        if (editorPanel.style.width && previewPanel.style.width) {
+          // Get current widths
+          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
+          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
+          const totalPanelWidth = editorStyleWidth + previewStyleWidth;
+          
+          if (totalPanelWidth > 0) {
+            // Distribute extra space proportionally
+            const editorRatio = editorStyleWidth / totalPanelWidth;
+            const previewRatio = previewStyleWidth / totalPanelWidth;
+            
+            const newEditorWidth = editorStyleWidth + (extraSpace * editorRatio);
+            const newPreviewWidth = previewStyleWidth + (extraSpace * previewRatio);
+            
+            editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, newEditorWidth) + 'px';
+            previewPanel.style.width = Math.max(MIN_PREVIEW_WIDTH, newPreviewWidth) + 'px';
+            editorPanel.style.flex = 'none';
+            previewPanel.style.flex = 'none';
+          }
+        } else {
+          // If no fixed widths, let flex handle expansion
+          editorPanel.style.flex = '1 1 auto';
+          previewPanel.style.flex = '1 1 auto';
+          editorPanel.style.width = '';
+          previewPanel.style.width = '';
+        }
+      }
+      
+      // Ensure minimums are met
+      if (!explorerCollapsed) {
+        const explorerStyleWidth = parseInt(fileExplorerPanel.style.width) || currentExplorerWidth;
+        if (explorerStyleWidth < MIN_EXPLORER_WIDTH) {
+          fileExplorerPanel.style.width = MIN_EXPLORER_WIDTH + 'px';
+        }
+      }
+      
+      if (!previewCollapsed) {
+        if (editorPanel.style.width) {
+          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
+          if (editorStyleWidth < MIN_EDITOR_WIDTH) {
+            editorPanel.style.width = MIN_EDITOR_WIDTH + 'px';
+          }
+        }
+        if (previewPanel.style.width) {
+          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
+          if (previewStyleWidth < MIN_PREVIEW_WIDTH) {
+            previewPanel.style.width = MIN_PREVIEW_WIDTH + 'px';
+          }
+        }
+      }
+    }
+    
+    // Update max-width constraint for explorer
+    if (!explorerCollapsed) {
+      const maxExplorerWidth = previewCollapsed 
+        ? containerWidth - MIN_EDITOR_WIDTH - RESIZER_WIDTH
+        : containerWidth - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
+      const currentExplorerWidth = fileExplorerPanel.offsetWidth;
+      if (currentExplorerWidth > maxExplorerWidth) {
+        fileExplorerPanel.style.width = maxExplorerWidth + 'px';
+      }
+    }
+  }
+  
+  // Add resize listener
+  window.addEventListener('resize', handleWindowResize);
+  
+  // Log tab functions (accessible globally)
+  function addPreviewLog(message, type = 'log') {
+    // Get logOutput dynamically to avoid TDZ issues
+    const output = document.getElementById('terminalLogOutput');
+    if (!output) return;
+    const line = document.createElement('div');
+    line.className = `terminal-line ${type}`;
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+  }
+  
+  function setupPreviewLogInterception() {
+    // Only set up listener once
+    if (logMessageListenerSetup) return;
+    logMessageListenerSetup = true;
+    
+    // Listen for postMessage from preview iframe
+    window.addEventListener('message', (event) => {
+      // Security: only accept messages from same origin
+      if (event.data && event.data.type === 'preview-log') {
+        const { message, logType } = event.data;
+        addPreviewLog(message, logType || 'log');
+      }
+    });
+  }
+  
   function setupTerminal() {
     const tabs = document.querySelectorAll('.terminal-tab');
     const tabContents = document.querySelectorAll('.terminal-tab-content');
     const clientInput = document.getElementById('terminalClientInput');
     const powershellInput = document.getElementById('terminalPowerShellInput');
+    const logInput = document.getElementById('terminalLogInput');
     const clientOutput = document.getElementById('terminalClientOutput');
     const serverOutput = document.getElementById('terminalServerOutput');
     const powershellOutput = document.getElementById('terminalPowerShellOutput');
@@ -970,6 +1319,8 @@ require(['vs/editor/editor.main'], function() {
             expectedId = 'terminalClient';
           } else if (tabName === 'server') {
             expectedId = 'terminalServer';
+          } else if (tabName === 'log') {
+            expectedId = 'terminalLog';
           } else {
             expectedId = `terminal${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
           }
@@ -1145,6 +1496,56 @@ require(['vs/editor/editor.main'], function() {
       powershellOutput.appendChild(line);
       powershellOutput.scrollTop = powershellOutput.scrollHeight;
     }
+    
+    // Setup preview log interception (listens for postMessage from iframe)
+    // This only needs to be called once, not on every iframe load
+    setupPreviewLogInterception();
+    
+    // Log tab - execute code in preview context
+    if (logInput) {
+      logInput.disabled = false;
+      logInput.style.pointerEvents = 'auto';
+      
+      logInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const command = logInput.value.trim();
+          if (command) {
+            addPreviewLog(`> ${command}`, 'log');
+            logInput.value = '';
+            
+            try {
+              const iframeWindow = previewFrame?.contentWindow;
+              if (!iframeWindow) {
+                addPreviewLog('Error: Preview iframe not available', 'error');
+                return;
+              }
+              
+              // Execute code in iframe context
+              let result;
+              try {
+                result = iframeWindow.eval(command);
+              } catch (evalErr) {
+                // If eval fails, try as expression
+                try {
+                  result = iframeWindow.eval(`(${command})`);
+                } catch (exprErr) {
+                  throw evalErr;
+                }
+              }
+              
+              if (result !== undefined) {
+                const resultStr = typeof result === 'object' 
+                  ? JSON.stringify(result, null, 2)
+                  : String(result);
+                addPreviewLog(resultStr, 'info');
+              }
+            } catch (err) {
+              addPreviewLog(`Error: ${err.message}`, 'error');
+            }
+          }
+        }
+      });
+    }
   }
   
   function updateActiveFileTreeItem(path) {
@@ -1272,6 +1673,11 @@ require(['vs/editor/editor.main'], function() {
           // Setup link interception after iframe loads
           previewFrame.onload = () => {
             interceptPreviewLinks();
+            setTimeout(() => {
+              if (setupPreviewLogInterception) {
+                setupPreviewLogInterception();
+              }
+            }, 100);
           };
         } else {
           status.textContent = 'Error: ' + data.error;
@@ -1308,6 +1714,7 @@ require(['vs/editor/editor.main'], function() {
         // Setup link interception after iframe loads
         previewFrame.onload = () => {
           interceptPreviewLinks();
+          // Log interception is set up via postMessage listener (called once in setupTerminal)
         };
       })
       .catch(err => {
@@ -1577,12 +1984,20 @@ require(['vs/editor/editor.main'], function() {
     function handleExplorerResize(e, containerRect) {
       if (fileExplorerPanel.classList.contains('collapsed')) return;
       
+      const previewCollapsed = previewPanel.classList.contains('collapsed');
       const deltaX = e.clientX - startX;
       let newWidth = startWidth + deltaX;
       
-      // Calculate constraints
+      // Calculate constraints based on preview state
       const minWidth = MIN_EXPLORER_WIDTH;
-      const maxWidth = containerRect.width - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
+      let maxWidth;
+      if (previewCollapsed) {
+        // When preview is collapsed, only need to leave room for editor
+        maxWidth = containerRect.width - MIN_EDITOR_WIDTH - RESIZER_WIDTH;
+      } else {
+        // When preview is visible, need room for both editor and preview
+        maxWidth = containerRect.width - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
+      }
       
       // Apply constraints
       newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
@@ -1594,34 +2009,49 @@ require(['vs/editor/editor.main'], function() {
       // Ensure editor and preview maintain minimum widths
       const remainingWidth = containerRect.width - newWidth - RESIZER_WIDTH;
       if (editorPanel && previewPanel) {
-        editorPanel.style.flex = '1 1 auto';
-        previewPanel.style.flex = '1 1 auto';
-        editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
-        previewPanel.style.minWidth = MIN_PREVIEW_WIDTH + 'px';
+        if (previewCollapsed) {
+          // When preview is collapsed, editor takes remaining space
+          editorPanel.style.flex = '1 1 auto';
+          editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
+        } else {
+          // When preview is visible, both maintain minimums
+          editorPanel.style.flex = '1 1 auto';
+          previewPanel.style.flex = '1 1 auto';
+          editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
+          previewPanel.style.minWidth = MIN_PREVIEW_WIDTH + 'px';
+        }
       }
     }
     
     // Editor resizer handler
     function handleEditorResize(e, containerRect) {
-      if (previewPanel.classList.contains('collapsed')) return;
+      const previewCollapsed = previewPanel.classList.contains('collapsed');
       
       const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
       const explorerResizerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : RESIZER_WIDTH;
-      const availableWidth = containerRect.width - explorerWidth - explorerResizerWidth - RESIZER_WIDTH;
+      const editorResizerWidth = RESIZER_WIDTH;
+      const availableWidth = containerRect.width - explorerWidth - explorerResizerWidth - (previewCollapsed ? 0 : editorResizerWidth);
       
       const deltaX = e.clientX - startX;
       let newEditorWidth = startWidth + deltaX;
       
-      // Apply constraints
-      newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth - MIN_PREVIEW_WIDTH));
-      const newPreviewWidth = availableWidth - newEditorWidth;
-      
-      // Only apply if both panels meet minimum requirements
-      if (newPreviewWidth >= MIN_PREVIEW_WIDTH) {
+      if (previewCollapsed) {
+        // When preview is collapsed, editor can take all available space
+        newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth));
         editorPanel.style.flex = 'none';
-        previewPanel.style.flex = 'none';
         editorPanel.style.width = newEditorWidth + 'px';
-        previewPanel.style.width = newPreviewWidth + 'px';
+      } else {
+        // Apply constraints when preview is visible
+        newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth - MIN_PREVIEW_WIDTH));
+        const newPreviewWidth = availableWidth - newEditorWidth;
+        
+        // Only apply if both panels meet minimum requirements
+        if (newPreviewWidth >= MIN_PREVIEW_WIDTH) {
+          editorPanel.style.flex = 'none';
+          previewPanel.style.flex = 'none';
+          editorPanel.style.width = newEditorWidth + 'px';
+          previewPanel.style.width = newPreviewWidth + 'px';
+        }
       }
     }
     
@@ -1630,7 +2060,15 @@ require(['vs/editor/editor.main'], function() {
       if (terminalPanel.classList.contains('collapsed')) return;
       
       const deltaY = e.clientY - startY;
-      let newHeight = startHeight + deltaY;
+      let newHeight;
+      
+      if (terminalAtBottom) {
+        // When at bottom, dragging up increases height (resizer is above terminal)
+        newHeight = startHeight - deltaY;
+      } else {
+        // When in explorer, dragging down increases height (resizer is above terminal)
+        newHeight = startHeight + deltaY;
+      }
       
       // Apply constraints
       newHeight = Math.max(MIN_TERMINAL_HEIGHT, Math.min(newHeight, MAX_TERMINAL_HEIGHT));
@@ -1740,6 +2178,7 @@ require(['vs/editor/editor.main'], function() {
       previewCollapsed: previewCollapsed,
       terminalCollapsed: terminalCollapsed,
       terminalHeight: terminalPanel ? (terminalPanel.style.height || '200px') : '200px',
+      terminalAtBottom: terminalAtBottom,
       explorerWidth: fileExplorerPanel.style.width || '250px',
       editorWidth: editorPanel.style.width || '',
       previewWidth: previewPanel.style.width || '',
@@ -1881,6 +2320,16 @@ require(['vs/editor/editor.main'], function() {
       
       // Restore terminal state
       if (terminalPanel) {
+        // Restore terminal position first
+        if (state.terminalAtBottom !== undefined) {
+          console.log('Restoring terminal position:', state.terminalAtBottom ? 'bottom' : 'explorer');
+          if (state.terminalAtBottom) {
+            moveTerminalToBottomPosition();
+          } else {
+            moveTerminalToExplorerPosition();
+          }
+        }
+        
         if (state.terminalCollapsed !== undefined) {
           console.log('Restoring terminal collapsed:', state.terminalCollapsed);
           if (state.terminalCollapsed) {
@@ -1931,6 +2380,8 @@ require(['vs/editor/editor.main'], function() {
                 expectedId = 'terminalClient';
               } else if (tabName === 'server') {
                 expectedId = 'terminalServer';
+              } else if (tabName === 'log') {
+                expectedId = 'terminalLog';
               }
               
               if (content.id === expectedId) {

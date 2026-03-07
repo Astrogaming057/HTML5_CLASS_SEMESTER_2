@@ -121,20 +121,75 @@ app.get('/__preview-content__', async (req, res) => {
     const basePath = fileDir ? '/' + fileDir + '/' : '/';
     const baseUrl = req.protocol + '://' + req.get('host') + basePath;
 
-    // Inject or update base tag
+    // Inject or update base tag and console logging script
     let modifiedContent = content;
     modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
     
+    // Console logging script to send logs to parent
+    const consoleLogScript = `
+<script>
+(function() {
+  const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  
+  function sendLogToParent(message, type) {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'preview-log',
+        message: message,
+        logType: type,
+        timestamp: new Date().toISOString()
+      }, '*');
+    }
+  }
+  
+  function formatMessage(args) {
+    return args.map(arg => {
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch (e) {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    }).join(' ');
+  }
+  
+  console.log = function(...args) {
+    originalLog.apply(console, args);
+    sendLogToParent(formatMessage(args), 'log');
+  };
+  
+  console.info = function(...args) {
+    originalInfo.apply(console, args);
+    sendLogToParent(formatMessage(args), 'info');
+  };
+  
+  console.warn = function(...args) {
+    originalWarn.apply(console, args);
+    sendLogToParent(formatMessage(args), 'warn');
+  };
+  
+  console.error = function(...args) {
+    originalError.apply(console, args);
+    sendLogToParent(formatMessage(args), 'error');
+  };
+})();
+</script>`;
+    
     if (modifiedContent.match(/<head[^>]*>/i)) {
       modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {
-        return match + `\n<base href="${baseUrl}">`;
+        return match + `\n<base href="${baseUrl}">${consoleLogScript}`;
       });
     } else if (modifiedContent.match(/<html[^>]*>/i)) {
       modifiedContent = modifiedContent.replace(/<html[^>]*>/i, (match) => {
-        return match + `\n<head><base href="${baseUrl}"></head>`;
+        return match + `\n<head><base href="${baseUrl}">${consoleLogScript}</head>`;
       });
     } else if (modifiedContent.trim().length > 0) {
-      modifiedContent = `<!DOCTYPE html><html><head><base href="${baseUrl}"></head><body>${modifiedContent}</body></html>`;
+      modifiedContent = `<!DOCTYPE html><html><head><base href="${baseUrl}">${consoleLogScript}</head><body>${modifiedContent}</body></html>`;
     }
 
     res.setHeader('Content-Type', 'text/html');

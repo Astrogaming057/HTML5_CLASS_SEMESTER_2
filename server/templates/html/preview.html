@@ -43,7 +43,10 @@
             <button class="terminal-tab active" data-tab="client">Client</button>
             <button class="terminal-tab" data-tab="server">Server</button>
             <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+            <button class="terminal-tab" data-tab="log">Log</button>
           </div>
+          <button id="moveTerminalToBottom" class="terminal-toggle-btn" title="Move Terminal to Bottom" style="display: none;">⬇</button>
+          <button id="moveTerminalToExplorer" class="terminal-toggle-btn" title="Move Terminal to Explorer" style="display: none;">⬆</button>
           <button id="toggleTerminal" class="terminal-toggle-btn" title="Toggle Terminal">−</button>
         </div>
         <div class="terminal-content">
@@ -62,6 +65,13 @@
             <div class="terminal-input-container">
               <span class="terminal-prompt">PS></span>
               <input type="text" class="terminal-input" id="terminalPowerShellInput" placeholder="Type PowerShell commands...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalLog">
+            <div class="terminal-output" id="terminalLogOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">></span>
+              <input type="text" class="terminal-input" id="terminalLogInput" placeholder="Execute code in preview context...">
             </div>
           </div>
         </div>
