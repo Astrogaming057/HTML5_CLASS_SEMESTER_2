@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview - Popout</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .popout-header {
+      background: #252526;
+      border-bottom: 1px solid #3e3e42;
+      padding: 8px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .popout-title {
+      font-size: 14px;
+      color: #cccccc;
+    }
+    .popout-close {
+      background: transparent;
+      border: none;
+      color: #cccccc;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+      border-radius: 3px;
+    }
+    .popout-close:hover {
+      color: #ffffff;
+      background: #2a2d2e;
+    }
+    .refresh-btn {
+      background: transparent;
+      border: none;
+      color: #cccccc;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-right: 8px;
+      border-radius: 3px;
+    }
+    .refresh-btn:hover {
+      color: #ffffff;
+      background: #2a2d2e;
+    }
+    #previewContainer {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+    #previewFrame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: white;
+    }
+    #imagePreview {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1e1e1e;
+    }
+    #previewImage {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <div class="popout-header">
+    <div class="popout-title">Preview - Popout</div>
+    <div>
+      <button class="refresh-btn" id="refreshBtn" title="Refresh Preview">🔄</button>
+      <button class="popout-close" id="closePopout">✕ Close</button>
+    </div>
+  </div>
+  <div id="previewContainer">
+    <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+    <div id="imagePreview" style="display: none;">
+      <img id="previewImage" alt="Preview">
+    </div>
+  </div>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const filePath = urlParams.get('file');
+    const previewFrame = document.getElementById('previewFrame');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImage = document.getElementById('previewImage');
+    
+    // BroadcastChannel for cross-window communication
+    const channel = new BroadcastChannel('preview-sync');
+    
+    function updatePreview() {
+      if (!filePath) return;
+      
+      const ext = filePath.split('.').pop().toLowerCase();
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'];
+      
+      if (imageExts.includes(ext)) {
+        previewFrame.style.display = 'none';
+        imagePreview.style.display = 'flex';
+        previewImage.src = `/${filePath}`;
+      } else {
+        imagePreview.style.display = 'none';
+        previewFrame.style.display = 'block';
+        // Use the preview content route which serves just the file content
+        previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+      }
+    }
+    
+    // Store current content for preview updates
+    let currentContent = null;
+    
+    // Listen for preview updates from main window
+    channel.addEventListener('message', (event) => {
+      if (event.data.type === 'preview-update') {
+        // When main window updates preview, we need to get the latest content
+        // The main window will update the preview content route, so we just refresh
+        if (previewFrame.style.display !== 'none') {
+          previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+        }
+      } else if (event.data.type === 'preview-refresh') {
+        if (previewFrame.style.display !== 'none') {
+          previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+        }
+      } else if (event.data.type === 'preview-content') {
+        // Receive actual content from main window
+        currentContent = event.data.content;
+        if (previewFrame.style.display !== 'none' && currentContent) {
+          // Update preview content via API
+          fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: currentContent
+          })
+          .then(() => {
+            previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+          })
+          .catch(err => {
+            console.error('Error updating preview content:', err);
+          });
+        }
+      }
+    });
+    
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      updatePreview();
+      channel.postMessage({ type: 'preview-refresh-request' });
+    });
+    
+    // Close button
+    document.getElementById('closePopout').addEventListener('click', () => {
+      window.close();
+    });
+    
+    // Handle window close
+    window.addEventListener('beforeunload', () => {
+      channel.postMessage({
+        type: 'popout-closed',
+        popoutType: 'preview'
+      });
+    });
+    
+    // Initial load
+    updatePreview();
+  </script>
+</body>
+</html>

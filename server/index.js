@@ -101,6 +101,53 @@ app.get('/__preview__', async (req, res) => {
   }
 });
 
+// Setup popout routes
+app.get('/__popout__/editor', async (req, res) => {
+  try {
+    const filePath = req.query.file;
+    const originalUrl = req.query.original;
+    const popoutHtml = await fs.readFile(
+      path.join(__dirname, 'templates', 'html', 'editor-popout.html'),
+      'utf-8'
+    );
+    const html = popoutHtml
+      .replace('{{FILE_PATH}}', filePath || '')
+      .replace('{{ORIGINAL_URL}}', originalUrl || '');
+    res.send(html);
+  } catch (error) {
+    logger.error('Error serving editor popout', error);
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+app.get('/__popout__/preview', async (req, res) => {
+  try {
+    const filePath = req.query.file;
+    const popoutHtml = await fs.readFile(
+      path.join(__dirname, 'templates', 'html', 'preview-popout.html'),
+      'utf-8'
+    );
+    const html = popoutHtml.replace('{{FILE_PATH}}', filePath || '');
+    res.send(html);
+  } catch (error) {
+    logger.error('Error serving preview popout', error);
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+app.get('/__popout__/terminal', async (req, res) => {
+  try {
+    const popoutHtml = await fs.readFile(
+      path.join(__dirname, 'templates', 'html', 'terminal-popout.html'),
+      'utf-8'
+    );
+    res.send(popoutHtml);
+  } catch (error) {
+    logger.error('Error serving terminal popout', error);
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
 // In-memory cache for preview content (keyed by file path)
 const previewCache = new Map();
 

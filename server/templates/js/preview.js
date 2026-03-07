@@ -10,6 +10,14 @@ let previewFrame = null;
 let fileTree = null;
 let ws = null;
 
+// Popout windows
+let editorPopout = null;
+let previewPopout = null;
+let terminalPopout = null;
+
+// BroadcastChannel for cross-window communication
+const syncChannel = new BroadcastChannel('preview-sync');
+
 // Language mapping
 function getLanguage(filePath) {
   const ext = filePath.split('.').pop().toLowerCase();
@@ -112,6 +120,298 @@ require(['vs/editor/editor.main'], function() {
   // Setup WebSocket connection for sync
   setupWebSocket();
   
+  // Setup BroadcastChannel listeners for popout synchronization
+  syncChannel.addEventListener('message', (event) => {
+    const data = event.data;
+    
+    // Handle editor content sync from popout
+    if (data.type === 'editor-content' && data.filePath === filePath && editor) {
+      const currentValue = editor.getValue();
+      if (currentValue !== data.content) {
+        // Prevent infinite loop by checking if content actually changed
+        const position = editor.getPosition();
+        const scrollTop = editor.getScrollTop();
+        editor.setValue(data.content);
+        originalContent = data.content;
+        isDirty = data.isDirty || false;
+        updateStatus();
+        // Restore position
+        if (position) {
+          editor.setPosition(position);
+          editor.setScrollTop(scrollTop);
+        }
+      }
+    }
+    
+    // Handle editor cursor sync from popout
+    if (data.type === 'editor-cursor' && data.filePath === filePath && editor) {
+      const pos = data.position;
+      if (pos) {
+        editor.setPosition(pos);
+        editor.revealPositionInCenter(pos);
+      }
+    }
+    
+    // Handle preview updates from popout
+    if (data.type === 'preview-refresh-request') {
+      if (previewFrame && previewFrame.style.display !== 'none') {
+        previewFrame.src = previewFrame.src;
+      }
+    }
+    
+    // Handle terminal output sync from popout
+    if (data.type === 'terminal-output') {
+      const { tab, output, append } = data;
+      // Handle tab name capitalization correctly
+      let tabName = tab;
+      if (tab === 'powershell') {
+        tabName = 'PowerShell';
+      } else {
+        tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+      }
+      const outputEl = document.getElementById(`terminal${tabName}Output`);
+      if (outputEl) {
+        if (append) {
+          outputEl.textContent += output;
+        } else {
+          outputEl.textContent = output;
+        }
+        outputEl.scrollTop = outputEl.scrollHeight;
+      }
+    }
+    
+    // Handle terminal clear from popout
+    if (data.type === 'terminal-clear') {
+      const { tab } = data;
+      // Handle tab name capitalization correctly
+      let tabName = tab;
+      if (tab === 'powershell') {
+        tabName = 'PowerShell';
+      } else {
+        tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+      }
+      const outputEl = document.getElementById(`terminal${tabName}Output`);
+      if (outputEl) {
+        outputEl.textContent = '';
+      }
+    }
+    
+    // Handle terminal commands from popout
+    if (data.type === 'terminal-command') {
+      handleTerminalCommand(data.tab, data.command);
+    }
+    
+    // Handle popout closed
+    if (data.type === 'popout-closed') {
+      if (data.popoutType === 'editor') {
+        editorPopout = null;
+        // Show editor panel again
+        if (editorPanel) {
+          editorPanel.classList.remove('collapsed');
+        }
+      } else if (data.popoutType === 'preview') {
+        previewPopout = null;
+        // Show preview panel again
+        if (previewPanel) {
+          previewPanel.classList.remove('collapsed');
+          updatePreviewVisibility();
+        }
+      } else if (data.popoutType === 'terminal') {
+        terminalPopout = null;
+        // Show terminal panel again
+        const terminalPanelEl = document.getElementById('terminalPanel');
+        if (terminalPanelEl) {
+          terminalPanelEl.classList.remove('collapsed');
+          // Manually update visibility
+          const toggleTerminalBtn = document.getElementById('toggleTerminal');
+          if (toggleTerminalBtn) {
+            toggleTerminalBtn.textContent = '−';
+          }
+          const resizerTerminalEl = document.getElementById('resizerTerminal');
+          if (resizerTerminalEl) {
+            resizerTerminalEl.style.display = 'block';
+          }
+          const terminalReopenBarEl = document.getElementById('terminalReopenBar');
+          if (terminalReopenBarEl) {
+            terminalReopenBarEl.style.display = 'none';
+          }
+        }
+      }
+    }
+  });
+  
+  function openEditorPopout() {
+    console.log('openEditorPopout called, filePath:', filePath);
+    if (editorPopout && !editorPopout.closed) {
+      editorPopout.focus();
+      return;
+    }
+    
+    const url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}`;
+    console.log('Opening editor popout:', url);
+    editorPopout = window.open(url, 'editor-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
+    
+    if (!editorPopout) {
+      console.error('Failed to open editor popout - popup blocked?');
+      alert('Popup blocked. Please allow popups for this site.');
+    }
+  }
+  
+  function openPreviewPopout() {
+    console.log('openPreviewPopout called, filePath:', filePath);
+    if (previewPopout && !previewPopout.closed) {
+      previewPopout.focus();
+      return;
+    }
+    
+    const url = `/__popout__/preview?file=${encodeURIComponent(filePath)}`;
+    console.log('Opening preview popout:', url);
+    previewPopout = window.open(url, 'preview-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
+    
+    if (!previewPopout) {
+      console.error('Failed to open preview popout - popup blocked?');
+      alert('Popup blocked. Please allow popups for this site.');
+      return;
+    }
+    
+    // Hide preview panel on main page
+    if (previewPanel) {
+      previewPanel.classList.add('collapsed');
+      updatePreviewVisibility();
+    }
+  }
+  
+  function openTerminalPopout() {
+    console.log('openTerminalPopout called');
+    if (terminalPopout && !terminalPopout.closed) {
+      terminalPopout.focus();
+      return;
+    }
+    
+    const url = `/__popout__/terminal`;
+    console.log('Opening terminal popout:', url);
+    terminalPopout = window.open(url, 'terminal-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
+    
+    if (!terminalPopout) {
+      console.error('Failed to open terminal popout - popup blocked?');
+      alert('Popup blocked. Please allow popups for this site.');
+      return;
+    }
+    
+    // Hide terminal panel on main page
+    const terminalPanelEl = document.getElementById('terminalPanel');
+    if (terminalPanelEl) {
+      terminalPanelEl.classList.add('collapsed');
+      // Manually update visibility
+      const toggleTerminalBtn = document.getElementById('toggleTerminal');
+      if (toggleTerminalBtn) {
+        toggleTerminalBtn.textContent = '+';
+      }
+      const resizerTerminalEl = document.getElementById('resizerTerminal');
+      if (resizerTerminalEl) {
+        resizerTerminalEl.style.display = 'none';
+      }
+      const terminalReopenBarEl = document.getElementById('terminalReopenBar');
+      if (terminalReopenBarEl) {
+        terminalReopenBarEl.style.display = 'flex';
+      }
+    }
+  }
+  
+  function handleTerminalCommand(tab, command) {
+    // Handle terminal commands from popout windows
+    // Handle tab name capitalization correctly
+    let tabName = tab;
+    if (tab === 'powershell') {
+      tabName = 'PowerShell';
+    } else {
+      tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+    }
+    const outputEl = document.getElementById(`terminal${tabName}Output`);
+    if (!outputEl) {
+      console.error('Terminal output element not found for tab:', tab, 'element ID:', `terminal${tabName}Output`);
+      return;
+    }
+    
+    if (tab === 'client') {
+      outputEl.textContent += `> ${command}\n`;
+      try {
+        const result = eval(command);
+        outputEl.textContent += `${result}\n`;
+      } catch (err) {
+        outputEl.textContent += `Error: ${err.message}\n`;
+      }
+      outputEl.scrollTop = outputEl.scrollHeight;
+      
+      // Sync back to popout
+      syncChannel.postMessage({
+        type: 'terminal-output',
+        tab: tab,
+        output: outputEl.textContent,
+        append: false
+      });
+    } else if (tab === 'powershell') {
+      // Execute PowerShell command via API
+      fetch('/__api__/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: command, type: 'powershell' })
+      })
+      .then(res => res.json())
+      .then(data => {
+        let outputText = '';
+        if (data.success) {
+          outputText = `PS> ${command}\n${data.output}\n`;
+          outputEl.textContent += outputText;
+        } else {
+          outputText = `PS> ${command}\nError: ${data.error}\n`;
+          outputEl.textContent += outputText;
+        }
+        outputEl.scrollTop = outputEl.scrollHeight;
+        
+        // Sync back to popout - send the new output line, not the entire output
+        syncChannel.postMessage({
+          type: 'terminal-output',
+          tab: tab,
+          output: outputText,
+          append: true
+        });
+      })
+      .catch(err => {
+        const errorText = `PS> ${command}\nError: ${err.message}\n`;
+        outputEl.textContent += errorText;
+        outputEl.scrollTop = outputEl.scrollHeight;
+        
+        // Sync error to popout
+        syncChannel.postMessage({
+          type: 'terminal-output',
+          tab: tab,
+          output: errorText,
+          append: true
+        });
+      });
+    } else if (tab === 'log') {
+      // Execute in preview context
+      if (previewFrame && previewFrame.contentWindow) {
+        try {
+          const result = previewFrame.contentWindow.eval(command);
+          outputEl.textContent += `> ${command}\n${result}\n`;
+        } catch (err) {
+          outputEl.textContent += `> ${command}\nError: ${err.message}\n`;
+        }
+        outputEl.scrollTop = outputEl.scrollHeight;
+        
+        // Sync back to popout
+        syncChannel.postMessage({
+          type: 'terminal-output',
+          tab: tab,
+          output: outputEl.textContent,
+          append: false
+        });
+      }
+    }
+  }
+  
   // Toggle explorer button (in panel)
   toggleExplorer.addEventListener('click', () => {
     toggleFileExplorer();
@@ -121,6 +421,37 @@ require(['vs/editor/editor.main'], function() {
   togglePreview.addEventListener('click', () => {
     togglePreviewPanel();
   });
+  
+  // Popout buttons
+  const popoutEditorBtn = document.getElementById('popoutEditor');
+  const popoutPreviewBtn = document.getElementById('popoutPreview');
+  const popoutTerminalBtn = document.getElementById('popoutTerminal');
+  
+  // Disable editor popout for now
+  if (popoutEditorBtn) {
+    popoutEditorBtn.disabled = true;
+    popoutEditorBtn.style.opacity = '0.5';
+    popoutEditorBtn.style.cursor = 'not-allowed';
+    popoutEditorBtn.title = 'Editor popout disabled';
+  }
+  
+  if (popoutPreviewBtn) {
+    popoutPreviewBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Preview popout clicked');
+      openPreviewPopout();
+    });
+  }
+  
+  if (popoutTerminalBtn) {
+    popoutTerminalBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Terminal popout clicked');
+      openTerminalPopout();
+    });
+  }
   
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -487,7 +818,25 @@ require(['vs/editor/editor.main'], function() {
   loadFile(filePath);
   
   // Track changes and update preview
-  editor.onDidChangeModelContent(() => {
+    editor.onDidChangeModelContent(() => {
+      // Sync to popout windows
+      syncChannel.postMessage({
+        type: 'editor-content',
+        filePath: filePath,
+        content: editor.getValue(),
+        isDirty: editor.getValue() !== originalContent
+      });
+      
+      // Sync cursor position
+      const position = editor.getPosition();
+      if (position) {
+        syncChannel.postMessage({
+          type: 'editor-cursor',
+          filePath: filePath,
+          position: position
+        });
+      }
+      
     const currentContent = editor.getValue();
     isDirty = currentContent !== originalContent;
     updateStatus();
@@ -505,6 +854,10 @@ require(['vs/editor/editor.main'], function() {
   // Refresh preview button
   refreshBtn.addEventListener('click', () => {
     updatePreview(editor.getValue());
+    // Broadcast refresh to popout windows
+    syncChannel.postMessage({
+      type: 'preview-refresh'
+    });
   });
   
   // Close button
@@ -1391,6 +1744,14 @@ require(['vs/editor/editor.main'], function() {
           line.textContent = `[${new Date(data.timestamp).toLocaleTimeString()}] ${data.message}${metaStr}`;
           serverOutput.appendChild(line);
           serverOutput.scrollTop = serverOutput.scrollHeight;
+          
+          // Sync to terminal popout
+          syncChannel.postMessage({
+            type: 'terminal-output',
+            tab: 'server',
+            output: line.textContent + '\n',
+            append: true
+          });
         }
         
         // Handle server update notifications
@@ -1732,6 +2093,14 @@ require(['vs/editor/editor.main'], function() {
       line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
       clientOutput.appendChild(line);
       clientOutput.scrollTop = clientOutput.scrollHeight;
+      
+      // Sync to terminal popout
+      syncChannel.postMessage({
+        type: 'terminal-output',
+        tab: 'client',
+        output: line.textContent + '\n',
+        append: true
+      });
     }
     
     console.log = function(...args) {
@@ -1770,6 +2139,13 @@ require(['vs/editor/editor.main'], function() {
               addLogToTerminal(`Error: ${err.message}`, 'error');
             }
             clientInput.value = '';
+            
+            // Sync command execution to popout
+            syncChannel.postMessage({
+              type: 'terminal-command',
+              tab: 'client',
+              command: command
+            });
           }
         }
       });
@@ -2063,6 +2439,19 @@ require(['vs/editor/editor.main'], function() {
   
   function updatePreview(content) {
     if (!previewFrame) return;
+    
+    // Broadcast preview update to popout windows with content
+    syncChannel.postMessage({
+      type: 'preview-update'
+    });
+    
+    // Also send the content so popout can update
+    if (content) {
+      syncChannel.postMessage({
+        type: 'preview-content',
+        content: content
+      });
+    }
     
     // Debounce preview updates
     clearTimeout(previewUpdateTimeout);
