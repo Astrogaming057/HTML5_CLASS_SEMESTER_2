@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor - {{FILENAME}}</title>
+  {{CSS_CONTENT}}
+</head>
+<body>
+  <div class="editor-header">
+    <div class="editor-title">
+      <span class="file-icon">📄</span>
+      <span id="fileName">{{FILENAME}}</span>
+    </div>
+    <div class="editor-actions">
+      <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
+      <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+  </div>
+  <div class="editor-container">
+    <textarea id="editor" spellcheck="false">{{CONTENT}}</textarea>
+  </div>
+  {{JS_CONTENT}}
+</body>
+</html>

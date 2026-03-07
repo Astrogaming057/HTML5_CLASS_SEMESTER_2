@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="google" value="notranslate">
+
+{{CSS_CONTENT}}
+{{JS_CONTENT}}
+
+<title id="title">Index of {{LOCATION}}</title>
+</head>
+<body>
+<h1 id="header">Index of LOCATION</h1>
+<div id="parentDirLinkBox" style="display: {{HAS_PARENT}};">
+  <a id="parentDirLink" class="icon up" href="{{PARENT_PATH}}">
+    <span id="parentDirText">[parent directory]</span>
+  </a>
+</div>
+<table>
+  <thead>
+    <tr class="header" id="theader">
+      <th id="nameColumnHeader" tabindex="0" role="button">Name</th>
+      <th id="sizeColumnHeader" class="detailsColumn" tabindex="0" role="button">Size</th>
+      <th id="dateColumnHeader" class="detailsColumn" tabindex="0" role="button">Date Modified</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+<script>
+start("{{LOCATION}}");
+{{PARENT_SCRIPT}}
+{{ROWS_SCRIPT}}
+</script>
+</body>
+</html>
