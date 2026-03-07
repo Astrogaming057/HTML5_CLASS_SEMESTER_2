@@ -19,19 +19,14 @@ function updatePreview() {
   } else {
     imagePreview.style.display = 'none';
     previewFrame.style.display = 'block';
-    // Use the preview content route which serves just the file content
     previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
   }
 }
 
-// Store current content for preview updates
 let currentContent = null;
 
-// Listen for preview updates from main window
 channel.addEventListener('message', (event) => {
   if (event.data.type === 'preview-update') {
-    // When main window updates preview, we need to get the latest content
-    // The main window will update the preview content route, so we just refresh
     if (previewFrame.style.display !== 'none') {
       previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
     }
@@ -40,10 +35,8 @@ channel.addEventListener('message', (event) => {
       previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
     }
   } else if (event.data.type === 'preview-content') {
-    // Receive actual content from main window
     currentContent = event.data.content;
     if (previewFrame.style.display !== 'none' && currentContent) {
-      // Update preview content via API
       fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
@@ -59,18 +52,15 @@ channel.addEventListener('message', (event) => {
   }
 });
 
-// Refresh button
 document.getElementById('refreshBtn').addEventListener('click', () => {
   updatePreview();
   channel.postMessage({ type: 'preview-refresh-request' });
 });
 
-// Close button
 document.getElementById('closePopout').addEventListener('click', () => {
   window.close();
 });
 
-// Handle window close
 window.addEventListener('beforeunload', () => {
   channel.postMessage({
     type: 'popout-closed',
@@ -78,5 +68,4 @@ window.addEventListener('beforeunload', () => {
   });
 });
 
-// Initial load
 updatePreview();

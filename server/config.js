@@ -4,7 +4,7 @@ module.exports = {
   PORT: process.env.PORT || 3000,
   BASE_DIR: path.resolve(__dirname, '..'),
   WATCH_OPTIONS: {
-    ignored: /(^|[\/\\])\../, // ignore dotfiles
+    ignored: /(^|[\/\\])\../,
     persistent: true,
     ignoreInitial: true
   }

@@ -2,14 +2,10 @@ const fs = require('fs').promises;
 const path = require('path');
 const { formatSize, formatDate } = require('../utils/formatters');
 
-// Cache template files
 let htmlTemplate = null;
 let cssContent = null;
 let jsContent = null;
 
-/**
- * Load template files (with caching)
- */
 async function loadTemplates() {
   if (!htmlTemplate) {
     const templatesDir = path.join(__dirname, 'html');
@@ -31,22 +27,13 @@ async function loadTemplates() {
   }
 }
 
-/**
- * Generate directory listing HTML page
- * @param {string} dirPath - Absolute path to the directory
- * @param {string} requestPath - Request path from URL
- * @param {string} baseDir - Base directory path
- * @returns {Promise<string>} HTML content for directory listing
- */
 async function generateDirectoryListing(dirPath, requestPath, baseDir) {
   await loadTemplates();
   
   const files = await fs.readdir(dirPath, { withFileTypes: true });
   
-  // Normalize request path to avoid double slashes
   const normalizedRequestPath = requestPath.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
   let parentPath = path.dirname(normalizedRequestPath);
-  // Normalize parent path
   parentPath = parentPath.replace(/\/+/g, '/') || '/';
   const hasParent = normalizedRequestPath !== '/';
 
@@ -54,7 +41,7 @@ async function generateDirectoryListing(dirPath, requestPath, baseDir) {
   const fileList = [];
 
   for (const file of files) {
-    if (file.name.startsWith('.')) continue; // Skip hidden files
+    if (file.name.startsWith('.')) continue;
     
     const fullPath = path.join(dirPath, file.name);
     const stats = await fs.stat(fullPath);
@@ -71,7 +58,6 @@ async function generateDirectoryListing(dirPath, requestPath, baseDir) {
     });
   }
 
-  // Sort: directories first, then files, both alphabetically
   fileList.sort((a, b) => {
     if (a.isDir && !b.isDir) return -1;
     if (!a.isDir && b.isDir) return 1;
@@ -83,26 +69,15 @@ async function generateDirectoryListing(dirPath, requestPath, baseDir) {
     rows += `addRow("${file.name.replace(/"/g, '&quot;')}", "${url}", ${file.isDir ? 1 : 0}, ${file.size}, "${formatSize(file.size)}", ${file.dateModified}, "${file.dateModifiedString}");\n`;
   }
 
-  // Use the already normalized request path
   const location = normalizedRequestPath === '/' ? baseDir : path.join(baseDir, normalizedRequestPath);
   const locationDisplay = location.replace(/\\/g, '/');
 
   return generateHTML(locationDisplay, parentPath, hasParent, rows);
 }
 
-/**
- * Generate the HTML template for directory listing
- * @param {string} locationDisplay - Display location path
- * @param {string} parentPath - Parent directory path
- * @param {boolean} hasParent - Whether parent directory exists
- * @param {string} rows - JavaScript code to add rows
- * @returns {string} Complete HTML document
- */
 function generateHTML(locationDisplay, parentPath, hasParent, rows) {
-  // Normalize parent path to avoid double slashes
   const normalizedParentPath = parentPath.replace(/\/+/g, '/') || '/';
   
-  // Replace template placeholders - replace ALL instances
   let html = htmlTemplate
     .replace(/\{\{LOCATION\}\}/g, locationDisplay)
     .replace('{{HAS_PARENT}}', hasParent ? 'block' : 'none')

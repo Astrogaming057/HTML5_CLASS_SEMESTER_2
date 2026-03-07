@@ -2,13 +2,6 @@ const chokidar = require('chokidar');
 const path = require('path');
 const logger = require('../utils/logger');
 
-/**
- * Setup file watcher and notify clients on file changes
- * @param {string} baseDir - Base directory to watch
- * @param {Object} watchOptions - Chokidar watch options
- * @param {Function} onFileChange - Callback when file changes (receives filePath, eventType)
- * @returns {Object} Chokidar watcher instance
- */
 function setupFileWatcher(baseDir, watchOptions, onFileChange) {
   const watcher = chokidar.watch(baseDir, watchOptions);
 

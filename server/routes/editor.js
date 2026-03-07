@@ -3,14 +3,10 @@ const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
 
-// Cache template files
 let htmlTemplate = null;
 let cssContent = null;
 let jsContent = null;
 
-/**
- * Load editor template files (with caching)
- */
 async function loadEditorTemplates() {
   if (!htmlTemplate) {
     const templatesDir = path.join(__dirname, '..', 'templates');
@@ -30,12 +26,6 @@ async function loadEditorTemplates() {
   }
 }
 
-/**
- * Serve editor page
- * @param {string} baseDir - Base directory
- * @param {string} filePath - File path to edit
- * @returns {Promise<string>} HTML content
- */
 async function serveEditor(baseDir, filePath) {
   await loadEditorTemplates();
   
@@ -55,7 +45,7 @@ async function serveEditor(baseDir, filePath) {
     content = await fs.readFile(resolvedPath, 'utf-8');
   } catch (error) {
     if (error.code === 'ENOENT') {
-      content = ''; // New file
+      content = '';
     } else {
       throw error;
     }
@@ -63,12 +53,11 @@ async function serveEditor(baseDir, filePath) {
 
   const fileName = filePath.split(path.sep).pop() || filePath;
   
-  // Escape content for JavaScript string (Monaco will load it via API)
   const escapedContent = JSON.stringify(content);
   
   let html = htmlTemplate
     .replace('{{FILENAME}}', fileName)
-    .replace('{{CONTENT}}', '') // Monaco will load via API, so empty initial value
+    .replace('{{CONTENT}}', '')
     .replace('{{CSS_CONTENT}}', `<style>${cssContent}</style>`)
     .replace('{{JS_CONTENT}}', `<script>${jsContent}</script>`);
 

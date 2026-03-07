@@ -12,21 +12,17 @@ const { isPathSafe } = require('./utils/pathUtils');
 const WebSocketManager = require('./websocket/websocketHandler');
 const logger = require('./utils/logger');
 
-// Initialize Express app and HTTP server
 const app = express();
-app.use(express.json({ limit: '100mb' })); // Parse JSON bodies with increased limit for file uploads
-app.use(express.urlencoded({ extended: true, limit: '100mb' })); // For URL-encoded bodies
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 const server = http.createServer(app);
 
 logger.info('Initializing server...', { port: config.PORT, baseDir: config.BASE_DIR });
 
-// Setup WebSocket manager
 const wsManager = new WebSocketManager();
 wsManager.setup(server);
-logger.setWebSocketManager(wsManager); // Enable log broadcasting
+logger.setWebSocketManager(wsManager);
 logger.info('WebSocket server initialized');
-
-// Setup file watcher for base directory
 let watcher;
 try {
   watcher = setupFileWatcher(
@@ -42,7 +38,6 @@ try {
   logger.error('Failed to initialize file watcher', error);
 }
 
-// Setup separate file watcher for server directory
 let serverWatcher;
 try {
   const serverDir = path.join(__dirname);
@@ -50,7 +45,6 @@ try {
     serverDir,
     { ...config.WATCH_OPTIONS, ignored: /(^|[\/\\])(node_modules|\.git)([\/\\]|$)/ },
     (filePath, eventType) => {
-      // Only notify for actual server code files, not temp files
       if (filePath.endsWith('.js') || filePath.endsWith('.json')) {
         logger.info('Server file changed', { filePath, eventType });
         wsManager.broadcast({
@@ -66,12 +60,9 @@ try {
   logger.error('Failed to initialize server file watcher', error);
 }
 
-// Setup API routes (before file server to avoid conflicts)
 app.use('/__api__', setupAPI(config.BASE_DIR));
-setWebSocketManager(wsManager); // Pass WebSocket manager to API
+setWebSocketManager(wsManager);
 logger.info('API routes configured');
-
-// Setup editor route
 app.get('/__editor__', async (req, res) => {
   try {
     const filePath = req.query.file;
@@ -86,7 +77,6 @@ app.get('/__editor__', async (req, res) => {
   }
 });
 
-// Setup preview route
 app.get('/__preview__', async (req, res) => {
   try {
     const filePath = req.query.file;
@@ -101,7 +91,6 @@ app.get('/__preview__', async (req, res) => {
   }
 });
 
-// Cache popout template files
 let editorPopoutHtml = null;
 let editorPopoutCss = null;
 let editorPopoutJs = null;
@@ -161,7 +150,6 @@ async function loadPopoutTemplates() {
   }
 }
 
-// Setup popout routes
 app.get('/__popout__/editor', async (req, res) => {
   try {
     await loadPopoutTemplates();
@@ -203,10 +191,8 @@ app.get('/__popout__/terminal', async (req, res) => {
   }
 });
 
-// In-memory cache for preview content (keyed by file path)
 const previewCache = new Map();
 
-// Setup preview content route (for iframe to load HTML with proper base path)
 app.get('/__preview-content__', async (req, res) => {
   try {
     const filePath = req.query.file;
@@ -214,11 +200,9 @@ app.get('/__preview-content__', async (req, res) => {
       return res.status(400).send('No file specified');
     }
 
-    // Check cache first
     let content = previewCache.get(filePath);
     
     if (content === undefined) {
-      // Not in cache, read from file
       const fullPath = path.join(config.BASE_DIR, filePath);
       const resolvedPath = path.resolve(fullPath);
 
@@ -241,17 +225,13 @@ app.get('/__preview-content__', async (req, res) => {
       }
     }
 
-    // Get directory path for base tag - normalize to use forward slashes
-    // filePath is already normalized (e.g., "week8/midterm_izaiah_niemuth/index.html")
     const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
     const basePath = fileDir ? '/' + fileDir + '/' : '/';
     const baseUrl = req.protocol + '://' + req.get('host') + basePath;
 
-    // Inject or update base tag and console logging script
     let modifiedContent = content;
     modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
     
-    // Console logging script to send logs to parent
     const consoleLogScript = `
 <script>
 (function() {
@@ -326,7 +306,6 @@ app.get('/__preview-content__', async (req, res) => {
   }
 });
 
-// Route to update preview cache (for live preview updates)
 app.post('/__preview-content__', express.text({ limit: '50mb' }), (req, res) => {
   try {
     const filePath = req.query.file;
@@ -334,14 +313,12 @@ app.post('/__preview-content__', express.text({ limit: '50mb' }), (req, res) => 
       return res.status(400).json({ success: false, error: 'No file specified' });
     }
 
-    // Validate path
     const fullPath = path.join(config.BASE_DIR, filePath);
     const resolvedPath = path.resolve(fullPath);
     if (!isPathSafe(resolvedPath, config.BASE_DIR)) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
-    // Store content in cache
     previewCache.set(filePath, req.body);
     
     res.json({ success: true });
@@ -351,11 +328,9 @@ app.post('/__preview-content__', express.text({ limit: '50mb' }), (req, res) => 
   }
 });
 
-// Setup file server routes
 app.use(setupFileServer(config.BASE_DIR));
 logger.info('File server routes configured');
 
-// Start server
 server.listen(config.PORT, () => {
   logger.info('Server started successfully', {
     url: `http://localhost:${config.PORT}`,
@@ -363,14 +338,11 @@ server.listen(config.PORT, () => {
   });
 });
 
-// Graceful shutdown
 const shutdown = () => {
   logger.info('Shutting down gracefully...');
   
-  // Close WebSocket connections
   wsManager.close();
   
-  // Close file watchers
   if (watcher && typeof watcher.close === 'function') {
     watcher.close();
     logger.info('File watcher closed');
@@ -380,13 +352,11 @@ const shutdown = () => {
     logger.info('Server file watcher closed');
   }
   
-  // Close HTTP server
   server.close(() => {
     logger.info('HTTP server closed');
     process.exit(0);
   });
   
-  // Force exit after timeout if server doesn't close
   setTimeout(() => {
     logger.warn('Forcing exit after timeout');
     process.exit(0);

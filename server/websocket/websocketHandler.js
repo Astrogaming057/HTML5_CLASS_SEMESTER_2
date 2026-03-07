@@ -1,19 +1,11 @@
 const WebSocket = require('ws');
 const logger = require('../utils/logger');
 
-/**
- * WebSocket connection manager
- */
 class WebSocketManager {
   constructor() {
     this.clients = new Set();
   }
 
-  /**
-   * Setup WebSocket server
-   * @param {http.Server} server - HTTP server instance
-   * @returns {WebSocket.Server} WebSocket server instance
-   */
   setup(server) {
     this.wss = new WebSocket.Server({ server });
 
@@ -40,13 +32,9 @@ class WebSocketManager {
     return this.wss;
   }
 
-  /**
-   * Close all WebSocket connections and server
-   */
   close() {
     logger.info('Closing WebSocket server', { clients: this.clients.size });
     
-    // Close all client connections
     this.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) {
         client.close();
@@ -54,7 +42,6 @@ class WebSocketManager {
     });
     this.clients.clear();
     
-    // Close WebSocket server
     if (this.wss) {
       this.wss.close(() => {
         logger.info('WebSocket server closed');
@@ -62,10 +49,6 @@ class WebSocketManager {
     }
   }
 
-  /**
-   * Broadcast message to all connected clients
-   * @param {Object} message - Message object to send
-   */
   broadcast(message) {
     const messageString = JSON.stringify(message);
     let sentCount = 0;
@@ -86,11 +69,6 @@ class WebSocketManager {
     });
   }
 
-  /**
-   * Notify clients about file changes
-   * @param {string} filePath - Relative path of changed file
-   * @param {string} eventType - Type of event: 'change', 'add', 'unlink', 'addDir', 'unlinkDir'
-   */
   notifyFileChange(filePath, eventType = 'change') {
     const messageTypes = {
       'change': 'fileChanged',

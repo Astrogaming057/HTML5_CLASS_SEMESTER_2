@@ -3,14 +3,10 @@ const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
 
-// Cache template files
 let htmlTemplate = null;
 let cssContent = null;
 let jsContent = null;
 
-/**
- * Load preview template files (with caching)
- */
 async function loadPreviewTemplates() {
   if (!htmlTemplate) {
     const templatesDir = path.join(__dirname, '..', 'templates');
@@ -30,12 +26,6 @@ async function loadPreviewTemplates() {
   }
 }
 
-/**
- * Serve preview page
- * @param {string} baseDir - Base directory
- * @param {string} filePath - File path to preview
- * @returns {Promise<string>} HTML content
- */
 async function servePreview(baseDir, filePath) {
   await loadPreviewTemplates();
   
@@ -55,7 +45,7 @@ async function servePreview(baseDir, filePath) {
     content = await fs.readFile(resolvedPath, 'utf-8');
   } catch (error) {
     if (error.code === 'ENOENT') {
-      content = ''; // New file
+      content = '';
     } else {
       throw error;
     }
