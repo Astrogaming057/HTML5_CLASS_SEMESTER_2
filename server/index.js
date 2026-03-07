@@ -101,18 +101,75 @@ app.get('/__preview__', async (req, res) => {
   }
 });
 
+// Cache popout template files
+let editorPopoutHtml = null;
+let editorPopoutCss = null;
+let editorPopoutJs = null;
+let previewPopoutHtml = null;
+let previewPopoutCss = null;
+let previewPopoutJs = null;
+let terminalPopoutHtml = null;
+let terminalPopoutCss = null;
+let terminalPopoutJs = null;
+
+async function loadPopoutTemplates() {
+  const templatesDir = path.join(__dirname, 'templates');
+  
+  if (!editorPopoutHtml) {
+    editorPopoutHtml = await fs.readFile(
+      path.join(templatesDir, 'html', 'editor-popout.html'),
+      'utf-8'
+    );
+    editorPopoutCss = await fs.readFile(
+      path.join(templatesDir, 'css', 'editor-popout.css'),
+      'utf-8'
+    );
+    editorPopoutJs = await fs.readFile(
+      path.join(templatesDir, 'js', 'editor-popout.js'),
+      'utf-8'
+    );
+  }
+  
+  if (!previewPopoutHtml) {
+    previewPopoutHtml = await fs.readFile(
+      path.join(templatesDir, 'html', 'preview-popout.html'),
+      'utf-8'
+    );
+    previewPopoutCss = await fs.readFile(
+      path.join(templatesDir, 'css', 'preview-popout.css'),
+      'utf-8'
+    );
+    previewPopoutJs = await fs.readFile(
+      path.join(templatesDir, 'js', 'preview-popout.js'),
+      'utf-8'
+    );
+  }
+  
+  if (!terminalPopoutHtml) {
+    terminalPopoutHtml = await fs.readFile(
+      path.join(templatesDir, 'html', 'terminal-popout.html'),
+      'utf-8'
+    );
+    terminalPopoutCss = await fs.readFile(
+      path.join(templatesDir, 'css', 'terminal-popout.css'),
+      'utf-8'
+    );
+    terminalPopoutJs = await fs.readFile(
+      path.join(templatesDir, 'js', 'terminal-popout.js'),
+      'utf-8'
+    );
+  }
+}
+
 // Setup popout routes
 app.get('/__popout__/editor', async (req, res) => {
   try {
+    await loadPopoutTemplates();
     const filePath = req.query.file;
     const originalUrl = req.query.original;
-    const popoutHtml = await fs.readFile(
-      path.join(__dirname, 'templates', 'html', 'editor-popout.html'),
-      'utf-8'
-    );
-    const html = popoutHtml
-      .replace('{{FILE_PATH}}', filePath || '')
-      .replace('{{ORIGINAL_URL}}', originalUrl || '');
+    const html = editorPopoutHtml
+      .replace('{{CSS_CONTENT}}', `<style>${editorPopoutCss}</style>`)
+      .replace('{{JS_CONTENT}}', `<script>${editorPopoutJs}</script>`);
     res.send(html);
   } catch (error) {
     logger.error('Error serving editor popout', error);
@@ -122,12 +179,10 @@ app.get('/__popout__/editor', async (req, res) => {
 
 app.get('/__popout__/preview', async (req, res) => {
   try {
-    const filePath = req.query.file;
-    const popoutHtml = await fs.readFile(
-      path.join(__dirname, 'templates', 'html', 'preview-popout.html'),
-      'utf-8'
-    );
-    const html = popoutHtml.replace('{{FILE_PATH}}', filePath || '');
+    await loadPopoutTemplates();
+    const html = previewPopoutHtml
+      .replace('{{CSS_CONTENT}}', `<style>${previewPopoutCss}</style>`)
+      .replace('{{JS_CONTENT}}', `<script>${previewPopoutJs}</script>`);
     res.send(html);
   } catch (error) {
     logger.error('Error serving preview popout', error);
@@ -137,11 +192,11 @@ app.get('/__popout__/preview', async (req, res) => {
 
 app.get('/__popout__/terminal', async (req, res) => {
   try {
-    const popoutHtml = await fs.readFile(
-      path.join(__dirname, 'templates', 'html', 'terminal-popout.html'),
-      'utf-8'
-    );
-    res.send(popoutHtml);
+    await loadPopoutTemplates();
+    const html = terminalPopoutHtml
+      .replace('{{CSS_CONTENT}}', `<style>${terminalPopoutCss}</style>`)
+      .replace('{{JS_CONTENT}}', `<script>${terminalPopoutJs}</script>`);
+    res.send(html);
   } catch (error) {
     logger.error('Error serving terminal popout', error);
     res.status(500).send('Error: ' + error.message);

@@ -359,35 +359,121 @@ require(['vs/editor/editor.main'], function() {
       })
       .then(res => res.json())
       .then(data => {
-        let outputText = '';
+        // Add command prompt
+        const commandLine = document.createElement('div');
+        commandLine.className = 'terminal-line log';
+        commandLine.textContent = `PS> ${command}`;
+        outputEl.appendChild(commandLine);
+        
         if (data.success) {
-          outputText = `PS> ${command}\n${data.output}\n`;
-          outputEl.textContent += outputText;
+          // Display output (stdout)
+          if (data.output && data.output.trim()) {
+            const lines = data.output.split('\n');
+            lines.forEach(line => {
+              if (line.trim()) {
+                const lineEl = document.createElement('div');
+                lineEl.className = 'terminal-line info';
+                lineEl.textContent = line;
+                outputEl.appendChild(lineEl);
+                
+                // Sync to popout
+                syncChannel.postMessage({
+                  type: 'terminal-output',
+                  tab: tab,
+                  output: line + '\n',
+                  append: true,
+                  lineType: 'info'
+                });
+              }
+            });
+          }
+          // Display errors (stderr) - PowerShell often writes to stderr even on success
+          if (data.error && data.error.trim()) {
+            const errorLines = data.error.split('\n');
+            errorLines.forEach(line => {
+              if (line.trim()) {
+                let lineType = 'warn';
+                // Detect error vs warning
+                if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
+                  lineType = 'error';
+                } else if (line.toLowerCase().includes('warning')) {
+                  lineType = 'warn';
+                }
+                
+                const lineEl = document.createElement('div');
+                lineEl.className = `terminal-line ${lineType}`;
+                lineEl.textContent = line;
+                outputEl.appendChild(lineEl);
+                
+                // Sync to popout
+                syncChannel.postMessage({
+                  type: 'terminal-output',
+                  tab: tab,
+                  output: line + '\n',
+                  append: true,
+                  lineType: lineType
+                });
+              }
+            });
+          }
         } else {
-          outputText = `PS> ${command}\nError: ${data.error}\n`;
-          outputEl.textContent += outputText;
+          // Command failed
+          const errorLine = document.createElement('div');
+          errorLine.className = 'terminal-line error';
+          errorLine.textContent = `Error: ${data.error || 'Command failed'}`;
+          outputEl.appendChild(errorLine);
+          
+          if (data.stderr) {
+            const stderrLine = document.createElement('div');
+            stderrLine.className = 'terminal-line error';
+            stderrLine.textContent = data.stderr;
+            outputEl.appendChild(stderrLine);
+            
+            // Sync stderr to popout
+            syncChannel.postMessage({
+              type: 'terminal-output',
+              tab: tab,
+              output: data.stderr + '\n',
+              append: true,
+              lineType: 'error'
+            });
+          }
+          
+          // Sync error to popout
+          syncChannel.postMessage({
+            type: 'terminal-output',
+            tab: tab,
+            output: `Error: ${data.error || 'Command failed'}\n`,
+            append: true,
+            lineType: 'error'
+          });
         }
+        
         outputEl.scrollTop = outputEl.scrollHeight;
         
-        // Sync back to popout - send the new output line, not the entire output
+        // Sync command prompt to popout
         syncChannel.postMessage({
           type: 'terminal-output',
           tab: tab,
-          output: outputText,
-          append: true
+          output: `PS> ${command}\n`,
+          append: true,
+          lineType: 'log'
         });
       })
       .catch(err => {
-        const errorText = `PS> ${command}\nError: ${err.message}\n`;
-        outputEl.textContent += errorText;
+        const errorLine = document.createElement('div');
+        errorLine.className = 'terminal-line error';
+        errorLine.textContent = `Network Error: ${err.message}`;
+        outputEl.appendChild(errorLine);
         outputEl.scrollTop = outputEl.scrollHeight;
         
         // Sync error to popout
         syncChannel.postMessage({
           type: 'terminal-output',
           tab: tab,
-          output: errorText,
-          append: true
+          output: `Network Error: ${err.message}\n`,
+          append: true,
+          lineType: 'error'
         });
       });
     } else if (tab === 'log') {

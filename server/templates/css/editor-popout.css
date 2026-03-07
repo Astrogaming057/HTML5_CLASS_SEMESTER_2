@@ -1,0 +1,50 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.popout-header {
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+  padding: 8px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.popout-title {
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.popout-close {
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 3px;
+}
+
+.popout-close:hover {
+  color: #ffffff;
+  background: #2a2d2e;
+}
+
+#editor {
+  flex: 1;
+  min-height: 0;
+}
