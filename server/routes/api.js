@@ -4,6 +4,17 @@ const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
 
+// WebSocket manager instance (will be set by index.js)
+let wsManager = null;
+
+/**
+ * Set WebSocket manager for broadcasting
+ * @param {WebSocketManager} manager - WebSocket manager instance
+ */
+function setWebSocketManager(manager) {
+  wsManager = manager;
+}
+
 const router = express.Router();
 
 /**
@@ -98,6 +109,10 @@ function setupAPI(baseDir) {
 
       await fs.writeFile(resolvedPath, content, 'utf-8');
       logger.info('API: File saved', { path: filePath, size: content.length });
+      
+      // Don't broadcast from API - the editor will broadcast its own save with sessionId
+      // This prevents duplicate messages and allows proper session tracking
+      
       res.json({ success: true });
     } catch (error) {
       logger.error('API: Error saving file', error);
@@ -141,5 +156,6 @@ function setupAPI(baseDir) {
 }
 
 module.exports = {
-  setupAPI
+  setupAPI,
+  setWebSocketManager
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const config = require('./config');
 const { setupFileServer } = require('./routes/fileServer');
-const { setupAPI } = require('./routes/api');
+const { setupAPI, setWebSocketManager } = require('./routes/api');
 const { serveEditor } = require('./routes/editor');
 const { setupFileWatcher } = require('./watcher/fileWatcher');
 const WebSocketManager = require('./websocket/websocketHandler');
@@ -38,6 +38,7 @@ try {
 
 // Setup API routes (before file server to avoid conflicts)
 app.use('/__api__', setupAPI(config.BASE_DIR));
+setWebSocketManager(wsManager); // Pass WebSocket manager to API
 logger.info('API routes configured');
 
 // Setup editor route
