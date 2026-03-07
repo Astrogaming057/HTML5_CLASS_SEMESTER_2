@@ -27,6 +27,7 @@ require(['vs/editor/editor.main'], function() {
   const saveBtn = document.getElementById('saveBtn');
   const refreshBtn = document.getElementById('refreshBtn');
   const closeBtn = document.getElementById('closeBtn');
+  const resetSettingsBtn = document.getElementById('resetSettingsBtn');
   const status = document.getElementById('status');
   const fileName = document.getElementById('fileName');
   previewFrame = document.getElementById('previewFrame');
@@ -365,6 +366,15 @@ require(['vs/editor/editor.main'], function() {
     }
     window.close();
   });
+  
+  // Reset settings button
+  if (resetSettingsBtn) {
+    resetSettingsBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to reset all settings? This will clear panel sizes, positions, and preferences.')) {
+        resetSettings();
+      }
+    });
+  }
   
   // Warn before closing with unsaved changes
   window.addEventListener('beforeunload', (e) => {
@@ -1510,109 +1520,191 @@ require(['vs/editor/editor.main'], function() {
     const container = document.querySelector('.preview-container');
     const resizerExplorer = document.getElementById('resizerExplorer');
     const resizerEditor = document.getElementById('resizerEditor');
-    
-    // Resizer between file explorer and editor
-    if (resizerExplorer) {
-      let isResizingExplorer = false;
-      
-      resizerExplorer.addEventListener('mousedown', (e) => {
-        isResizingExplorer = true;
-        document.addEventListener('mousemove', handleExplorerResize);
-        document.addEventListener('mouseup', stopExplorerResize);
-        e.preventDefault();
-      });
-      
-      function handleExplorerResize(e) {
-        if (!isResizingExplorer || fileExplorerPanel.classList.contains('collapsed')) return;
-        
-        const containerRect = container.getBoundingClientRect();
-        const newExplorerWidth = e.clientX - containerRect.left;
-        
-        if (newExplorerWidth >= 150 && newExplorerWidth <= containerRect.width * 0.5) {
-          fileExplorerPanel.style.width = newExplorerWidth + 'px';
-        }
-      }
-      
-      function stopExplorerResize() {
-        isResizingExplorer = false;
-        document.removeEventListener('mousemove', handleExplorerResize);
-        document.removeEventListener('mouseup', stopExplorerResize);
-      }
-    }
-    
-    // Resizer between editor and preview
-    if (resizerEditor) {
-      let isResizingEditor = false;
-      
-      resizerEditor.addEventListener('mousedown', (e) => {
-        isResizingEditor = true;
-        document.addEventListener('mousemove', handleEditorResize);
-        document.addEventListener('mouseup', stopEditorResize);
-        e.preventDefault();
-      });
-      
-      function handleEditorResize(e) {
-        if (!isResizingEditor || previewPanel.classList.contains('collapsed')) return;
-        
-        const containerRect = container.getBoundingClientRect();
-        const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
-        const relativeX = e.clientX - containerRect.left - explorerWidth;
-        const availableWidth = containerRect.width - explorerWidth;
-        const editorPercent = (relativeX / availableWidth) * 100;
-        
-        if (editorPercent >= 20 && editorPercent <= 80) {
-          editorPanel.style.flex = 'none';
-          previewPanel.style.flex = 'none';
-          editorPanel.style.width = editorPercent + '%';
-          previewPanel.style.width = (100 - editorPercent) + '%';
-        }
-      }
-      
-      function stopEditorResize() {
-        isResizingEditor = false;
-        document.removeEventListener('mousemove', handleEditorResize);
-        document.removeEventListener('mouseup', stopEditorResize);
-        saveState();
-      }
-    }
-    
-    // Resizer between file tree and terminal
     const resizerTerminal = document.getElementById('resizerTerminal');
     const terminalPanel = document.getElementById('terminalPanel');
     
-    if (resizerTerminal && terminalPanel) {
-      let isResizingTerminal = false;
+    // Global resize state (VS Code style)
+    let activeResizer = null;
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    
+    // Constants
+    const MIN_EXPLORER_WIDTH = 150;
+    const MIN_EDITOR_WIDTH = 200;
+    const MIN_PREVIEW_WIDTH = 200;
+    const MIN_TERMINAL_HEIGHT = 100;
+    const MAX_TERMINAL_HEIGHT = 500;
+    const RESIZER_WIDTH = 4;
+    
+    // Global mouse handlers (works even when mouse leaves resizer)
+    function handleGlobalMouseMove(e) {
+      if (!activeResizer) return;
       
-      resizerTerminal.addEventListener('mousedown', (e) => {
-        isResizingTerminal = true;
-        document.addEventListener('mousemove', handleTerminalResize);
-        document.addEventListener('mouseup', stopTerminalResize);
+      const containerRect = container.getBoundingClientRect();
+      
+      switch (activeResizer) {
+        case 'explorer':
+          handleExplorerResize(e, containerRect);
+          break;
+        case 'editor':
+          handleEditorResize(e, containerRect);
+          break;
+        case 'terminal':
+          handleTerminalResize(e, containerRect);
+          break;
+      }
+    }
+    
+    function handleGlobalMouseUp(e) {
+      if (!activeResizer) return;
+      
+      // Clean up global state
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('mouseleave', handleGlobalMouseUp);
+      window.removeEventListener('blur', handleGlobalMouseUp);
+      
+      activeResizer = null;
+      saveState();
+    }
+    
+    // Explorer resizer handler
+    function handleExplorerResize(e, containerRect) {
+      if (fileExplorerPanel.classList.contains('collapsed')) return;
+      
+      const deltaX = e.clientX - startX;
+      let newWidth = startWidth + deltaX;
+      
+      // Calculate constraints
+      const minWidth = MIN_EXPLORER_WIDTH;
+      const maxWidth = containerRect.width - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
+      
+      // Apply constraints
+      newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+      
+      // Update explorer width
+      fileExplorerPanel.style.width = newWidth + 'px';
+      fileExplorerPanel.style.flex = 'none';
+      
+      // Ensure editor and preview maintain minimum widths
+      const remainingWidth = containerRect.width - newWidth - RESIZER_WIDTH;
+      if (editorPanel && previewPanel) {
+        editorPanel.style.flex = '1 1 auto';
+        previewPanel.style.flex = '1 1 auto';
+        editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
+        previewPanel.style.minWidth = MIN_PREVIEW_WIDTH + 'px';
+      }
+    }
+    
+    // Editor resizer handler
+    function handleEditorResize(e, containerRect) {
+      if (previewPanel.classList.contains('collapsed')) return;
+      
+      const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
+      const explorerResizerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : RESIZER_WIDTH;
+      const availableWidth = containerRect.width - explorerWidth - explorerResizerWidth - RESIZER_WIDTH;
+      
+      const deltaX = e.clientX - startX;
+      let newEditorWidth = startWidth + deltaX;
+      
+      // Apply constraints
+      newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth - MIN_PREVIEW_WIDTH));
+      const newPreviewWidth = availableWidth - newEditorWidth;
+      
+      // Only apply if both panels meet minimum requirements
+      if (newPreviewWidth >= MIN_PREVIEW_WIDTH) {
+        editorPanel.style.flex = 'none';
+        previewPanel.style.flex = 'none';
+        editorPanel.style.width = newEditorWidth + 'px';
+        previewPanel.style.width = newPreviewWidth + 'px';
+      }
+    }
+    
+    // Terminal resizer handler
+    function handleTerminalResize(e, containerRect) {
+      if (terminalPanel.classList.contains('collapsed')) return;
+      
+      const deltaY = e.clientY - startY;
+      let newHeight = startHeight + deltaY;
+      
+      // Apply constraints
+      newHeight = Math.max(MIN_TERMINAL_HEIGHT, Math.min(newHeight, MAX_TERMINAL_HEIGHT));
+      
+      terminalPanel.style.height = newHeight + 'px';
+    }
+    
+    // Setup explorer resizer
+    if (resizerExplorer) {
+      resizerExplorer.addEventListener('mousedown', (e) => {
+        if (fileExplorerPanel.classList.contains('collapsed')) return;
+        
         e.preventDefault();
+        e.stopPropagation();
+        
+        activeResizer = 'explorer';
+        startX = e.clientX;
+        startWidth = fileExplorerPanel.offsetWidth;
+        
+        // Setup global handlers
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.classList.add('resizing');
+        document.addEventListener('mousemove', handleGlobalMouseMove);
+        document.addEventListener('mouseup', handleGlobalMouseUp);
+        document.addEventListener('mouseleave', handleGlobalMouseUp);
+        window.addEventListener('blur', handleGlobalMouseUp);
       });
-      
-      function handleTerminalResize(e) {
-        if (!isResizingTerminal || terminalPanel.classList.contains('collapsed')) return;
+    }
+    
+    // Setup editor resizer
+    if (resizerEditor) {
+      resizerEditor.addEventListener('mousedown', (e) => {
+        if (previewPanel.classList.contains('collapsed')) return;
         
-        const fileExplorerPanel = document.getElementById('fileExplorerPanel');
-        const explorerRect = fileExplorerPanel.getBoundingClientRect();
+        e.preventDefault();
+        e.stopPropagation();
         
-        // Calculate terminal height based on mouse position relative to the explorer panel bottom
-        const mouseY = e.clientY;
-        const explorerBottom = explorerRect.bottom;
-        const newTerminalHeight = mouseY - explorerBottom;
+        activeResizer = 'editor';
+        startX = e.clientX;
+        startWidth = editorPanel.offsetWidth;
         
-        // Constrain terminal height
-        if (newTerminalHeight >= 100 && newTerminalHeight <= 500) {
-          terminalPanel.style.height = newTerminalHeight + 'px';
-        }
-      }
-      
-      function stopTerminalResize() {
-        isResizingTerminal = false;
-        document.removeEventListener('mousemove', handleTerminalResize);
-        document.removeEventListener('mouseup', stopTerminalResize);
-        saveState();
-      }
+        // Setup global handlers
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.classList.add('resizing');
+        document.addEventListener('mousemove', handleGlobalMouseMove);
+        document.addEventListener('mouseup', handleGlobalMouseUp);
+        document.addEventListener('mouseleave', handleGlobalMouseUp);
+        window.addEventListener('blur', handleGlobalMouseUp);
+      });
+    }
+    
+    // Setup terminal resizer
+    if (resizerTerminal && terminalPanel) {
+      resizerTerminal.addEventListener('mousedown', (e) => {
+        if (terminalPanel.classList.contains('collapsed')) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        activeResizer = 'terminal';
+        startY = e.clientY;
+        startHeight = terminalPanel.offsetHeight;
+        
+        // Setup global handlers
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        document.body.classList.add('resizing');
+        document.addEventListener('mousemove', handleGlobalMouseMove);
+        document.addEventListener('mouseup', handleGlobalMouseUp);
+        document.addEventListener('mouseleave', handleGlobalMouseUp);
+        window.addEventListener('blur', handleGlobalMouseUp);
+      });
       
       // Hide resizer if terminal is collapsed
       if (terminalPanel.classList.contains('collapsed')) {
@@ -1881,6 +1973,73 @@ require(['vs/editor/editor.main'], function() {
     } catch (err) {
       console.error('Error restoring state:', err);
     }
+  }
+  
+  // Reset settings function
+  function resetSettings() {
+    // Clear all localStorage settings
+    localStorage.removeItem('previewState');
+    localStorage.removeItem('fileExplorerSettings');
+    
+    // Reset explorer panel
+    fileExplorerPanel.classList.remove('collapsed');
+    fileExplorerPanel.style.width = '250px';
+    fileExplorerPanel.style.maxWidth = '';
+    fileExplorerPanel.style.flex = '';
+    toggleExplorer.textContent = '◀';
+    
+    // Reset editor panel
+    editorPanel.style.width = '';
+    editorPanel.style.flex = '';
+    editorPanel.style.minWidth = '';
+    editorPanel.style.maxWidth = '';
+    
+    // Reset preview panel
+    previewPanel.classList.remove('collapsed');
+    previewPanel.style.width = '';
+    previewPanel.style.flex = '';
+    previewPanel.style.minWidth = '';
+    previewPanel.style.maxWidth = '';
+    togglePreview.textContent = '◀';
+    
+    // Reset terminal panel
+    if (terminalPanel) {
+      terminalPanel.classList.remove('collapsed');
+      terminalPanel.style.height = '200px';
+      
+      // Reset terminal tab to client
+      const tabs = document.querySelectorAll('.terminal-tab');
+      const tabContents = document.querySelectorAll('.terminal-tab-content');
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(c => {
+        c.classList.remove('active');
+        c.style.display = 'none';
+      });
+      const clientTab = document.querySelector('.terminal-tab[data-tab="client"]');
+      const clientContent = document.getElementById('terminalClient');
+      if (clientTab && clientContent) {
+        clientTab.classList.add('active');
+        clientContent.classList.add('active');
+        clientContent.style.display = 'flex';
+      }
+    }
+    
+    // Update visibility
+    updateExplorerVisibility();
+    updatePreviewVisibility();
+    if (terminalPanel) {
+      updateTerminalVisibility();
+    }
+    
+    // Show feedback
+    status.textContent = 'Settings reset';
+    status.className = 'status saved';
+    setTimeout(() => {
+      status.textContent = 'Ready';
+      status.className = 'status';
+    }, 2000);
+    
+    console.log('Settings reset to defaults');
   }
   
   // Save state on various events

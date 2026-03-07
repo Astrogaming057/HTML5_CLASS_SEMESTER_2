@@ -94,14 +94,15 @@ body {
 .file-explorer-panel {
   width: 250px;
   min-width: 150px;
-  max-width: 50%;
+  max-width: calc(100% - 420px); /* Ensure editor (200px) + preview (200px) + resizers (20px) remain visible */
   display: flex;
   flex-direction: column;
   border-right: 1px solid #3e3e42;
   background: #252526;
-  transition: width 0.2s;
+  transition: width 0.15s;
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
 }
 
 .file-explorer-panel.collapsed {
@@ -295,11 +296,18 @@ body {
   height: 4px;
   background: #3e3e42;
   cursor: row-resize;
-  transition: background 0.2s;
+  transition: background 0.15s;
   flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+  touch-action: none;
 }
 
 .resizer-terminal:hover {
+  background: #0e639c;
+}
+
+body.resizing .resizer-terminal {
   background: #0e639c;
 }
 
@@ -497,6 +505,7 @@ body {
   flex-direction: column;
   border-right: 1px solid #3e3e42;
   min-width: 200px;
+  position: relative;
 }
 
 #previewContainer {
@@ -526,8 +535,14 @@ body {
 .preview-panel {
   border-right: none;
   min-width: 200px;
-  transition: width 0.2s, min-width 0.2s;
+  transition: width 0.15s, min-width 0.15s;
   flex: 1;
+}
+
+body.resizing .file-explorer-panel,
+body.resizing .editor-panel,
+body.resizing .preview-panel {
+  transition: none !important;
 }
 
 .preview-panel.collapsed {
@@ -549,11 +564,23 @@ body {
   width: 4px;
   background: #3e3e42;
   cursor: col-resize;
-  transition: background 0.2s;
+  transition: background 0.15s;
   flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+  touch-action: none;
 }
 
 .resizer:hover {
+  background: #0e639c;
+}
+
+body.resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.resizing .resizer {
   background: #0e639c;
 }
 
