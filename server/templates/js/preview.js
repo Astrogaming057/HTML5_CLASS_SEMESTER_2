@@ -1,5 +1,6 @@
 const urlParams = new URLSearchParams(window.location.search);
 let filePath = urlParams.get('file');
+const forceLoad = urlParams.get('force') === 'true' || urlParams.get('noRestore') === 'true';
 let currentDir = '';
 
 let editor = null;
@@ -69,28 +70,42 @@ require(['vs/editor/editor.main'], function() {
     return `${message}_${logType}_${timestamp}`;
   }
   
-  const savedState = localStorage.getItem('previewState');
-  if (savedState) {
-    try {
-      const state = JSON.parse(savedState);
-      if (state.currentDir && state.currentDir !== currentDir) {
-        currentDir = state.currentDir;
-        console.log('Restored directory from state:', currentDir);
+  if (!forceLoad) {
+    const savedState = localStorage.getItem('previewState');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        if (state.currentDir && state.currentDir !== currentDir) {
+          currentDir = state.currentDir;
+          console.log('Restored directory from state:', currentDir);
+        }
+      } catch (err) {
+        console.error('Error parsing saved state:', err);
       }
-    } catch (err) {
-      console.error('Error parsing saved state:', err);
     }
+  } else {
+    console.log('Force load mode: skipping state restoration');
   }
   
   setupFileExplorer();
   
   requestAnimationFrame(() => {
     setTimeout(() => {
-      restoreState();
-      updateExplorerVisibility();
-      updatePreviewVisibility();
-      if (terminalPanel) {
-        updateTerminalVisibility();
+      if (forceLoad) {
+        console.log('Force load: loading file directly without state restoration');
+        loadFile(filePath);
+        updateExplorerVisibility();
+        updatePreviewVisibility();
+        if (terminalPanel) {
+          updateTerminalVisibility();
+        }
+      } else {
+        restoreState();
+        updateExplorerVisibility();
+        updatePreviewVisibility();
+        if (terminalPanel) {
+          updateTerminalVisibility();
+        }
       }
       isRestoringState = false;
       console.log('State restoration complete - saving enabled');
@@ -2482,16 +2497,20 @@ require(['vs/editor/editor.main'], function() {
       const currentModel = editor.getModel();
       
       // Create or get model for this file
-      let model = monaco.editor.getModels().find(m => m.uri.path === '/' + path);
-      if (!model) {
-        // Create new model
-        const uri = monaco.Uri.parse('file:///' + path);
-        model = monaco.editor.createModel(fileData.content, detectedLanguage, uri);
-      } else {
-        // Update existing model
-        model.setValue(fileData.content);
-        monaco.editor.setModelLanguage(model, detectedLanguage);
-      }
+          const normalizedPath = path.replace(/^\/+/, '');
+          let model = monaco.editor.getModels().find(m => {
+            const modelPath = m.uri.path.replace(/^\/+/, '');
+            return modelPath === normalizedPath;
+          });
+          if (!model) {
+            // Create new model
+            const uri = monaco.Uri.parse('file:///' + normalizedPath);
+            model = monaco.editor.createModel(fileData.content, detectedLanguage, uri);
+          } else {
+            // Update existing model
+            model.setValue(fileData.content);
+            monaco.editor.setModelLanguage(model, detectedLanguage);
+          }
       
       // Switch editor to this model
       editor.setModel(model);
@@ -3160,7 +3179,8 @@ require(['vs/editor/editor.main'], function() {
       const toggleTerminal = document.getElementById('toggleTerminal');
       
       // Restore file path - switch if different (without reload)
-      if (state.filePath && state.filePath !== filePath) {
+      // BUT: Don't restore if forceLoad is true (user explicitly wants this file)
+      if (!forceLoad && state.filePath && state.filePath !== filePath) {
         console.log('Switching to saved file:', state.filePath);
         // Use switchToFile but skip the unsaved changes check during restore
         filePath = state.filePath;
@@ -3175,6 +3195,8 @@ require(['vs/editor/editor.main'], function() {
         const newUrl = '/__preview__?file=' + encodeURIComponent(state.filePath);
         window.history.replaceState({ file: state.filePath }, '', newUrl);
         // Continue with restoring other state
+      } else if (forceLoad) {
+        console.log('Force load: using file from URL, not restoring saved file');
       }
       
       // Restore explorer state

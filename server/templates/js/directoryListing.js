@@ -201,7 +201,7 @@ function openEditor(filePath) {
 }
 
 function openPreview(filePath) {
-  window.open('/__preview__?file=' + encodeURIComponent(filePath), '_blank');
+  window.open('/__preview__?file=' + encodeURIComponent(filePath) + '&force=true', '_blank');
 }
 
 function onDragStart(e) {
