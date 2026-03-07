@@ -63,9 +63,12 @@ async function serveEditor(baseDir, filePath) {
 
   const fileName = filePath.split(path.sep).pop() || filePath;
   
+  // Escape content for JavaScript string (Monaco will load it via API)
+  const escapedContent = JSON.stringify(content);
+  
   let html = htmlTemplate
     .replace('{{FILENAME}}', fileName)
-    .replace('{{CONTENT}}', content.replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+    .replace('{{CONTENT}}', '') // Monaco will load via API, so empty initial value
     .replace('{{CSS_CONTENT}}', `<style>${cssContent}</style>`)
     .replace('{{JS_CONTENT}}', `<script>${jsContent}</script>`);
 

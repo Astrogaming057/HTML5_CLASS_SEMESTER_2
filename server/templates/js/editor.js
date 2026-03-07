@@ -2,12 +2,58 @@
 const urlParams = new URLSearchParams(window.location.search);
 const filePath = urlParams.get('file');
 
+let editor = null;
 let originalContent = '';
 let isDirty = false;
 
-// Initialize editor
-document.addEventListener('DOMContentLoaded', () => {
-  const editor = document.getElementById('editor');
+// Language mapping
+function getLanguage(filePath) {
+  const ext = filePath.split('.').pop().toLowerCase();
+  const languages = {
+    'js': 'javascript',
+    'jsx': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'typescript',
+    'html': 'html',
+    'htm': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'sass',
+    'less': 'less',
+    'json': 'json',
+    'md': 'markdown',
+    'py': 'python',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'php': 'php',
+    'rb': 'ruby',
+    'go': 'go',
+    'rs': 'rust',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'sh': 'shell',
+    'bash': 'shell',
+    'bat': 'bat',
+    'ps1': 'powershell',
+    'xml': 'xml',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'sql': 'sql',
+    'vue': 'vue',
+    'dockerfile': 'dockerfile',
+    'txt': 'plaintext'
+  };
+  return languages[ext] || 'plaintext';
+}
+
+// Initialize Monaco Editor
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+
+require(['vs/editor/editor.main'], function() {
+  const editorContainer = document.getElementById('editor');
   const saveBtn = document.getElementById('saveBtn');
   const closeBtn = document.getElementById('closeBtn');
   const status = document.getElementById('status');
@@ -16,28 +62,59 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!filePath) {
     status.textContent = 'Error: No file specified';
     status.className = 'status error';
-    editor.disabled = true;
     return;
   }
   
   fileName.textContent = filePath.split('/').pop();
-  originalContent = editor.value;
+  const language = getLanguage(filePath);
+  
+  // Create Monaco Editor instance
+  editor = monaco.editor.create(editorContainer, {
+    value: '',
+    language: language,
+    theme: 'vs-dark',
+    fontSize: 14,
+    fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+    lineNumbers: 'on',
+    roundedSelection: false,
+    scrollBeyondLastLine: false,
+    readOnly: false,
+    cursorStyle: 'line',
+    automaticLayout: true,
+    minimap: {
+      enabled: true
+    },
+    wordWrap: 'on',
+    formatOnPaste: true,
+    formatOnType: true,
+    tabSize: 2,
+    insertSpaces: true,
+    detectIndentation: true,
+    renderWhitespace: 'selection',
+    renderLineHighlight: 'all',
+    bracketPairColorization: {
+      enabled: true
+    },
+    suggestOnTriggerCharacters: true,
+    quickSuggestions: true,
+    acceptSuggestionOnEnter: 'on',
+    tabCompletion: 'on',
+    wordBasedSuggestions: 'matchingDocuments'
+  });
   
   // Load file content
   loadFile(filePath);
   
   // Track changes
-  editor.addEventListener('input', () => {
-    isDirty = editor.value !== originalContent;
+  editor.onDidChangeModelContent(() => {
+    const currentContent = editor.getValue();
+    isDirty = currentContent !== originalContent;
     updateStatus();
   });
   
   // Save on Ctrl+S
-  editor.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      saveFile();
-    }
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    saveFile();
   });
   
   // Save button
@@ -75,12 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          editor.value = data.content;
+          editor.setValue(data.content);
           originalContent = data.content;
           isDirty = false;
           updateStatus();
-          // Apply syntax highlighting
-          applySyntaxHighlighting(editor, path);
+          
+          // Set language based on file extension
+          const detectedLanguage = getLanguage(path);
+          monaco.editor.setModelLanguage(editor.getModel(), detectedLanguage);
         } else {
           status.textContent = 'Error: ' + data.error;
           status.className = 'status error';
@@ -94,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   function saveFile() {
-    const content = editor.value;
+    const content = editor.getValue();
     status.textContent = 'Saving...';
     status.className = 'status saving';
     
@@ -126,50 +205,5 @@ document.addEventListener('DOMContentLoaded', () => {
       status.className = 'status error';
       console.error(err);
     });
-  }
-  
-  function applySyntaxHighlighting(textarea, filePath) {
-    // Basic syntax highlighting using a simple approach
-    // For better highlighting, consider using a library like Prism.js or highlight.js
-    const ext = filePath.split('.').pop().toLowerCase();
-    const language = getLanguage(ext);
-    
-    // This is a simplified version - for production, use a proper syntax highlighter
-    textarea.style.color = '#d4d4d4';
-  }
-  
-  function getLanguage(ext) {
-    const languages = {
-      'js': 'javascript',
-      'jsx': 'javascript',
-      'ts': 'typescript',
-      'tsx': 'typescript',
-      'html': 'html',
-      'htm': 'html',
-      'css': 'css',
-      'scss': 'scss',
-      'sass': 'sass',
-      'json': 'json',
-      'md': 'markdown',
-      'py': 'python',
-      'java': 'java',
-      'c': 'c',
-      'cpp': 'cpp',
-      'h': 'c',
-      'hpp': 'cpp',
-      'php': 'php',
-      'rb': 'ruby',
-      'go': 'go',
-      'rs': 'rust',
-      'swift': 'swift',
-      'kt': 'kotlin',
-      'sh': 'bash',
-      'bat': 'batch',
-      'ps1': 'powershell',
-      'xml': 'xml',
-      'yaml': 'yaml',
-      'yml': 'yaml'
-    };
-    return languages[ext] || 'text';
   }
 });

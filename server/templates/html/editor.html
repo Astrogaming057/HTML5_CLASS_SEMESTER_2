@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Editor - {{FILENAME}}</title>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   {{CSS_CONTENT}}
 </head>
 <body>
@@ -19,7 +20,7 @@
     </div>
   </div>
   <div class="editor-container">
-    <textarea id="editor" spellcheck="false">{{CONTENT}}</textarea>
+    <div id="editor"></div>
   </div>
   {{JS_CONTENT}}
 </body>
