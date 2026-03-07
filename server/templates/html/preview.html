@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview - {{FILENAME}}</title>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  {{CSS_CONTENT}}
+</head>
+<body>
+  <div class="preview-header">
+    <div class="preview-title">
+      <span class="file-icon">👁️</span>
+      <span id="fileName">{{FILENAME}}</span>
+    </div>
+    <div class="preview-actions">
+      <button id="toggleExplorerBtn" class="btn btn-secondary" title="Toggle File Explorer (Ctrl+B)">📁 Explorer</button>
+      <button id="togglePreviewBtn" class="btn btn-secondary" title="Toggle Preview (Ctrl+P)">👁️ Preview</button>
+      <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
+      <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh Preview</button>
+      <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+  </div>
+  <div class="preview-container">
+    <div class="file-explorer-panel" id="fileExplorerPanel">
+      <div class="panel-header">
+        <button id="backBtn" class="back-btn" title="Go Back">←</button>
+        <span>📁 Files</span>
+        <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
+      </div>
+      <div class="file-tree" id="fileTree">
+        <div class="file-tree-loading">Loading...</div>
+      </div>
+    </div>
+    <div class="resizer resizer-explorer" id="resizerExplorer"></div>
+    <div class="editor-panel" id="editorPanel">
+      <div class="panel-header">Editor</div>
+      <div id="editor"></div>
+    </div>
+    <div class="resizer resizer-editor" id="resizerEditor"></div>
+    <div class="preview-panel" id="previewPanel">
+      <div class="panel-header">
+        <span>Preview</span>
+        <button id="togglePreview" class="toggle-btn" title="Toggle Preview">◀</button>
+      </div>
+      <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+    </div>
+  </div>
+  
+  <!-- Context Menu -->
+  <div id="contextMenu" class="context-menu" style="display: none;">
+    <div class="context-menu-item" id="contextNewFile">📄 New File</div>
+    <div class="context-menu-item" id="contextNewFolder">📁 New Folder</div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item" id="contextRename">✏️ Rename</div>
+    <div class="context-menu-item" id="contextDelete">🗑️ Delete</div>
+  </div>
+  
+  {{JS_CONTENT}}
+</body>
+</html>

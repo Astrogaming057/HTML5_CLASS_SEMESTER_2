@@ -89,12 +89,24 @@ class WebSocketManager {
   /**
    * Notify clients about file changes
    * @param {string} filePath - Relative path of changed file
+   * @param {string} eventType - Type of event: 'change', 'add', 'unlink', 'addDir', 'unlinkDir'
    */
-  notifyFileChange(filePath) {
-    logger.info('Notifying clients of file change', { filePath, clients: this.clients.size });
+  notifyFileChange(filePath, eventType = 'change') {
+    const messageTypes = {
+      'change': 'fileChanged',
+      'add': 'fileAdded',
+      'unlink': 'fileDeleted',
+      'addDir': 'directoryAdded',
+      'unlinkDir': 'directoryDeleted'
+    };
+    
+    const messageType = messageTypes[eventType] || 'fileChanged';
+    logger.info('Notifying clients of file event', { filePath, eventType, messageType, clients: this.clients.size });
+    
     this.broadcast({
-      type: 'fileChanged',
-      path: filePath
+      type: messageType,
+      path: filePath,
+      eventType: eventType
     });
   }
 }

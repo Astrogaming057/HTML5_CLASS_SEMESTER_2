@@ -1,8 +1,31 @@
-h1 {
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 1px solid #c0c0c0;
   margin-bottom: 10px;
   padding-bottom: 10px;
+}
+
+h1 {
+  margin: 0;
   white-space: nowrap;
+  flex: 1;
+}
+
+.settings-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-left: 10px;
+}
+
+.settings-btn:hover {
+  background: #45a049;
 }
 
 table {
@@ -48,4 +71,198 @@ html[dir=rtl] a {
 #parentDirLinkBox {
   margin-bottom: 10px;
   padding-bottom: 10px;
+}
+
+/* Settings Panel */
+.settings-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.settings-header {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.settings-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.settings-close-btn:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.settings-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.setting-group {
+  margin-bottom: 20px;
+}
+
+.setting-label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.setting-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  color: #333;
+}
+
+.setting-description {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.setting-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-slider {
+  width: 44px;
+  height: 24px;
+  background: #ccc;
+  border-radius: 24px;
+  position: relative;
+  transition: background 0.3s;
+  margin-right: 10px;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+}
+
+.setting-toggle input[type="checkbox"]:checked + .toggle-slider {
+  background: #4CAF50;
+}
+
+.setting-toggle input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-label {
+  color: #333;
+  font-size: 14px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.settings-actions .btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-actions .btn-primary {
+  background: #4CAF50;
+  color: white;
+}
+
+.settings-actions .btn-primary:hover {
+  background: #45a049;
+}
+
+.settings-actions .btn-secondary {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.settings-actions .btn-secondary:hover {
+  background: #e0e0e0;
+}
+
+/* WebSocket Status Indicator */
+.ws-status {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1000;
+}
+
+.ws-status.connected {
+  background: #4CAF50;
+  color: white;
+}
+
+.ws-status.disconnected {
+  background: #f44336;
+  color: white;
 }

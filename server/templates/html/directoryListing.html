@@ -11,7 +11,10 @@
 <title id="title">Index of {{LOCATION}}</title>
 </head>
 <body>
-<h1 id="header">Index of LOCATION</h1>
+<div class="header-bar">
+  <h1 id="header">Index of LOCATION</h1>
+  <button id="settingsBtn" class="settings-btn" title="Settings">⚙️</button>
+</div>
 <div id="parentDirLinkBox" style="display: {{HAS_PARENT}};">
   <a id="parentDirLink" class="icon up" href="{{PARENT_PATH}}">
     <span id="parentDirText">[parent directory]</span>
@@ -27,6 +30,66 @@
   </thead>
   <tbody id="tbody"></tbody>
 </table>
+
+<!-- Settings Panel -->
+<div id="settingsPanel" class="settings-panel" style="display: none;">
+  <div class="settings-content">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button class="settings-close-btn" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="setting-group">
+        <label class="setting-label">Click Behavior</label>
+        <select id="clickBehavior" class="setting-select">
+          <option value="open">Click to Open File/Folder</option>
+          <option value="editor">Click to Open in Editor (for editable files)</option>
+        </select>
+        <p class="setting-description">Controls what happens when you click on files</p>
+      </div>
+      
+      <div class="setting-group">
+        <label class="setting-label">HTML Preview Mode</label>
+        <select id="previewMode" class="setting-select">
+          <option value="editor">Editor Only</option>
+          <option value="preview">Split View (Editor + Preview)</option>
+        </select>
+        <p class="setting-description">How to open HTML files (Editor or Split Preview)</p>
+      </div>
+      
+      <div class="setting-group">
+        <label class="setting-label">Auto-refresh</label>
+        <label class="setting-toggle">
+          <input type="checkbox" id="autoRefresh" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">Automatically refresh when files change</span>
+        </label>
+      </div>
+      
+      <div class="setting-group">
+        <label class="setting-label">Show Hidden Files</label>
+        <label class="setting-toggle">
+          <input type="checkbox" id="showHidden">
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">Display files and folders starting with .</span>
+        </label>
+      </div>
+      
+      <div class="setting-group">
+        <label class="setting-label">File Size Format</label>
+        <select id="sizeFormat" class="setting-select">
+          <option value="human">Human Readable (KB, MB, GB)</option>
+          <option value="bytes">Bytes</option>
+        </select>
+      </div>
+      
+      <div class="settings-actions">
+        <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+        <button class="btn btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 start("{{LOCATION}}");
 {{PARENT_SCRIPT}}

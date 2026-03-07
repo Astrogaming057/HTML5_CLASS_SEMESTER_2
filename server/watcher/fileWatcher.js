@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
  * Setup file watcher and notify clients on file changes
  * @param {string} baseDir - Base directory to watch
  * @param {Object} watchOptions - Chokidar watch options
- * @param {Function} onFileChange - Callback when file changes (receives filePath)
+ * @param {Function} onFileChange - Callback when file changes (receives filePath, eventType)
  * @returns {Object} Chokidar watcher instance
  */
 function setupFileWatcher(baseDir, watchOptions, onFileChange) {
@@ -19,7 +19,7 @@ function setupFileWatcher(baseDir, watchOptions, onFileChange) {
   watcher.on('change', (filePath) => {
     const relativePath = path.relative(baseDir, filePath).replace(/\\/g, '/');
     logger.info('File changed', { filePath: relativePath, absolutePath: filePath });
-    onFileChange(relativePath);
+    onFileChange(relativePath, 'change');
   });
 
   watcher.on('error', (error) => {
@@ -28,12 +28,26 @@ function setupFileWatcher(baseDir, watchOptions, onFileChange) {
 
   watcher.on('add', (filePath) => {
     const relativePath = path.relative(baseDir, filePath).replace(/\\/g, '/');
-    logger.debug('File added', { filePath: relativePath });
+    logger.info('File added', { filePath: relativePath });
+    onFileChange(relativePath, 'add');
   });
 
   watcher.on('unlink', (filePath) => {
     const relativePath = path.relative(baseDir, filePath).replace(/\\/g, '/');
-    logger.debug('File removed', { filePath: relativePath });
+    logger.info('File removed', { filePath: relativePath });
+    onFileChange(relativePath, 'unlink');
+  });
+
+  watcher.on('addDir', (dirPath) => {
+    const relativePath = path.relative(baseDir, dirPath).replace(/\\/g, '/');
+    logger.info('Directory added', { filePath: relativePath });
+    onFileChange(relativePath, 'addDir');
+  });
+
+  watcher.on('unlinkDir', (dirPath) => {
+    const relativePath = path.relative(baseDir, dirPath).replace(/\\/g, '/');
+    logger.info('Directory removed', { filePath: relativePath });
+    onFileChange(relativePath, 'unlinkDir');
   });
 
   return watcher;

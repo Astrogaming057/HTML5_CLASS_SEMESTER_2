@@ -1,6 +1,122 @@
 // Editable file extensions
 const EDITABLE_EXTENSIONS = ['json', 'css', 'js', 'md', 'html', 'htm', 'txt', 'xml', 'yaml', 'yml', 'ts', 'jsx', 'tsx', 'vue', 'sass', 'scss', 'less', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'sh', 'bat', 'ps1'];
 
+// Settings with defaults
+let settings = {
+  clickBehavior: 'open', // 'open' or 'editor'
+  previewMode: 'editor', // 'editor' or 'preview'
+  autoRefresh: true,
+  showHidden: false,
+  sizeFormat: 'human'
+};
+
+// Load settings from localStorage
+function loadSettings() {
+  const saved = localStorage.getItem('fileExplorerSettings');
+  if (saved) {
+    try {
+      settings = { ...settings, ...JSON.parse(saved) };
+    } catch (e) {
+      console.error('Error loading settings:', e);
+    }
+  }
+  applySettings();
+}
+
+// Save settings to localStorage
+function saveSettingsToStorage() {
+  localStorage.setItem('fileExplorerSettings', JSON.stringify(settings));
+}
+
+// Apply settings to UI
+function applySettings() {
+  if (document.getElementById('clickBehavior')) {
+    document.getElementById('clickBehavior').value = settings.clickBehavior;
+  }
+  if (document.getElementById('previewMode')) {
+    document.getElementById('previewMode').value = settings.previewMode || 'editor';
+  }
+  if (document.getElementById('autoRefresh')) {
+    document.getElementById('autoRefresh').checked = settings.autoRefresh;
+  }
+  if (document.getElementById('showHidden')) {
+    document.getElementById('showHidden').checked = settings.showHidden;
+  }
+  if (document.getElementById('sizeFormat')) {
+    document.getElementById('sizeFormat').value = settings.sizeFormat;
+  }
+}
+
+// WebSocket connection
+let ws = null;
+let wsStatusIndicator = null;
+
+function setupWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = protocol + '//' + window.location.host;
+  ws = new WebSocket(wsUrl);
+  
+  // Create status indicator
+  if (!wsStatusIndicator) {
+    wsStatusIndicator = document.createElement('div');
+    wsStatusIndicator.className = 'ws-status';
+    wsStatusIndicator.textContent = 'Connecting...';
+    document.body.appendChild(wsStatusIndicator);
+  }
+  
+  ws.onopen = () => {
+    wsStatusIndicator.textContent = 'Connected';
+    wsStatusIndicator.className = 'ws-status connected';
+  };
+  
+  ws.onclose = () => {
+    wsStatusIndicator.textContent = 'Disconnected';
+    wsStatusIndicator.className = 'ws-status disconnected';
+    // Reconnect after 2 seconds
+    setTimeout(setupWebSocket, 2000);
+  };
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+    wsStatusIndicator.textContent = 'Error';
+    wsStatusIndicator.className = 'ws-status disconnected';
+  };
+  
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      
+      if (!settings.autoRefresh) return;
+      
+      const currentPath = window.location.pathname.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
+      const changedPath = data.path.replace(/\\/g, '/');
+      const normalizedCurrentPath = currentPath.replace(/^\/+/, '');
+      
+      // Check if the event affects the current directory
+      const affectsCurrentDir = 
+        changedPath.startsWith(normalizedCurrentPath) || 
+        normalizedCurrentPath === '' ||
+        currentPath === '/';
+      
+      if (affectsCurrentDir) {
+        // Handle different event types
+        if (data.type === 'fileChanged') {
+          console.log('File changed, reloading...', changedPath);
+          location.reload();
+        } else if (data.type === 'fileAdded' || data.type === 'fileDeleted') {
+          console.log('File added/deleted, reloading...', changedPath);
+          location.reload();
+        } else if (data.type === 'directoryAdded' || data.type === 'directoryDeleted') {
+          console.log('Directory added/deleted, reloading...', changedPath);
+          location.reload();
+        }
+      }
+    } catch (err) {
+      console.error('Error parsing WebSocket message:', err);
+    }
+  };
+}
+
 function addRow(name, url, isdir, size, size_string, date_modified, date_modified_string) {
   if (name == "." || name == "..")
     return;
@@ -23,21 +139,61 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
     url = url + "/";
     size = 0;
     size_string = "";
+    // Folders always open normally, regardless of settings
   } else {
     link.draggable = "true";
     link.addEventListener("dragstart", onDragStart, false);
     
-    // Add ctrl+click handler for editable files
+    // Add click handler based on settings
     const ext = name.split('.').pop().toLowerCase();
-    if (EDITABLE_EXTENSIONS.includes(ext)) {
+    const isEditable = EDITABLE_EXTENSIONS.includes(ext);
+    
+    if (isEditable) {
+      const isHTML = ext === 'html' || ext === 'htm';
+      
       link.addEventListener('click', function(e) {
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          openEditor(root + url.replace(/\/$/, ''));
+        if (settings.clickBehavior === 'editor') {
+          // Click opens editor/preview, Ctrl+Click opens file normally
+          if (e.ctrlKey || e.metaKey) {
+            // Let default behavior happen (open file)
+            return;
+          } else {
+            e.preventDefault();
+            // For HTML files, check preview mode
+            if (isHTML && settings.previewMode === 'preview') {
+              openPreview(root + url.replace(/\/$/, ''));
+            } else {
+              openEditor(root + url.replace(/\/$/, ''));
+            }
+          }
+        } else {
+          // Click opens file, Ctrl+Click opens editor/preview
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            // For HTML files, check preview mode
+            if (isHTML && settings.previewMode === 'preview') {
+              openPreview(root + url.replace(/\/$/, ''));
+            } else {
+              openEditor(root + url.replace(/\/$/, ''));
+            }
+          }
+          // Otherwise, let default behavior happen (open file)
         }
       });
       link.style.cursor = 'pointer';
-      link.title = 'Ctrl+Click to edit';
+      if (settings.clickBehavior === 'editor') {
+        if (isHTML && settings.previewMode === 'preview') {
+          link.title = 'Click to preview (Ctrl+Click to open file)';
+        } else {
+          link.title = 'Click to edit (Ctrl+Click to open file)';
+        }
+      } else {
+        if (isHTML && settings.previewMode === 'preview') {
+          link.title = 'Click to open (Ctrl+Click to preview)';
+        } else {
+          link.title = 'Click to open (Ctrl+Click to edit)';
+        }
+      }
     }
   }
   link.innerText = name;
@@ -46,6 +202,7 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
   // Add right-click context menu
   row.addEventListener('contextmenu', function(e) {
     e.preventDefault();
+    e.stopPropagation(); // Prevent document-level handler from firing
     showContextMenu(e, name, isdir, root + url);
   });
 
@@ -61,6 +218,10 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
 
 function openEditor(filePath) {
   window.open('/__editor__?file=' + encodeURIComponent(filePath), '_blank');
+}
+
+function openPreview(filePath) {
+  window.open('/__preview__?file=' + encodeURIComponent(filePath), '_blank');
 }
 
 function onDragStart(e) {
@@ -164,10 +325,53 @@ function showContextMenu(e, name, isdir, path) {
   
   const currentDir = document.location.pathname.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
   
+  // If no name provided, this is empty space - only show create options
+  if (!name) {
+    const newFileItem = createMenuItem('📄 New File', () => {
+      const fileName = prompt('Enter file name:');
+      if (fileName) {
+        createFile(currentDir, fileName);
+      }
+      contextMenu.remove();
+      contextMenu = null;
+    });
+    contextMenu.appendChild(newFileItem);
+    
+    const newFolderItem = createMenuItem('📁 New Folder', () => {
+      const folderName = prompt('Enter folder name:');
+      if (folderName) {
+        createFolder(currentDir, folderName);
+      }
+      contextMenu.remove();
+      contextMenu = null;
+    });
+    contextMenu.appendChild(newFolderItem);
+    
+    document.body.appendChild(contextMenu);
+    contextMenu.style.left = e.pageX + 'px';
+    contextMenu.style.top = e.pageY + 'px';
+    
+    // Close menu on click outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu() {
+        if (contextMenu) {
+          contextMenu.remove();
+          contextMenu = null;
+        }
+        document.removeEventListener('click', closeMenu);
+      });
+    }, 0);
+    return;
+  }
+  
   // Check if file is editable
   const isEditable = !isdir && isEditableFile(name);
   
   if (!isdir) {
+    // Check if file is HTML
+    const ext = name.split('.').pop().toLowerCase();
+    const isHTML = ext === 'html' || ext === 'htm';
+    
     // Open in Editor option for all files
     const openEditorItem = createMenuItem('📝 Open in Editor', () => {
       openEditor(path);
@@ -175,6 +379,16 @@ function showContextMenu(e, name, isdir, path) {
       contextMenu = null;
     });
     contextMenu.appendChild(openEditorItem);
+    
+    // Open in Preview option for HTML files
+    if (isHTML) {
+      const openPreviewItem = createMenuItem('👁️ Open in Preview', () => {
+        openPreview(path);
+        contextMenu.remove();
+        contextMenu = null;
+      });
+      contextMenu.appendChild(openPreviewItem);
+    }
     
     // Add separator
     contextMenu.appendChild(createSeparator());
@@ -319,6 +533,70 @@ function onLoad() {
   addHandlers(document.getElementById('nameColumnHeader'), 0);
   addHandlers(document.getElementById('sizeColumnHeader'), 1);
   addHandlers(document.getElementById('dateColumnHeader'), 2);
+  
+  // Load settings
+  loadSettings();
+  
+  // Setup WebSocket
+  setupWebSocket();
+  
+  // Setup settings button
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      document.getElementById('settingsPanel').style.display = 'flex';
+      applySettings();
+    });
+  }
+  
+  // Add right-click to entire page for creating files/folders
+  document.addEventListener('contextmenu', function(e) {
+    // Don't show menu if clicking on existing context menu items or settings
+    if (e.target.closest('#contextMenu') || e.target.closest('#settingsPanel') || e.target.closest('.settings-btn')) {
+      return;
+    }
+    
+    // If clicking on a table row, let the row's handler take over
+    if (e.target.closest('tr') && e.target.closest('tbody')) {
+      return; // Let the row's contextmenu handler deal with it
+    }
+    
+    // For everything else (empty space, header, etc.), show create menu
+    e.preventDefault();
+    const currentDir = document.location.pathname.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
+    showContextMenu(e, '', false, currentDir);
+  });
 }
+
+// Settings functions
+window.closeSettings = function() {
+  document.getElementById('settingsPanel').style.display = 'none';
+};
+
+window.saveSettings = function() {
+  settings.clickBehavior = document.getElementById('clickBehavior').value;
+  settings.previewMode = document.getElementById('previewMode').value;
+  settings.autoRefresh = document.getElementById('autoRefresh').checked;
+  settings.showHidden = document.getElementById('showHidden').checked;
+  settings.sizeFormat = document.getElementById('sizeFormat').value;
+  
+  saveSettingsToStorage();
+  closeSettings();
+  
+  // Reload to apply click behavior changes
+  location.reload();
+};
+
+window.resetSettings = function() {
+  settings = {
+    clickBehavior: 'open',
+    previewMode: 'editor',
+    autoRefresh: true,
+    showHidden: false,
+    sizeFormat: 'human'
+  };
+  applySettings();
+  saveSettingsToStorage();
+};
 
 window.addEventListener('DOMContentLoaded', onLoad);
