@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #0a1929;
+  --bg-secondary: #0f2537;
+  --bg-tertiary: #143045;
+  --bg-hover: #193b53;
+  --bg-active: #00acc1;
+  --bg-button-primary: #00acc1;
+  --bg-button-primary-hover: #0097a7;
+  --bg-button-secondary: #143045;
+  --bg-button-secondary-hover: #193b53;
+  --bg-input: #0d1f2e;
+  --bg-scrollbar: #0d1f2e;
+  --bg-scrollbar-thumb: #26c6da;
+  --bg-scrollbar-thumb-hover: #00acc1;
+  
+  --text-primary: #e0f7fa;
+  --text-secondary: #b2ebf2;
+  --text-tertiary: #80deea;
+  --text-inverse: #ffffff;
+  --text-button: #b2ebf2;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #26c6da;
+  --border-secondary: #00acc1;
+  --border-active: #00bcd4;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #26c6da;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #26c6da;
+  --resizer-hover: #00bcd4;
+}
+
+body {
+  background: linear-gradient(180deg, #0a1929 0%, #0f2537 30%, #143045 60%, #0a1929 100%);
+  background-size: 100% 300%;
+  animation: oceanWave 20s ease infinite;
+}
+
+@keyframes oceanWave {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 0% 100%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(38, 198, 218, 0.15);
+}

@@ -1,0 +1,63 @@
+:root {
+  --bg-primary: #2d1a2d;
+  --bg-secondary: #3d2a3d;
+  --bg-tertiary: #4d3a4d;
+  --bg-hover: #5d4a5d;
+  --bg-active: #ff6ec7;
+  --bg-button-primary: #ff6ec7;
+  --bg-button-primary-hover: #ff4db3;
+  --bg-button-secondary: #4d3a4d;
+  --bg-button-secondary-hover: #5d4a5d;
+  --bg-input: #2d1a2d;
+  --bg-scrollbar: #2d1a2d;
+  --bg-scrollbar-thumb: #ff9ee0;
+  --bg-scrollbar-thumb-hover: #ff6ec7;
+  
+  --text-primary: #ffe0f0;
+  --text-secondary: #ffcce6;
+  --text-tertiary: #ffb3d9;
+  --text-inverse: #ffffff;
+  --text-button: #ffcce6;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #ff9ee0;
+  --border-secondary: #ff6ec7;
+  --border-active: #ff4db3;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #ff6ec7;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #ff9ee0;
+  --resizer-hover: #ff4db3;
+}
+
+body {
+  background: linear-gradient(135deg, #2d1a2d 0%, #3d2a3d 20%, #ff6ec7 40%, #3d2a3d 60%, #2d1a2d 80%, #ff9ee0 100%);
+  background-size: 400% 400%;
+  animation: candySwirl 20s ease infinite;
+}
+
+@keyframes candySwirl {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 25px rgba(255, 110, 199, 0.4);
+  border: 1px solid var(--border-primary) !important;
+}
+
+.file-tree-item.active,
+.btn-primary {
+  box-shadow: 0 0 25px rgba(255, 110, 199, 0.6);
+}

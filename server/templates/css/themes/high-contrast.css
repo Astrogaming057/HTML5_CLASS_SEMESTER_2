@@ -1,0 +1,35 @@
+:root {
+  --bg-primary: #000000;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  --bg-hover: #333333;
+  --bg-active: #0066cc;
+  --bg-button-primary: #0066cc;
+  --bg-button-primary-hover: #0052a3;
+  --bg-button-secondary: #2a2a2a;
+  --bg-button-secondary-hover: #3a3a3a;
+  --bg-input: #000000;
+  --bg-scrollbar: #1a1a1a;
+  --bg-scrollbar-thumb: #666666;
+  --bg-scrollbar-thumb-hover: #888888;
+  
+  --text-primary: #ffffff;
+  --text-secondary: #ffffff;
+  --text-tertiary: #cccccc;
+  --text-inverse: #000000;
+  --text-button: #ffffff;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #ffffff;
+  --border-secondary: #cccccc;
+  --border-active: #00ffff;
+  
+  --status-saving: #ffff00;
+  --status-saved: #00ff00;
+  --status-error: #ff0000;
+  --status-info: #00ffff;
+  --status-warn: #ffff00;
+  
+  --resizer-bg: #ffffff;
+  --resizer-hover: #00ffff;
+}

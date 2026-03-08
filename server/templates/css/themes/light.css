@@ -1,0 +1,35 @@
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --bg-hover: #e0e0e0;
+  --bg-active: #cce5ff;
+  --bg-button-primary: #0078d4;
+  --bg-button-primary-hover: #005a9e;
+  --bg-button-secondary: #e1e1e1;
+  --bg-button-secondary-hover: #d0d0d0;
+  --bg-input: #ffffff;
+  --bg-scrollbar: #f3f3f3;
+  --bg-scrollbar-thumb: #c1c1c1;
+  --bg-scrollbar-thumb-hover: #a8a8a8;
+  
+  --text-primary: #1e1e1e;
+  --text-secondary: #323130;
+  --text-tertiary: #605e5c;
+  --text-inverse: #000000;
+  --text-button: #323130;
+  --text-button-primary: white;
+  
+  --border-primary: #d1d1d1;
+  --border-secondary: #e8e8e8;
+  --border-active: #0078d4;
+  
+  --status-saving: #ff8c00;
+  --status-saved: #107c10;
+  --status-error: #d13438;
+  --status-info: #0078d4;
+  --status-warn: #ffaa44;
+  
+  --resizer-bg: #d1d1d1;
+  --resizer-hover: #0078d4;
+}

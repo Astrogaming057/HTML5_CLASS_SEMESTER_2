@@ -1,0 +1,78 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #2a2a3e;
+  --bg-tertiary: #3a3a4e;
+  --bg-hover: #4a4a5e;
+  --bg-active: #6c5ce7;
+  --bg-button-primary: #6c5ce7;
+  --bg-button-primary-hover: #5f3dc4;
+  --bg-button-secondary: #3a3a4e;
+  --bg-button-secondary-hover: #4a4a5e;
+  --bg-input: #1a1a2e;
+  --bg-scrollbar: #1a1a2e;
+  --bg-scrollbar-thumb: #a29bfe;
+  --bg-scrollbar-thumb-hover: #6c5ce7;
+  
+  --text-primary: #e0e0ff;
+  --text-secondary: #b8b8ff;
+  --text-tertiary: #9090ff;
+  --text-inverse: #ffffff;
+  --text-button: #b8b8ff;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #a29bfe;
+  --border-secondary: #6c5ce7;
+  --border-active: #5f3dc4;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #a29bfe;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #a29bfe;
+  --resizer-hover: #5f3dc4;
+}
+
+body {
+  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 25%, #3a3a4e 50%, #2a2a3e 75%, #1a1a2e 100%);
+  background-size: 300% 300%;
+  animation: stormCloud 12s ease infinite;
+  position: relative;
+}
+
+@keyframes stormCloud {
+  0%, 100% { background-position: 0% 50%; filter: brightness(1); }
+  50% { background-position: 100% 50%; filter: brightness(0.9); }
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(180deg, transparent 0%, rgba(108, 92, 231, 0.1) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+  animation: lightning 8s ease infinite;
+}
+
+@keyframes lightning {
+  0%, 90%, 100% { opacity: 0; }
+  92%, 94%, 96% { opacity: 0.3; }
+  93%, 95% { opacity: 0.6; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 25px rgba(108, 92, 231, 0.3);
+}

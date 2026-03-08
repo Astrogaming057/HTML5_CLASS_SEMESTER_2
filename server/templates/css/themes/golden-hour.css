@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #2a1f0f;
+  --bg-secondary: #3d2f1a;
+  --bg-tertiary: #4d3f25;
+  --bg-hover: #5d4f30;
+  --bg-active: #ffb300;
+  --bg-button-primary: #ffb300;
+  --bg-button-primary-hover: #ff8f00;
+  --bg-button-secondary: #4d3f25;
+  --bg-button-secondary-hover: #5d4f30;
+  --bg-input: #2a1f0f;
+  --bg-scrollbar: #2a1f0f;
+  --bg-scrollbar-thumb: #ffc107;
+  --bg-scrollbar-thumb-hover: #ffb300;
+  
+  --text-primary: #fff8e1;
+  --text-secondary: #ffecb3;
+  --text-tertiary: #ffe082;
+  --text-inverse: #ffffff;
+  --text-button: #ffecb3;
+  --text-button-primary: #2a1f0f;
+  
+  --border-primary: #ffc107;
+  --border-secondary: #ffb300;
+  --border-active: #ff8f00;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #ffc107;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #ffc107;
+  --resizer-hover: #ff8f00;
+}
+
+body {
+  background: linear-gradient(135deg, #2a1f0f 0%, #3d2f1a 20%, #4d3f25 40%, #ffb300 60%, #3d2f1a 80%, #2a1f0f 100%);
+  background-size: 400% 400%;
+  animation: goldenHour 25s ease infinite;
+}
+
+@keyframes goldenHour {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 25px rgba(255, 179, 0, 0.3);
+}

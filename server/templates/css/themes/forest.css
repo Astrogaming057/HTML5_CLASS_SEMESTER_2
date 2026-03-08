@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #1b2e1b;
+  --bg-secondary: #2d4a2d;
+  --bg-tertiary: #3d5a3d;
+  --bg-hover: #4d6a4d;
+  --bg-active: #66bb6a;
+  --bg-button-primary: #66bb6a;
+  --bg-button-primary-hover: #4caf50;
+  --bg-button-secondary: #3d5a3d;
+  --bg-button-secondary-hover: #4d6a4d;
+  --bg-input: #1a281a;
+  --bg-scrollbar: #1a281a;
+  --bg-scrollbar-thumb: #81c784;
+  --bg-scrollbar-thumb-hover: #66bb6a;
+  
+  --text-primary: #e8f5e9;
+  --text-secondary: #c8e6c9;
+  --text-tertiary: #a5d6a7;
+  --text-inverse: #ffffff;
+  --text-button: #c8e6c9;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #81c784;
+  --border-secondary: #66bb6a;
+  --border-active: #4caf50;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #66bb6a;
+  --status-error: #ef5350;
+  --status-info: #81c784;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #81c784;
+  --resizer-hover: #4caf50;
+}
+
+body {
+  background: linear-gradient(135deg, #1b2e1b 0%, #2d4a2d 25%, #1b2e1b 50%, #0f1f0f 75%, #1b2e1b 100%);
+  background-size: 300% 300%;
+  animation: forestBreeze 25s ease infinite;
+}
+
+@keyframes forestBreeze {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(102, 187, 106, 0.15);
+}

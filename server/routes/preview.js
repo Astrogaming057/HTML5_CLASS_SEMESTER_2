@@ -2,6 +2,8 @@ const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
 const { isPathSafe } = require('../utils/pathUtils');
+const { escapeHtml } = require('../utils/formatters');
+const { renderMarkdownWithStyles } = require('../utils/markdownRenderer');
 const { getStatusPage } = require('../templates/status/statusHandler');
 const logger = require('../utils/logger');
 
@@ -55,9 +57,14 @@ async function servePreview(baseDir, filePath) {
 
   const fileName = filePath.split(path.sep).pop() || filePath;
   
+  const darkTheme = await fs.readFile(
+    path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css'),
+    'utf-8'
+  );
+  
   let html = htmlTemplate
     .replace('{{FILENAME}}', fileName)
-    .replace('{{CSS_CONTENT}}', `<style>${cssContent}</style>`)
+    .replace('{{CSS_CONTENT}}', `<style>${cssContent}</style><style id="theme-style">${darkTheme}</style>`)
     .replace('{{JS_CONTENT}}', `<script>${jsContent}</script>`);
 
   return html;
@@ -155,12 +162,31 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       const basePath = fileDir ? '/' + fileDir + '/' : '/';
       const baseUrl = req.protocol + '://' + req.get('host') + basePath;
 
+      const fileName = filePath.split('/').pop() || filePath;
+      const ext = fileName.split('.').pop().toLowerCase();
+      const isHTML = ext === 'html' || ext === 'htm';
+      const isMarkdown = ext === 'md' || ext === 'markdown';
+
       let modifiedContent = content;
-      modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
       
-      modifiedContent = modifiedContent.replace(/console\.(log|info|warn|error|debug|trace|table|group|groupEnd|groupCollapsed|time|timeEnd|timeLog|timeStamp|clear|dir|dirxml|assert|count|countReset|profile|profileEnd)\s*\(/gi, (match, method) => {
-        return `debug_Injected_Console.${method}(`;
-      });
+      if (isHTML) {
+        modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
+        
+        modifiedContent = modifiedContent.replace(/console\.(log|info|warn|error|debug|trace|table|group|groupEnd|groupCollapsed|time|timeEnd|timeLog|timeStamp|clear|dir|dirxml|assert|count|countReset|profile|profileEnd)\s*\(/gi, (match, method) => {
+          return `debug_Injected_Console.${method}(`;
+        });
+      } else if (isMarkdown) {
+        try {
+          modifiedContent = await renderMarkdownWithStyles(content);
+        } catch (error) {
+          logger.error('Error parsing markdown', error);
+          modifiedContent = escapeHtml(content);
+          modifiedContent = `<pre>${modifiedContent}</pre>`;
+        }
+      } else {
+        modifiedContent = escapeHtml(modifiedContent);
+        modifiedContent = `<pre>${modifiedContent}</pre>`;
+      }
       
       const protocol = req.protocol === 'https' ? 'wss:' : 'ws:';
       const wsHost = req.get('host');
@@ -371,16 +397,53 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
 })();
 </script>`;
       
-      if (modifiedContent.match(/<head[^>]*>/i)) {
-        modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {
-          return match + `${consoleLogScript}\n<base href="${baseUrl}">`;
-        });
-      } else if (modifiedContent.match(/<html[^>]*>/i)) {
-        modifiedContent = modifiedContent.replace(/<html[^>]*>/i, (match) => {
-          return match + `\n<head>${consoleLogScript}\n<base href="${baseUrl}"></head>`;
-        });
-      } else if (modifiedContent.trim().length > 0) {
-        modifiedContent = `<!DOCTYPE html><html><head>${consoleLogScript}\n<base href="${baseUrl}"></head><body>${modifiedContent}</body></html>`;
+      const themeName = req.query.theme || 'dark';
+      let themeStyles = '';
+      try {
+        if (themeName === 'custom' && req.query.customCSS) {
+          const customCSS = Buffer.from(req.query.customCSS, 'base64').toString('utf-8');
+          if (customCSS.trim() === '') {
+            // Fallback to dark theme if custom CSS is empty
+            const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
+            const themeContent = await fs.readFile(themePath, 'utf-8');
+            themeStyles = `<style id="theme-style">${themeContent}</style>`;
+          } else {
+            themeStyles = `<style id="theme-style">${customCSS}</style>`;
+          }
+        } else {
+          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', `${themeName}.css`);
+          const themeContent = await fs.readFile(themePath, 'utf-8');
+          themeStyles = `<style id="theme-style">${themeContent}</style>`;
+        }
+      } catch (error) {
+        logger.warn('Error loading theme for preview', { theme: themeName, error: error.message });
+        // Fallback to dark theme on error
+        try {
+          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
+          const themeContent = await fs.readFile(themePath, 'utf-8');
+          themeStyles = `<style id="theme-style">${themeContent}</style>`;
+        } catch (fallbackError) {
+          logger.error('Error loading fallback theme', fallbackError);
+        }
+      }
+      
+      if (isHTML) {
+        if (modifiedContent.match(/<head[^>]*>/i)) {
+          modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {
+            return match + `${consoleLogScript}\n<base href="${baseUrl}">${themeStyles}`;
+          });
+        } else if (modifiedContent.match(/<html[^>]*>/i)) {
+          modifiedContent = modifiedContent.replace(/<html[^>]*>/i, (match) => {
+            return match + `\n<head>${consoleLogScript}\n<base href="${baseUrl}">${themeStyles}</head>`;
+          });
+        } else if (modifiedContent.trim().length > 0) {
+          modifiedContent = `<!DOCTYPE html><html><head>${consoleLogScript}\n<base href="${baseUrl}">${themeStyles}</head><body>${modifiedContent}</body></html>`;
+        }
+        } else {
+        if (modifiedContent.trim().length > 0) {
+          const preStyles = `<style>pre { margin: 0; padding: 20px; font-family: 'Courier New', monospace; white-space: pre-wrap; word-wrap: break-word; background: var(--bg-secondary, #f6f8fa); color: var(--text-primary, #24292e); border: 1px solid var(--border-primary, #e1e4e8); border-radius: 4px; } body { background: var(--bg-primary, #ffffff); color: var(--text-primary, #24292e); }</style>`;
+          modifiedContent = `<!DOCTYPE html><html><head>${consoleLogScript}\n<base href="${baseUrl}">${themeStyles}${preStyles}</head><body>${modifiedContent}</body></html>`;
+        }
       }
 
       res.setHeader('Content-Type', 'text/html');

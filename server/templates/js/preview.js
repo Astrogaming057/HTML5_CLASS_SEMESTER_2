@@ -34,6 +34,12 @@ require(['vs/editor/editor.main'], function() {
   const refreshBtn = document.getElementById('refreshBtn');
   const closeBtn = document.getElementById('closeBtn');
   const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+  const backToFilesBtn = document.getElementById('backToFilesBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const resetSettingsBtn2 = document.getElementById('resetSettingsBtn2');
   const status = document.getElementById('status');
   const fileName = document.getElementById('fileName');
   previewFrame = document.getElementById('previewFrame');
@@ -63,6 +69,167 @@ require(['vs/editor/editor.main'], function() {
   const language = getLanguage(filePath);
   
   let isRestoringState = true;
+  
+  let previewSettings = {
+    autoRefreshPreview: true,
+    pageTheme: 'dark',
+    customThemeCSS: '',
+    editorFontSize: 14,
+    editorTheme: 'vs-dark',
+    editorWordWrap: false,
+    editorLineNumbers: true,
+    editorTabSize: 4,
+    defaultExplorerVisible: true,
+    defaultTerminalVisible: false
+  };
+  
+  function loadPreviewSettings() {
+    const saved = localStorage.getItem('previewSettings');
+    if (saved) {
+      try {
+        previewSettings = { ...previewSettings, ...JSON.parse(saved) };
+      } catch (e) {
+        console.error('Error loading preview settings:', e);
+      }
+    }
+    applyPreviewSettings();
+  }
+  
+  function savePreviewSettings() {
+    try {
+      localStorage.setItem('previewSettings', JSON.stringify(previewSettings));
+    } catch (e) {
+      console.error('Error saving preview settings:', e);
+    }
+  }
+  
+  async function loadTheme(themeName) {
+    try {
+      const themeStyle = document.getElementById('theme-style');
+      if (!themeStyle) {
+        console.error('Theme style element not found');
+        return;
+      }
+      
+      if (themeName === 'custom') {
+        const customCSS = previewSettings.customThemeCSS || '';
+        if (customCSS.trim() === '') {
+          // Fallback to dark theme if custom CSS is empty
+          const response = await fetch(`/__api__/theme?name=dark`);
+          if (response.ok) {
+            const themeCss = await response.text();
+            themeStyle.textContent = themeCss;
+          } else {
+            console.error('Failed to load fallback theme:', response.status);
+          }
+        } else {
+          themeStyle.textContent = customCSS;
+        }
+      } else {
+        const response = await fetch(`/__api__/theme?name=${encodeURIComponent(themeName)}`);
+        if (response.ok) {
+          const themeCss = await response.text();
+          themeStyle.textContent = themeCss;
+        } else {
+          console.error('Failed to load theme:', response.status);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading theme:', error);
+    }
+  }
+  
+  function applyPreviewSettings() {
+    if (editor) {
+      editor.updateOptions({
+        fontSize: previewSettings.editorFontSize,
+        theme: previewSettings.editorTheme,
+        wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
+        lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
+        tabSize: previewSettings.editorTabSize
+      });
+    }
+    
+    loadTheme(previewSettings.pageTheme);
+    
+    if (settingsPanel) {
+      const autoRefreshPreview = document.getElementById('autoRefreshPreview');
+      const pageTheme = document.getElementById('pageTheme');
+      const customThemeCSS = document.getElementById('customThemeCSS');
+      const customThemeGroup = document.getElementById('customThemeGroup');
+      const editorFontSize = document.getElementById('editorFontSize');
+      const editorTheme = document.getElementById('editorTheme');
+      const editorWordWrap = document.getElementById('editorWordWrap');
+      const editorLineNumbers = document.getElementById('editorLineNumbers');
+      const editorTabSize = document.getElementById('editorTabSize');
+      const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
+      const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+      
+      if (autoRefreshPreview) autoRefreshPreview.checked = previewSettings.autoRefreshPreview;
+      if (pageTheme) {
+        pageTheme.value = previewSettings.pageTheme;
+        if (customThemeGroup) {
+          customThemeGroup.style.display = previewSettings.pageTheme === 'custom' ? 'block' : 'none';
+        }
+      }
+      if (customThemeCSS) customThemeCSS.value = previewSettings.customThemeCSS || '';
+      if (editorFontSize) editorFontSize.value = previewSettings.editorFontSize;
+      if (editorTheme) editorTheme.value = previewSettings.editorTheme;
+      if (editorWordWrap) editorWordWrap.checked = previewSettings.editorWordWrap;
+      if (editorLineNumbers) editorLineNumbers.checked = previewSettings.editorLineNumbers;
+      if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
+      if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
+      if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
+    }
+  }
+  
+  let originalTheme = null;
+  
+  function openSettings() {
+    if (settingsPanel) {
+      originalTheme = previewSettings.pageTheme;
+      applyPreviewSettings();
+      settingsPanel.style.display = 'flex';
+      
+      const pageTheme = document.getElementById('pageTheme');
+      if (pageTheme) {
+        pageTheme.addEventListener('change', handleThemePreview);
+      }
+    }
+  }
+  
+  function closeSettings() {
+    if (settingsPanel) {
+      const pageTheme = document.getElementById('pageTheme');
+      if (pageTheme) {
+        pageTheme.removeEventListener('change', handleThemePreview);
+      }
+      
+      if (originalTheme !== null && originalTheme !== previewSettings.pageTheme) {
+        loadTheme(originalTheme);
+        previewSettings.pageTheme = originalTheme;
+      }
+      
+      originalTheme = null;
+      settingsPanel.style.display = 'none';
+    }
+  }
+  
+  function handleThemePreview() {
+    const pageTheme = document.getElementById('pageTheme');
+    const customThemeGroup = document.getElementById('customThemeGroup');
+    
+    if (pageTheme && pageTheme.value) {
+      // Show/hide custom theme textarea immediately
+      if (customThemeGroup) {
+        customThemeGroup.style.display = pageTheme.value === 'custom' ? 'block' : 'none';
+      }
+      // Preview the theme
+      loadTheme(pageTheme.value);
+    }
+  }
+  
+  loadPreviewSettings();
   
   const receivedLogIds = new Set();
   
@@ -781,10 +948,10 @@ require(['vs/editor/editor.main'], function() {
   editor = monaco.editor.create(editorContainer, {
     value: '',
     language: language,
-    theme: 'vs-dark',
-    fontSize: 14,
+    theme: previewSettings.editorTheme,
+    fontSize: previewSettings.editorFontSize,
     fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-    lineNumbers: 'on',
+    lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
     roundedSelection: false,
     scrollBeyondLastLine: false,
     readOnly: false,
@@ -793,10 +960,10 @@ require(['vs/editor/editor.main'], function() {
     minimap: {
       enabled: true
     },
-    wordWrap: 'on',
+    wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
     formatOnPaste: true,
     formatOnType: true,
-    tabSize: 2,
+    tabSize: previewSettings.editorTabSize,
     insertSpaces: true,
     detectIndentation: true,
     renderWhitespace: 'selection',
@@ -805,6 +972,8 @@ require(['vs/editor/editor.main'], function() {
       enabled: true
     }
   });
+  
+  applyPreviewSettings();
   
   // Handle browser back/forward buttons
   window.addEventListener('popstate', (e) => {
@@ -902,6 +1071,15 @@ require(['vs/editor/editor.main'], function() {
     });
   });
   
+  // Back to Files button
+  if (backToFilesBtn) {
+    backToFilesBtn.addEventListener('click', () => {
+      const dirPath = filePath.split('/').slice(0, -1).join('/') || '';
+      const targetPath = dirPath ? '/' + dirPath + '/' : '/';
+      window.location.href = targetPath;
+    });
+  }
+  
   // Close button
   closeBtn.addEventListener('click', async () => {
     if (isDirty) {
@@ -912,6 +1090,170 @@ require(['vs/editor/editor.main'], function() {
     }
     window.close();
   });
+  
+  // Settings button
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      console.log('Settings button clicked');
+      openSettings();
+    });
+  } else {
+    console.error('Settings button not found!');
+  }
+  
+  if (!settingsPanel) {
+    console.error('Settings panel not found!');
+  }
+  
+  if (settingsCloseBtn) {
+    settingsCloseBtn.addEventListener('click', closeSettings);
+  }
+  
+  if (settingsPanel) {
+    settingsPanel.addEventListener('click', (e) => {
+      if (e.target === settingsPanel) {
+        closeSettings();
+      }
+    });
+  }
+  
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', () => {
+      const autoRefreshPreview = document.getElementById('autoRefreshPreview');
+      const pageTheme = document.getElementById('pageTheme');
+      const customThemeCSS = document.getElementById('customThemeCSS');
+      const editorFontSize = document.getElementById('editorFontSize');
+      const editorTheme = document.getElementById('editorTheme');
+      const editorWordWrap = document.getElementById('editorWordWrap');
+      const editorLineNumbers = document.getElementById('editorLineNumbers');
+      const editorTabSize = document.getElementById('editorTabSize');
+      const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
+      const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+      
+      previewSettings.autoRefreshPreview = autoRefreshPreview ? autoRefreshPreview.checked : true;
+      previewSettings.pageTheme = pageTheme ? pageTheme.value : 'dark';
+      previewSettings.customThemeCSS = customThemeCSS ? customThemeCSS.value : '';
+      previewSettings.editorFontSize = editorFontSize ? parseInt(editorFontSize.value) : 14;
+      previewSettings.editorTheme = editorTheme ? editorTheme.value : 'vs-dark';
+      previewSettings.editorWordWrap = editorWordWrap ? editorWordWrap.checked : false;
+      previewSettings.editorLineNumbers = editorLineNumbers ? editorLineNumbers.checked : true;
+      previewSettings.editorTabSize = editorTabSize ? parseInt(editorTabSize.value) : 4;
+      previewSettings.defaultExplorerVisible = defaultExplorerVisible ? defaultExplorerVisible.checked : true;
+      previewSettings.defaultTerminalVisible = defaultTerminalVisible ? defaultTerminalVisible.checked : false;
+      
+      const pageThemeEl = document.getElementById('pageTheme');
+      if (pageThemeEl) {
+        pageThemeEl.removeEventListener('change', handleThemePreview);
+      }
+      
+      originalTheme = null;
+      savePreviewSettings();
+      
+      loadTheme(previewSettings.pageTheme).then(() => {
+        applyPreviewSettings();
+        closeSettings();
+        
+        status.textContent = 'Settings saved';
+        status.className = 'status saved';
+        setTimeout(() => {
+          status.textContent = 'Ready';
+          status.className = 'status';
+        }, 2000);
+      }).catch((error) => {
+        console.error('Error applying theme:', error);
+        applyPreviewSettings();
+        closeSettings();
+        
+        status.textContent = 'Settings saved (theme load failed)';
+        status.className = 'status error';
+        setTimeout(() => {
+          status.textContent = 'Ready';
+          status.className = 'status';
+        }, 2000);
+      });
+    });
+  }
+  
+  const loadDarkExampleBtn = document.getElementById('loadDarkExampleBtn');
+  const loadLightExampleBtn = document.getElementById('loadLightExampleBtn');
+  const clearCustomThemeBtn = document.getElementById('clearCustomThemeBtn');
+  
+  if (loadDarkExampleBtn) {
+    loadDarkExampleBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/__api__/theme?name=dark');
+        if (response.ok) {
+          const darkCSS = await response.text();
+          const customThemeCSS = document.getElementById('customThemeCSS');
+          if (customThemeCSS) {
+            customThemeCSS.value = darkCSS;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading dark example:', error);
+      }
+    });
+  }
+  
+  if (loadLightExampleBtn) {
+    loadLightExampleBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/__api__/theme?name=light');
+        if (response.ok) {
+          const lightCSS = await response.text();
+          const customThemeCSS = document.getElementById('customThemeCSS');
+          if (customThemeCSS) {
+            customThemeCSS.value = lightCSS;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading light example:', error);
+      }
+    });
+  }
+  
+  if (clearCustomThemeBtn) {
+    clearCustomThemeBtn.addEventListener('click', () => {
+      const customThemeCSS = document.getElementById('customThemeCSS');
+      if (customThemeCSS) {
+        customThemeCSS.value = '';
+      }
+    });
+  }
+  
+  if (resetSettingsBtn2) {
+    resetSettingsBtn2.addEventListener('click', () => {
+      previewSettings = {
+        autoRefreshPreview: true,
+        pageTheme: 'dark',
+        customThemeCSS: '',
+        editorFontSize: 14,
+        editorTheme: 'vs-dark',
+        editorWordWrap: false,
+        editorLineNumbers: true,
+        editorTabSize: 4,
+        defaultExplorerVisible: true,
+        defaultTerminalVisible: false
+      };
+      
+      const pageThemeEl = document.getElementById('pageTheme');
+      if (pageThemeEl) {
+        pageThemeEl.value = 'dark';
+      }
+      
+      loadTheme('dark').then(() => {
+        applyPreviewSettings();
+        originalTheme = 'dark';
+        
+        status.textContent = 'Settings reset to defaults (preview)';
+        status.className = 'status saved';
+        setTimeout(() => {
+          status.textContent = 'Ready';
+          status.className = 'status';
+        }, 2000);
+      });
+    });
+  }
   
   // Reset settings button
   if (resetSettingsBtn) {
@@ -1820,7 +2162,7 @@ require(['vs/editor/editor.main'], function() {
         if (data.type === 'fileAdded' || data.type === 'fileDeleted' || 
             data.type === 'directoryAdded' || data.type === 'directoryDeleted') {
           handleFileSystemEvent(data);
-        } else if (data.type === 'fileChanged') {
+        } else if (data.type === 'fileChanged' && previewSettings.autoRefreshPreview) {
           // If the current file was changed externally, refresh preview
           const normalizePath = (p) => p.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
           const currentPathNormalized = normalizePath(filePath);
@@ -1828,7 +2170,11 @@ require(['vs/editor/editor.main'], function() {
           
           if (currentPathNormalized === changedPathNormalized) {
             // Refresh preview if current file changed
-            const previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&t=' + Date.now();
+            let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+            if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+              previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+            }
+            previewUrl += '&t=' + Date.now();
             previewFrame.src = previewUrl;
           }
         }
@@ -2522,7 +2868,11 @@ require(['vs/editor/editor.main'], function() {
       // Show HTML preview for non-image files
       showHtmlPreview();
       // Load initial preview via preview content route
-      const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&t=' + Date.now();
+      let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+      if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+        previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+      }
+      previewUrl += '&t=' + Date.now();
       previewFrame.src = previewUrl;
       
       // Setup link interception after iframe loads
@@ -2637,7 +2987,11 @@ require(['vs/editor/editor.main'], function() {
       })
       .then(() => {
         // Load via preview content route which injects base tag
-        const previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&t=' + Date.now();
+        let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+        }
+        previewUrl += '&t=' + Date.now();
         previewFrame.src = previewUrl;
         
         // Setup link interception after iframe loads
@@ -2783,25 +3137,35 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  function updatePreviewFallback(content) {
-    // Fallback method using srcdoc with base tag
+  async function updatePreviewFallback(content) {
     const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
     const basePath = fileDir ? '/' + fileDir + '/' : '/';
     const baseUrl = window.location.origin + basePath;
+    
+    let themeStyles = '';
+    try {
+      const response = await fetch(`/__api__/theme?name=${encodeURIComponent(previewSettings.pageTheme)}`);
+      if (response.ok) {
+        const themeCss = await response.text();
+        themeStyles = `<style id="theme-style">${themeCss}</style>`;
+      }
+    } catch (error) {
+      console.error('Error loading theme for preview fallback:', error);
+    }
     
     let modifiedContent = content;
     modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
     
     if (modifiedContent.match(/<head[^>]*>/i)) {
       modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {
-        return match + `\n<base href="${baseUrl}">`;
+        return match + `\n<base href="${baseUrl}">${themeStyles}`;
       });
     } else if (modifiedContent.match(/<html[^>]*>/i)) {
       modifiedContent = modifiedContent.replace(/<html[^>]*>/i, (match) => {
-        return match + `\n<head><base href="${baseUrl}"></head>`;
+        return match + `\n<head><base href="${baseUrl}">${themeStyles}</head>`;
       });
     } else if (modifiedContent.trim().length > 0) {
-      modifiedContent = `<!DOCTYPE html><html><head><base href="${baseUrl}"></head><body>${modifiedContent}</body></html>`;
+      modifiedContent = `<!DOCTYPE html><html><head><base href="${baseUrl}">${themeStyles}</head><body>${modifiedContent}</body></html>`;
     }
     
     previewFrame.srcdoc = modifiedContent;
@@ -3162,7 +3526,19 @@ require(['vs/editor/editor.main'], function() {
       const savedState = localStorage.getItem('previewState');
       if (!savedState) {
         console.log('No saved state found - initializing with defaults');
-        // Initialize visibility with default state (all open)
+        
+        if (!previewSettings.defaultExplorerVisible) {
+          fileExplorerPanel.classList.add('collapsed');
+          toggleExplorer.textContent = '▶';
+        }
+        if (!previewSettings.defaultTerminalVisible && terminalPanel) {
+          terminalPanel.classList.add('collapsed');
+          const toggleTerminal = document.getElementById('toggleTerminal');
+          if (toggleTerminal) {
+            toggleTerminal.textContent = '+';
+          }
+        }
+        
         updateExplorerVisibility();
         updatePreviewVisibility();
         if (terminalPanel) {

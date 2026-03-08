@@ -1,0 +1,58 @@
+:root {
+  --bg-primary: #0d1b2a;
+  --bg-secondary: #1b263b;
+  --bg-tertiary: #263548;
+  --bg-hover: #31505f;
+  --bg-active: #48cae4;
+  --bg-button-primary: #48cae4;
+  --bg-button-primary-hover: #0096c7;
+  --bg-button-secondary: #263548;
+  --bg-button-secondary-hover: #31505f;
+  --bg-input: #0a1520;
+  --bg-scrollbar: #0a1520;
+  --bg-scrollbar-thumb: #90e0ef;
+  --bg-scrollbar-thumb-hover: #48cae4;
+  
+  --text-primary: #e0f2f9;
+  --text-secondary: #b3e5fc;
+  --text-tertiary: #81d4fa;
+  --text-inverse: #ffffff;
+  --text-button: #b3e5fc;
+  --text-button-primary: #0d1b2a;
+  
+  --border-primary: #90e0ef;
+  --border-secondary: #48cae4;
+  --border-active: #0096c7;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #48cae4;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #90e0ef;
+  --resizer-hover: #0096c7;
+}
+
+body {
+  background: linear-gradient(180deg, #0d1b2a 0%, #1b263b 30%, #263548 60%, #1b263b 90%, #0d1b2a 100%);
+  background-size: 100% 400%;
+  animation: arcticFlow 25s ease infinite;
+}
+
+@keyframes arcticFlow {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 0% 100%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(72, 202, 228, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}

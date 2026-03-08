@@ -1,0 +1,75 @@
+:root {
+  --bg-primary: #000a14;
+  --bg-secondary: #001a28;
+  --bg-tertiary: #002a3c;
+  --bg-hover: #003a50;
+  --bg-active: #00acc1;
+  --bg-button-primary: #00acc1;
+  --bg-button-primary-hover: #00838f;
+  --bg-button-secondary: #002a3c;
+  --bg-button-secondary-hover: #003a50;
+  --bg-input: #000a14;
+  --bg-scrollbar: #000a14;
+  --bg-scrollbar-thumb: #26c6da;
+  --bg-scrollbar-thumb-hover: #00acc1;
+  
+  --text-primary: #e0f7fa;
+  --text-secondary: #b2ebf2;
+  --text-tertiary: #80deea;
+  --text-inverse: #ffffff;
+  --text-button: #b2ebf2;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #26c6da;
+  --border-secondary: #00acc1;
+  --border-active: #00838f;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #26c6da;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #26c6da;
+  --resizer-hover: #00838f;
+}
+
+body {
+  background: linear-gradient(180deg, #000a14 0%, #001a28 20%, #002a3c 40%, #001a28 60%, #000a14 80%, #000514 100%);
+  background-size: 100% 500%;
+  animation: deepSeaFlow 30s ease infinite;
+}
+
+@keyframes deepSeaFlow {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 0% 100%; }
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 30% 50%, rgba(0, 172, 193, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+  animation: deepSeaGlow 10s ease infinite;
+}
+
+@keyframes deepSeaGlow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.2); }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 25px rgba(0, 172, 193, 0.25), inset 0 0 20px rgba(0, 172, 193, 0.1);
+}

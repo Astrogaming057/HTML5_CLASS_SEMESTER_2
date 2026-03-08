@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #151b2e;
+  --bg-tertiary: #1e2640;
+  --bg-hover: #252f52;
+  --bg-active: #00e5ff;
+  --bg-button-primary: #00e5ff;
+  --bg-button-primary-hover: #00bcd4;
+  --bg-button-secondary: #1e2640;
+  --bg-button-secondary-hover: #252f52;
+  --bg-input: #0f1525;
+  --bg-scrollbar: #0f1525;
+  --bg-scrollbar-thumb: #00e5ff;
+  --bg-scrollbar-thumb-hover: #00bcd4;
+  
+  --text-primary: #e0f7fa;
+  --text-secondary: #b2ebf2;
+  --text-tertiary: #80deea;
+  --text-inverse: #ffffff;
+  --text-button: #b2ebf2;
+  --text-button-primary: #0a0e1a;
+  
+  --border-primary: #00e5ff;
+  --border-secondary: #00bcd4;
+  --border-active: #00ffff;
+  
+  --status-saving: #ffc107;
+  --status-saved: #00e676;
+  --status-error: #ff1744;
+  --status-info: #00e5ff;
+  --status-warn: #ff9100;
+  
+  --resizer-bg: #00e5ff;
+  --resizer-hover: #00ffff;
+}
+
+body {
+  background: #0a0e1a;
+  box-shadow: inset 0 0 200px rgba(0, 229, 255, 0.1);
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  border: 1px solid var(--border-primary) !important;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.3), inset 0 0 20px rgba(0, 229, 255, 0.05);
+}
+
+.file-tree-item.active,
+.btn-primary {
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+}

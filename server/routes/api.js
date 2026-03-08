@@ -503,6 +503,41 @@ function setupAPI(baseDir) {
     }
   });
 
+  router.get('/theme', async (req, res) => {
+    try {
+      const themeName = req.query.name || 'dark';
+      const validThemes = [
+        'dark', 'light', 'high-contrast',
+        'liquid-glass-blue', 'liquid-glass-purple', 'liquid-glass-green', 'liquid-glass-amber',
+        'fog-gray', 'fog-blue',
+        'neon-cyan', 'sunset', 'ocean', 'forest',
+        'matrix', 'midnight-purple', 'amber-warm',
+        'arctic', 'rose-gold', 'cyberpunk', 'space',
+        'fire', 'ice', 'lavender', 'emerald', 'sakura',
+        'volcanic', 'aurora', 'retro-80s', 'mint',
+        'crimson', 'deep-sea', 'golden-hour', 'storm', 'candy',
+        'bubbles', 'custom'
+      ];
+      
+      if (themeName === 'custom') {
+        return res.status(200).send('');
+      }
+      
+      if (!validThemes.includes(themeName)) {
+        return res.status(400).send('Invalid theme name');
+      }
+      
+      const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', `${themeName}.css`);
+      const themeContent = await fs.readFile(themePath, 'utf-8');
+      
+      res.setHeader('Content-Type', 'text/css');
+      res.send(themeContent);
+    } catch (error) {
+      logger.error('API: Error loading theme', error);
+      res.status(500).send('Error loading theme');
+    }
+  });
+
   return router;
 }
 

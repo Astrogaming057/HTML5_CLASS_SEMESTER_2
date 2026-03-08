@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #1a0f1f;
+  --bg-secondary: #2d1b35;
+  --bg-tertiary: #3d2845;
+  --bg-hover: #4d3555;
+  --bg-active: #ff6b6b;
+  --bg-button-primary: #ff6b6b;
+  --bg-button-primary-hover: #ff5252;
+  --bg-button-secondary: #3d2845;
+  --bg-button-secondary-hover: #4d3555;
+  --bg-input: #251520;
+  --bg-scrollbar: #251520;
+  --bg-scrollbar-thumb: #ff8a80;
+  --bg-scrollbar-thumb-hover: #ff6b6b;
+  
+  --text-primary: #ffe0e0;
+  --text-secondary: #ffb3b3;
+  --text-tertiary: #ff9999;
+  --text-inverse: #ffffff;
+  --text-button: #ffb3b3;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #ff8a80;
+  --border-secondary: #ff6b6b;
+  --border-active: #ff5252;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #66bb6a;
+  --status-error: #ff1744;
+  --status-info: #ff8a80;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #ff8a80;
+  --resizer-hover: #ff5252;
+}
+
+body {
+  background: linear-gradient(135deg, #1a0f1f 0%, #2d1b35 25%, #3d1f2f 50%, #2d1b35 75%, #1a0f1f 100%);
+  background-size: 400% 400%;
+  animation: sunsetGlow 15s ease infinite;
+}
+
+@keyframes sunsetGlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.2);
+}

@@ -136,15 +136,13 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
     const isEditable = EDITABLE_EXTENSIONS.includes(ext);
     
     if (isEditable) {
-      const isHTML = ext === 'html' || ext === 'htm';
-      
       link.addEventListener('click', function(e) {
         if (settings.clickBehavior === 'editor') {
           if (e.ctrlKey || e.metaKey) {
             return;
           } else {
             e.preventDefault();
-            if (isHTML && settings.previewMode === 'preview') {
+            if (settings.previewMode === 'preview') {
               openPreview(root + url.replace(/\/$/, ''));
             } else {
               openEditor(root + url.replace(/\/$/, ''));
@@ -153,7 +151,7 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
         } else {
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            if (isHTML && settings.previewMode === 'preview') {
+            if (settings.previewMode === 'preview') {
               openPreview(root + url.replace(/\/$/, ''));
             } else {
               openEditor(root + url.replace(/\/$/, ''));
@@ -163,13 +161,13 @@ function addRow(name, url, isdir, size, size_string, date_modified, date_modifie
       });
       link.style.cursor = 'pointer';
       if (settings.clickBehavior === 'editor') {
-        if (isHTML && settings.previewMode === 'preview') {
+        if (settings.previewMode === 'preview') {
           link.title = 'Click to preview (Ctrl+Click to open file)';
         } else {
           link.title = 'Click to edit (Ctrl+Click to open file)';
         }
       } else {
-        if (isHTML && settings.previewMode === 'preview') {
+        if (settings.previewMode === 'preview') {
           link.title = 'Click to open (Ctrl+Click to preview)';
         } else {
           link.title = 'Click to open (Ctrl+Click to edit)';
@@ -339,11 +337,6 @@ function showContextMenu(e, name, isdir, path) {
   const isEditable = !isdir && isEditableFile(name);
   
   if (!isdir) {
-    // Check if file is HTML
-    const ext = name.split('.').pop().toLowerCase();
-    const isHTML = ext === 'html' || ext === 'htm';
-    
-    // Open in Editor option for all files
     const openEditorItem = createMenuItem('📝 Open in Editor', () => {
       openEditor(path);
       contextMenu.remove();
@@ -351,17 +344,13 @@ function showContextMenu(e, name, isdir, path) {
     });
     contextMenu.appendChild(openEditorItem);
     
-    // Open in Preview option for HTML files
-    if (isHTML) {
-      const openPreviewItem = createMenuItem('👁️ Open in Preview', () => {
-        openPreview(path);
-        contextMenu.remove();
-        contextMenu = null;
-      });
-      contextMenu.appendChild(openPreviewItem);
-    }
+    const openPreviewItem = createMenuItem('👁️ Open in Preview', () => {
+      openPreview(path);
+      contextMenu.remove();
+      contextMenu = null;
+    });
+    contextMenu.appendChild(openPreviewItem);
     
-    // Add separator
     contextMenu.appendChild(createSeparator());
   }
   
@@ -510,7 +499,6 @@ function onLoad() {
   // Setup WebSocket
   setupWebSocket();
   
-  // Setup settings button
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {
@@ -519,26 +507,21 @@ function onLoad() {
     });
   }
   
-  // Add right-click to entire page for creating files/folders
   document.addEventListener('contextmenu', function(e) {
-    // Don't show menu if clicking on existing context menu items or settings
     if (e.target.closest('#contextMenu') || e.target.closest('#settingsPanel') || e.target.closest('.settings-btn')) {
       return;
     }
     
-    // If clicking on a table row, let the row's handler take over
     if (e.target.closest('tr') && e.target.closest('tbody')) {
-      return; // Let the row's contextmenu handler deal with it
+      return; 
     }
     
-    // For everything else (empty space, header, etc.), show create menu
     e.preventDefault();
     const currentDir = document.location.pathname.replace(/\/+$/, '').replace(/\/+/g, '/') || '/';
     showContextMenu(e, '', false, currentDir);
   });
 }
 
-// Settings functions
 window.closeSettings = function() {
   document.getElementById('settingsPanel').style.display = 'none';
 };
@@ -553,7 +536,6 @@ window.saveSettings = function() {
   saveSettingsToStorage();
   closeSettings();
   
-  // Reload to apply click behavior changes
   location.reload();
 };
 

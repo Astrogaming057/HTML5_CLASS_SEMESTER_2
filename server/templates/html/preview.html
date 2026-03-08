@@ -10,11 +10,12 @@
 <body>
   <div class="preview-header">
     <div class="preview-title">
-      <span class="file-icon">👁️</span>
       <span id="fileName">{{FILENAME}}</span>
     </div>
     <div class="preview-actions">
+      <button id="backToFilesBtn" class="btn btn-secondary" title="Back to File Discovery">← Files</button>
       <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
+      <button id="settingsBtn" class="btn btn-secondary" title="Settings">⚙️</button>
       <button id="resetSettingsBtn" class="btn btn-secondary" title="Reset All Settings">🔄 Reset</button>
       <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
       <span id="status" class="status">Ready</span>
@@ -168,6 +169,170 @@
       <div class="restart-spinner"></div>
       <div class="restart-message">Restarting server...</div>
       <div class="restart-status" id="restartStatus"></div>
+    </div>
+  </div>
+  
+  <div id="settingsPanel" class="settings-panel" style="display: none;">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close-btn" id="settingsCloseBtn">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="setting-group">
+          <label class="setting-label">Auto-refresh Preview</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="autoRefreshPreview" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Automatically refresh preview when file changes</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Editor Font Size</label>
+          <select id="editorFontSize" class="setting-select">
+            <option value="12">12px</option>
+            <option value="13">13px</option>
+            <option value="14" selected>14px</option>
+            <option value="15">15px</option>
+            <option value="16">16px</option>
+            <option value="18">18px</option>
+            <option value="20">20px</option>
+          </select>
+          <p class="setting-description">Font size for the code editor</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Page Theme</label>
+          <select id="pageTheme" class="setting-select">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="liquid-glass-blue">Liquid Glass Blue</option>
+            <option value="liquid-glass-purple">Liquid Glass Purple</option>
+            <option value="liquid-glass-green">Liquid Glass Green</option>
+            <option value="liquid-glass-amber">Liquid Glass Amber</option>
+            <option value="fog-gray">Fog Gray</option>
+            <option value="fog-blue">Fog Blue</option>
+            <option value="neon-cyan">Neon Cyan</option>
+            <option value="sunset">Sunset</option>
+            <option value="ocean">Ocean</option>
+            <option value="forest">Forest</option>
+            <option value="matrix">Matrix</option>
+            <option value="midnight-purple">Midnight Purple</option>
+            <option value="amber-warm">Amber Warm</option>
+            <option value="arctic">Arctic</option>
+            <option value="rose-gold">Rose Gold</option>
+            <option value="cyberpunk">Cyberpunk</option>
+            <option value="space">Space</option>
+            <option value="fire">Fire</option>
+            <option value="ice">Ice</option>
+            <option value="lavender">Lavender</option>
+            <option value="emerald">Emerald</option>
+            <option value="sakura">Sakura</option>
+            <option value="volcanic">Volcanic</option>
+            <option value="aurora">Aurora</option>
+            <option value="retro-80s">Retro 80s</option>
+            <option value="mint">Mint</option>
+            <option value="crimson">Crimson</option>
+            <option value="deep-sea">Deep Sea</option>
+            <option value="golden-hour">Golden Hour</option>
+            <option value="storm">Storm</option>
+            <option value="candy">Candy</option>
+            <option value="bubbles">Bubbles</option>
+            <option value="custom">Custom</option>
+          </select>
+          <p class="setting-description">Color theme for the entire page</p>
+        </div>
+        
+        <div id="customThemeGroup" class="setting-group" style="display: none;">
+          <label class="setting-label">Custom Theme CSS</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button type="button" id="loadDarkExampleBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Load Dark Example</button>
+            <button type="button" id="loadLightExampleBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Load Light Example</button>
+            <button type="button" id="clearCustomThemeBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Clear</button>
+          </div>
+          <textarea id="customThemeCSS" class="setting-select" rows="15" placeholder="Enter your custom CSS here...
+
+Example:
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2a2d2e;
+  --text-primary: #d4d4d4;
+  --text-secondary: #cccccc;
+  --text-tertiary: #858585;
+  --border-primary: #3e3e42;
+  --border-active: #0e639c;
+  --bg-button-primary: #0e639c;
+  --bg-button-primary-hover: #1177bb;
+}
+
+You can copy any theme file and modify it, or create your own!"></textarea>
+          <p class="setting-description">1. Select "Custom" from the theme dropdown above. 2. Enter your CSS here (use :root for CSS variables). 3. Click "Save Settings" to apply. Use the buttons above to load examples.</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Editor Theme</label>
+          <select id="editorTheme" class="setting-select">
+            <option value="vs-dark" selected>Dark</option>
+            <option value="vs">Light</option>
+            <option value="hc-black">High Contrast Dark</option>
+          </select>
+          <p class="setting-description">Color theme for the code editor</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Word Wrap</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="editorWordWrap">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable word wrap in editor</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Show Line Numbers</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="editorLineNumbers" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Display line numbers in editor</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Tab Size</label>
+          <select id="editorTabSize" class="setting-select">
+            <option value="2">2 spaces</option>
+            <option value="4" selected>4 spaces</option>
+            <option value="8">8 spaces</option>
+          </select>
+          <p class="setting-description">Number of spaces for tab indentation</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Default Explorer Visibility</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="defaultExplorerVisible" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show file explorer by default</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Default Terminal Visibility</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="defaultTerminalVisible">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show terminal by default</span>
+          </label>
+        </div>
+        
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+          <button class="btn btn-secondary" id="resetSettingsBtn2">Reset to Defaults</button>
+        </div>
+      </div>
     </div>
   </div>
   

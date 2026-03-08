@@ -1,0 +1,85 @@
+:root {
+  --bg-primary: #0a0f1a;
+  --bg-secondary: #1a1f2a;
+  --bg-tertiary: #2a2f3a;
+  --bg-hover: #3a3f4a;
+  --bg-active: #00ff88;
+  --bg-button-primary: #00ff88;
+  --bg-button-primary-hover: #00cc6a;
+  --bg-button-secondary: #2a2f3a;
+  --bg-button-secondary-hover: #3a3f4a;
+  --bg-input: #0a0f1a;
+  --bg-scrollbar: #0a0f1a;
+  --bg-scrollbar-thumb: #00ffaa;
+  --bg-scrollbar-thumb-hover: #00ff88;
+  
+  --text-primary: #e0ffe8;
+  --text-secondary: #b3ffcc;
+  --text-tertiary: #80ffaa;
+  --text-inverse: #ffffff;
+  --text-button: #b3ffcc;
+  --text-button-primary: #0a0f1a;
+  
+  --border-primary: #00ffaa;
+  --border-secondary: #00ff88;
+  --border-active: #00cc6a;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #00ff88;
+  --status-error: #ef5350;
+  --status-info: #00ffaa;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #00ffaa;
+  --resizer-hover: #00cc6a;
+}
+
+body {
+  background: #0a0f1a;
+  position: relative;
+  overflow: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 136, 0.1) 0%,
+    transparent 20%,
+    transparent 40%,
+    rgba(0, 255, 170, 0.1) 50%,
+    transparent 60%,
+    transparent 80%,
+    rgba(0, 255, 136, 0.1) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: auroraWave 8s ease infinite;
+}
+
+@keyframes auroraWave {
+  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.8; }
+  50% { transform: translateY(-20px) scaleY(1.2); opacity: 1; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 0 40px rgba(0, 255, 136, 0.3), inset 0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.file-tree-item.active,
+.btn-primary {
+  box-shadow: 0 0 25px rgba(0, 255, 136, 0.6);
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+}
