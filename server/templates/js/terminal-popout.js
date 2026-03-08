@@ -175,6 +175,11 @@ function setupWebSocket() {
           const logType = data.logType || 'log';
           const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
           
+          // Clear log when "Console injected successfully" appears
+          if (message === 'Console injected successfully') {
+            logOutput.textContent = '';
+          }
+          
           const cleanMessage = cleanAnsiCodes(message);
           const lines = cleanMessage.split('\n').filter(line => line.trim());
           
@@ -186,6 +191,11 @@ function setupWebSocket() {
           });
           
           logOutput.scrollTop = logOutput.scrollHeight;
+        }
+      } else if (data.type === 'preview-log-clear') {
+        const logOutput = document.getElementById('terminalLogOutput');
+        if (logOutput) {
+          logOutput.textContent = '';
         }
       }
     } catch (err) {

@@ -150,6 +150,46 @@
     </div>
   </div>
   
+  <div id="cacheComparisonDialog" class="cache-comparison-dialog" style="display: none;">
+    <div class="cache-comparison-content">
+      <div class="cache-comparison-header">
+        <h3>Unsaved Changes Found in Cache</h3>
+        <button class="custom-prompt-close" id="cacheComparisonClose">✕</button>
+      </div>
+      <div class="cache-comparison-body">
+        <div class="cache-comparison-labels">
+          <div class="cache-label">Cached Version</div>
+          <div class="cache-label">Live Version</div>
+        </div>
+        <div class="cache-comparison-editors">
+          <div class="cache-editor-container">
+            <div class="cache-editor-header">Cached</div>
+            <div id="cacheEditor" class="cache-editor"></div>
+          </div>
+          <div class="cache-editor-container">
+            <div class="cache-editor-header">Live</div>
+            <div id="liveEditor" class="cache-editor"></div>
+          </div>
+        </div>
+        <div class="cache-comparison-previews">
+          <div class="cache-preview-container">
+            <div class="cache-preview-header">Cached Preview</div>
+            <iframe id="cachePreview" class="cache-preview-frame"></iframe>
+          </div>
+          <div class="cache-preview-container">
+            <div class="cache-preview-header">Live Preview</div>
+            <iframe id="livePreview" class="cache-preview-frame"></iframe>
+          </div>
+        </div>
+      </div>
+      <div class="cache-comparison-actions">
+        <button class="btn btn-primary" id="cacheComparisonUseCache">Use Cached Version</button>
+        <button class="btn btn-secondary" id="cacheComparisonUseLive">Use Live Version</button>
+        <button class="btn btn-secondary" id="cacheComparisonCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
   <div id="serverUpdateNotification" class="server-update-notification" style="display: none;">
     <div class="server-update-content">
       <div class="server-update-icon">🔄</div>

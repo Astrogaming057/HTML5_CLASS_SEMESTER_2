@@ -30,4 +30,3 @@ p.addEventListener('DOMContentLoaded',()=>{
     }
 });
 window.toggleDarkMode=_t;
-console.log('ready...')

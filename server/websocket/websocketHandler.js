@@ -30,6 +30,10 @@ class WebSocketManager {
               logType: message.logType || 'log',
               timestamp: message.timestamp || new Date().toISOString()
             });
+          } else if (message.type === 'preview-log-clear') {
+            this.broadcast({
+              type: 'preview-log-clear'
+            });
           }
         } catch (error) {
           logger.debug('Error parsing WebSocket message', error);

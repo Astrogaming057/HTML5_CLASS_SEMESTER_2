@@ -51,7 +51,7 @@ function setupStatusRoutes(app) {
   app.get('/__status__/:code', async (req, res) => {
     const code = parseInt(req.params.code, 10);
     
-    if (isNaN(code) || code < 400 || code > 599) {
+    if (isNaN(code) || (code < 300 || code > 599)) {
       return res.status(400).send('Invalid status code');
     }
     
@@ -68,7 +68,7 @@ function setupStatusRoutes(app) {
     const code = parseInt(req.params.code, 10);
     const assetName = req.params.asset;
     
-    if (isNaN(code) || code < 400 || code > 599) {
+    if (isNaN(code) || (code < 300 || code > 599)) {
       return res.status(400).send('Invalid status code');
     }
     

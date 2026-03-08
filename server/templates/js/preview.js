@@ -2152,6 +2152,20 @@ require(['vs/editor/editor.main'], function() {
           }
         }
         
+        // Handle preview log clear
+        if (data.type === 'preview-log-clear') {
+          const output = document.getElementById('terminalLogOutput');
+          if (output) {
+            output.textContent = '';
+            receivedLogIds.clear();
+          }
+          
+          syncChannel.postMessage({
+            type: 'terminal-clear',
+            tab: 'log'
+          });
+        }
+        
         // Handle server update notifications
         if (data.type === 'serverUpdateAvailable') {
           showServerUpdateNotification();
@@ -2385,6 +2399,26 @@ require(['vs/editor/editor.main'], function() {
     // Get logOutput dynamically to avoid TDZ issues
     const output = document.getElementById('terminalLogOutput');
     if (!output) return;
+    
+    // Clear log when "Console injected successfully" appears
+    if (message === 'Console injected successfully') {
+      output.textContent = '';
+      receivedLogIds.clear();
+      
+      // Also clear in terminal popout
+      syncChannel.postMessage({
+        type: 'terminal-clear',
+        tab: 'log'
+      });
+      
+      // Broadcast clear via WebSocket
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'preview-log-clear'
+        }));
+      }
+    }
+    
     const line = document.createElement('div');
     line.className = `terminal-line ${type}`;
     line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -2417,6 +2451,17 @@ require(['vs/editor/editor.main'], function() {
             }));
           }
         }
+      } else if (event.data && event.data.type === 'preview-log-clear') {
+        const output = document.getElementById('terminalLogOutput');
+        if (output) {
+          output.textContent = '';
+          receivedLogIds.clear();
+        }
+        
+        syncChannel.postMessage({
+          type: 'terminal-clear',
+          tab: 'log'
+        });
       }
     });
   }
@@ -2812,9 +2857,9 @@ require(['vs/editor/editor.main'], function() {
         return;
       }
       
-      // If cache exists and is different from actual file, prompt user
+      // If cache exists and is different from actual file, show comparison dialog
       if (cacheData.success && cacheData.exists && cacheData.content !== fileData.content) {
-        const choice = await customCacheDialog('Unsaved changes found in cache. What would you like to do?');
+        const choice = await customCacheDialog(cacheData.content, fileData.content, path);
         
         if (choice === 'pull') {
           // Load from cache
@@ -2828,7 +2873,11 @@ require(['vs/editor/editor.main'], function() {
           });
           
           // Reset preview
-          const previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&t=' + Date.now();
+          let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+          if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+            previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+          }
+          previewUrl += '&t=' + Date.now();
           previewFrame.src = previewUrl;
         } else {
           // User cancelled, don't load
@@ -2891,40 +2940,43 @@ require(['vs/editor/editor.main'], function() {
     }
   }
   
-  function customCacheDialog(message) {
+  let cacheEditorInstance = null;
+  let liveEditorInstance = null;
+  
+  async function customCacheDialog(cachedContent, liveContent, filePath) {
     return new Promise((resolve) => {
-      const dialog = document.getElementById('customConfirmDialog');
-      const messageEl = document.getElementById('customConfirmMessage');
-      const okBtn = document.getElementById('customConfirmOk');
-      const cancelBtn = document.getElementById('customConfirmCancel');
-      const closeBtn = document.getElementById('customConfirmClose');
+      const dialog = document.getElementById('cacheComparisonDialog');
+      const closeBtn = document.getElementById('cacheComparisonClose');
+      const useCacheBtn = document.getElementById('cacheComparisonUseCache');
+      const useLiveBtn = document.getElementById('cacheComparisonUseLive');
+      const cancelBtn = document.getElementById('cacheComparisonCancel');
       
-      // Change button labels
-      const originalOkText = okBtn.textContent;
-      const originalCancelText = cancelBtn.textContent;
-      okBtn.textContent = 'Pull from Cache';
-      cancelBtn.textContent = 'Discard';
-      
-      messageEl.textContent = message;
-      dialog.style.display = 'flex';
-      okBtn.focus();
+      const detectedLanguage = getLanguage(filePath);
       
       const cleanup = () => {
         dialog.style.display = 'none';
-        okBtn.textContent = originalOkText;
-        cancelBtn.textContent = originalCancelText;
-        okBtn.onclick = null;
+        if (cacheEditorInstance) {
+          cacheEditorInstance.dispose();
+          cacheEditorInstance = null;
+        }
+        if (liveEditorInstance) {
+          liveEditorInstance.dispose();
+          liveEditorInstance = null;
+        }
+        useCacheBtn.onclick = null;
+        useLiveBtn.onclick = null;
         cancelBtn.onclick = null;
         closeBtn.onclick = null;
         dialog.onkeydown = null;
+        dialog.onclick = null;
       };
       
-      const handlePull = () => {
+      const handleUseCache = () => {
         cleanup();
         resolve('pull');
       };
       
-      const handleDiscard = () => {
+      const handleUseLive = () => {
         cleanup();
         resolve('discard');
       };
@@ -2934,27 +2986,102 @@ require(['vs/editor/editor.main'], function() {
         resolve('cancel');
       };
       
-      okBtn.onclick = handlePull;
-      cancelBtn.onclick = handleDiscard;
+      useCacheBtn.onclick = handleUseCache;
+      useLiveBtn.onclick = handleUseLive;
+      cancelBtn.onclick = handleCancel;
       closeBtn.onclick = handleCancel;
       
-      // Handle keyboard
-      const handleKeydown = (e) => {
-        if (e.key === 'Enter') {
-          handlePull();
-        } else if (e.key === 'Escape') {
+      dialog.onkeydown = (e) => {
+        if (e.key === 'Escape') {
           handleCancel();
         }
       };
-      dialog.onkeydown = handleKeydown;
       
-      // Close on background click
       dialog.onclick = (e) => {
         if (e.target === dialog) {
           handleCancel();
         }
       };
+      
+      dialog.style.display = 'flex';
+      
+      setTimeout(async () => {
+        const cacheEditorEl = document.getElementById('cacheEditor');
+        const liveEditorEl = document.getElementById('liveEditor');
+        const cachePreview = document.getElementById('cachePreview');
+        const livePreview = document.getElementById('livePreview');
+        
+        if (cacheEditorEl && !cacheEditorInstance) {
+          cacheEditorInstance = monaco.editor.create(cacheEditorEl, {
+            value: cachedContent,
+            language: detectedLanguage,
+            theme: previewSettings.editorTheme,
+            fontSize: previewSettings.editorFontSize,
+            wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
+            lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
+            readOnly: true,
+            minimap: { enabled: false }
+          });
+          
+          cacheEditorInstance.onDidChangeModelContent(() => {
+            const content = cacheEditorInstance.getValue();
+            updateCachePreview(content, filePath, cachePreview, false);
+          });
+          
+          updateCachePreview(cachedContent, filePath, cachePreview, false);
+        }
+        
+        if (liveEditorEl && !liveEditorInstance) {
+          liveEditorInstance = monaco.editor.create(liveEditorEl, {
+            value: liveContent,
+            language: detectedLanguage,
+            theme: previewSettings.editorTheme,
+            fontSize: previewSettings.editorFontSize,
+            wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
+            lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
+            readOnly: true,
+            minimap: { enabled: false }
+          });
+          
+          liveEditorInstance.onDidChangeModelContent(() => {
+            const content = liveEditorInstance.getValue();
+            updateCachePreview(content, filePath, livePreview, true);
+          });
+          
+          updateCachePreview(liveContent, filePath, livePreview, true);
+        }
+      }, 100);
     });
+  }
+  
+  async function updateCachePreview(content, filePath, previewFrame, isLive = false) {
+    if (!previewFrame) return;
+    
+    try {
+      if (isLive) {
+        let previewUrl = '/__preview-content__/live?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+        }
+        previewUrl += '&t=' + Date.now();
+        previewFrame.src = previewUrl;
+      } else {
+        await fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: content
+        });
+        
+        let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+        }
+        previewUrl += '&t=' + Date.now();
+        previewFrame.src = previewUrl;
+      }
+    } catch (error) {
+      console.error('Error updating cache preview:', error);
+    }
   }
   
   let previewUpdateTimeout = null;
