@@ -5,6 +5,11 @@ class WebSocketManager {
   constructor() {
     this.clients = new Set();
     this.connectionListeners = new Set();
+    this.serverCommands = null;
+  }
+
+  setServerCommands(serverCommands) {
+    this.serverCommands = serverCommands;
   }
 
   setup(server) {
@@ -20,9 +25,36 @@ class WebSocketManager {
       
       this.notifyConnectionListeners();
 
-      ws.on('message', (data) => {
+      ws.on('message', async (data) => {
         try {
-          const message = JSON.parse(data.toString());
+          // Check if data is valid before parsing
+          if (!data) {
+            logger.debug('Received empty WebSocket message');
+            return;
+          }
+          
+          const dataString = data.toString();
+          if (!dataString || dataString.trim().length === 0) {
+            logger.debug('Received empty string WebSocket message');
+            return;
+          }
+          
+          // Check if it looks like JSON (starts with { or [)
+          if (!dataString.trim().startsWith('{') && !dataString.trim().startsWith('[')) {
+            logger.debug('Received non-JSON WebSocket message', { 
+              preview: dataString.substring(0, 100),
+              length: dataString.length 
+            });
+            return;
+          }
+          
+          const message = JSON.parse(dataString);
+          
+          if (!message || typeof message !== 'object') {
+            logger.debug('Parsed message is not an object', { message });
+            return;
+          }
+          
           if (message.type === 'preview-log') {
             this.broadcast({
               type: 'preview-log',
@@ -34,9 +66,36 @@ class WebSocketManager {
             this.broadcast({
               type: 'preview-log-clear'
             });
+          } else if (message.type === 'server-command') {
+            if (this.serverCommands) {
+              const result = await this.serverCommands.executeCommand(message.command, message.args || []);
+              ws.send(JSON.stringify({
+                type: 'server-command-response',
+                command: message.command,
+                success: result.success,
+                message: result.message,
+                data: result.data,
+                timestamp: new Date().toISOString()
+              }));
+              
+              logger.info('Server command executed', { 
+                command: message.command, 
+                success: result.success 
+              });
+            }
           }
         } catch (error) {
-          logger.debug('Error parsing WebSocket message', error);
+          // Only log if it's not a JSON parse error for empty/invalid messages
+          if (error instanceof SyntaxError) {
+            const dataPreview = data ? data.toString().substring(0, 100) : 'null';
+            logger.debug('Error parsing WebSocket message (invalid JSON)', { 
+              error: error.message,
+              preview: dataPreview,
+              length: data ? data.toString().length : 0
+            });
+          } else {
+            logger.debug('Error processing WebSocket message', { error: error.message });
+          }
         }
       });
 

@@ -1,6 +1,6 @@
 window.PreviewSyncChannel = (function() {
   return {
-    setupSyncChannel(syncChannel, filePath, editor, originalContent, isDirty, updateStatus, previewFrame, handleTerminalCommand, editorPanel, previewPanel, updatePreviewVisibility, updateTerminalVisibility) {
+    setupSyncChannel(syncChannel, filePath, editor, originalContent, isDirty, updateStatus, previewFrame, handleTerminalCommand, editorPanel, previewPanel, updatePreviewVisibility, updateTerminalVisibility, isPreviewPinned) {
       syncChannel.addEventListener('message', (event) => {
         const data = event.data;
         
@@ -29,7 +29,8 @@ window.PreviewSyncChannel = (function() {
         }
         
         if (data.type === 'preview-refresh-request') {
-          if (previewFrame && previewFrame.style.display !== 'none') {
+          const pinned = typeof isPreviewPinned === 'function' ? isPreviewPinned() : false;
+          if (previewFrame && previewFrame.style.display !== 'none' && !pinned) {
             previewFrame.src = previewFrame.src;
           }
         }

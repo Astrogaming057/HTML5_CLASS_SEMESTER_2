@@ -3,6 +3,7 @@ window.PreviewSettings = (function() {
     autoRefreshPreview: true,
     pageTheme: 'dark',
     customThemeCSS: '',
+    applyThemeToPreviewFrame: false,
     editorFontSize: 14,
     editorTheme: 'vs-dark',
     editorWordWrap: false,
@@ -33,6 +34,7 @@ window.PreviewSettings = (function() {
         }
       }
       this.applyPreviewSettings();
+      this.applyThemeToPreviewFrame();
     },
 
     savePreviewSettings() {
@@ -119,6 +121,7 @@ window.PreviewSettings = (function() {
         const editorTabSize = document.getElementById('editorTabSize');
         const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+        const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
         
         if (autoRefreshPreview) autoRefreshPreview.checked = previewSettings.autoRefreshPreview;
         if (pageTheme) {
@@ -128,6 +131,7 @@ window.PreviewSettings = (function() {
           }
         }
         if (customThemeCSS) customThemeCSS.value = previewSettings.customThemeCSS || '';
+        if (applyThemeToPreviewFrame) applyThemeToPreviewFrame.checked = previewSettings.applyThemeToPreviewFrame;
         if (editorFontSize) editorFontSize.value = previewSettings.editorFontSize;
         if (editorTheme) editorTheme.value = previewSettings.editorTheme;
         if (editorWordWrap) editorWordWrap.checked = previewSettings.editorWordWrap;
@@ -135,6 +139,9 @@ window.PreviewSettings = (function() {
         if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
         if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
         if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
+        
+        // Apply theme to preview frame if enabled
+        this.applyThemeToPreviewFrame();
       }
     },
 
@@ -179,6 +186,29 @@ window.PreviewSettings = (function() {
           customThemeGroup.style.display = pageTheme.value === 'custom' ? 'block' : 'none';
         }
         PreviewSettings.loadTheme(pageTheme.value);
+        // Re-apply theme to preview frame if enabled
+        PreviewSettings.applyThemeToPreviewFrame();
+      }
+    },
+
+    applyThemeToPreviewFrame() {
+      const previewFrame = document.getElementById('previewFrame');
+      const previewContainer = document.getElementById('previewContainer');
+      
+      if (previewSettings.applyThemeToPreviewFrame) {
+        if (previewFrame) {
+          previewFrame.classList.add('theme-applied');
+        }
+        if (previewContainer) {
+          previewContainer.classList.add('theme-applied');
+        }
+      } else {
+        if (previewFrame) {
+          previewFrame.classList.remove('theme-applied');
+        }
+        if (previewContainer) {
+          previewContainer.classList.remove('theme-applied');
+        }
       }
     },
 
@@ -187,6 +217,7 @@ window.PreviewSettings = (function() {
         autoRefreshPreview: true,
         pageTheme: 'dark',
         customThemeCSS: '',
+        applyThemeToPreviewFrame: false,
         editorFontSize: 14,
         editorTheme: 'vs-dark',
         editorWordWrap: false,

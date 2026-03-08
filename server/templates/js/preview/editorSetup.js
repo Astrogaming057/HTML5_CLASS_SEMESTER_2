@@ -1,7 +1,7 @@
 window.PreviewEditorSetup = (function() {
   return {
     createEditor(editorContainer, language, previewSettings) {
-      return monaco.editor.create(editorContainer, {
+      const editor = monaco.editor.create(editorContainer, {
         value: '',
         language: language,
         theme: previewSettings.editorTheme,
@@ -26,11 +26,61 @@ window.PreviewEditorSetup = (function() {
         renderLineHighlight: 'all',
         bracketPairColorization: {
           enabled: true
+        },
+        // Enhanced autocomplete/IntelliSense
+        suggestOnTriggerCharacters: true,
+        quickSuggestions: {
+          other: true,
+          comments: true,
+          strings: true
+        },
+        quickSuggestionsDelay: 100,
+        acceptSuggestionOnEnter: 'on',
+        acceptSuggestionOnCommitCharacter: true,
+        tabCompletion: 'on',
+        wordBasedSuggestions: 'matchingDocuments',
+        suggestSelection: 'first',
+        snippetSuggestions: 'top',
+        enableParameterHints: true,
+        parameterHints: {
+          enabled: true,
+          cycle: true
         }
       });
+
+      // Register HTML-specific completions
+      if (language === 'html') {
+        monaco.languages.registerCompletionItemProvider('html', {
+          provideCompletionItems: (model, position) => {
+            const suggestions = [
+              // Common HTML tags
+              { label: 'div', kind: monaco.languages.CompletionItemKind.Class, insertText: '<div>$1</div>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'span', kind: monaco.languages.CompletionItemKind.Class, insertText: '<span>$1</span>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'p', kind: monaco.languages.CompletionItemKind.Class, insertText: '<p>$1</p>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'a', kind: monaco.languages.CompletionItemKind.Class, insertText: '<a href="$1">$2</a>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'img', kind: monaco.languages.CompletionItemKind.Class, insertText: '<img src="$1" alt="$2">', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'button', kind: monaco.languages.CompletionItemKind.Class, insertText: '<button>$1</button>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'input', kind: monaco.languages.CompletionItemKind.Class, insertText: '<input type="$1" name="$2">', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'form', kind: monaco.languages.CompletionItemKind.Class, insertText: '<form action="$1" method="$2">\n\t$3\n</form>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'ul', kind: monaco.languages.CompletionItemKind.Class, insertText: '<ul>\n\t<li>$1</li>\n</ul>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'ol', kind: monaco.languages.CompletionItemKind.Class, insertText: '<ol>\n\t<li>$1</li>\n</ol>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'table', kind: monaco.languages.CompletionItemKind.Class, insertText: '<table>\n\t<tr>\n\t\t<th>$1</th>\n\t</tr>\n\t<tr>\n\t\t<td>$2</td>\n\t</tr>\n</table>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'section', kind: monaco.languages.CompletionItemKind.Class, insertText: '<section>$1</section>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'article', kind: monaco.languages.CompletionItemKind.Class, insertText: '<article>$1</article>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'header', kind: monaco.languages.CompletionItemKind.Class, insertText: '<header>$1</header>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'footer', kind: monaco.languages.CompletionItemKind.Class, insertText: '<footer>$1</footer>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'nav', kind: monaco.languages.CompletionItemKind.Class, insertText: '<nav>$1</nav>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet },
+              { label: 'main', kind: monaco.languages.CompletionItemKind.Class, insertText: '<main>$1</main>', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet }
+            ];
+            return { suggestions };
+          }
+        });
+      }
+
+      return editor;
     },
 
-    setupEditorListeners(editor, getFilePath, syncChannel, originalContent, isDirty, updateStatus, updatePreview, saveToEditorTimeout, isApplyingExternalChange) {
+    setupEditorListeners(editor, getFilePath, syncChannel, originalContent, isDirty, updateStatus, updatePreview, saveToEditorTimeout, isApplyingExternalChange, updateTabDirtyState) {
       editor.onDidChangeModelContent(() => {
         if (isApplyingExternalChange && isApplyingExternalChange.current) {
           return;
@@ -57,6 +107,10 @@ window.PreviewEditorSetup = (function() {
         isDirty.current = currentContent !== originalContent.current;
         updateStatus();
         updatePreview(currentContent);
+        
+        if (updateTabDirtyState && typeof updateTabDirtyState === 'function') {
+          updateTabDirtyState();
+        }
         
         if (saveToEditorTimeout.current) {
           clearTimeout(saveToEditorTimeout.current);

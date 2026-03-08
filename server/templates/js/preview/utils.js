@@ -62,21 +62,28 @@ window.PreviewUtils = {
     });
   },
 
-  customConfirm(message) {
+  customConfirm(message, showDiscard = false) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('customConfirmDialog');
       const messageEl = document.getElementById('customConfirmMessage');
       const okBtn = document.getElementById('customConfirmOk');
+      const discardBtn = document.getElementById('customConfirmDiscard');
       const cancelBtn = document.getElementById('customConfirmCancel');
       const closeBtn = document.getElementById('customConfirmClose');
       
       messageEl.textContent = message;
       dialog.style.display = 'flex';
+      
+      if (discardBtn) {
+        discardBtn.style.display = showDiscard ? 'inline-block' : 'none';
+      }
+      
       okBtn.focus();
       
       const cleanup = () => {
         dialog.style.display = 'none';
         okBtn.onclick = null;
+        if (discardBtn) discardBtn.onclick = null;
         cancelBtn.onclick = null;
         closeBtn.onclick = null;
         dialog.onkeydown = null;
@@ -87,12 +94,20 @@ window.PreviewUtils = {
         resolve(true);
       };
       
+      const handleDiscard = () => {
+        cleanup();
+        resolve('discard');
+      };
+      
       const handleCancel = () => {
         cleanup();
         resolve(false);
       };
       
       okBtn.onclick = handleOk;
+      if (discardBtn) {
+        discardBtn.onclick = handleDiscard;
+      }
       cancelBtn.onclick = handleCancel;
       closeBtn.onclick = handleCancel;
       

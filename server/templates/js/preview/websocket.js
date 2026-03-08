@@ -1,6 +1,6 @@
 window.PreviewWebSocket = (function() {
   return {
-    setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree) {
+    setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = protocol + '//' + window.location.host;
       const ws = new WebSocket(wsUrl);
@@ -11,11 +11,20 @@ window.PreviewWebSocket = (function() {
         console.log('Preview WebSocket connected');
       };
       
-      ws.onclose = () => {
-        console.log('Preview WebSocket disconnected - Reconnecting...');
-        setTimeout(() => {
-          wsRef.ws = this.setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree);
-        }, 2000);
+      ws.onclose = (event) => {
+        console.log('Preview WebSocket disconnected - Reconnecting...', { code: event.code, reason: event.reason });
+        // Reconnect after a short delay, unless it was a normal closure (1000)
+        // Code 1001 (going away) and others will trigger reconnection
+        if (event.code !== 1000) {
+          setTimeout(() => {
+            wsRef.ws = this.setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback);
+          }, 1000);
+        } else {
+          // Even for normal closure, reconnect if it was a reconnect request
+          setTimeout(() => {
+            wsRef.ws = this.setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback);
+          }, 1000);
+        }
       };
       
       ws.onerror = (error) => {
@@ -24,7 +33,55 @@ window.PreviewWebSocket = (function() {
       
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
+          // Check if data is valid before parsing
+          if (!event.data) {
+            return;
+          }
+          
+          const dataString = typeof event.data === 'string' ? event.data : event.data.toString();
+          if (!dataString || dataString.trim().length === 0) {
+            return;
+          }
+          
+          // Check if it looks like JSON
+          const trimmed = dataString.trim();
+          if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+            // Not JSON, might be a plain string message - ignore it
+            return;
+          }
+          
+          const data = JSON.parse(dataString);
+          
+          // Handle cache cleanup messages
+          if (data.type === 'cache-cleanup-start') {
+            console.log(`[Cache Cleanup] ${data.message}`);
+            if (addPreviewLog) {
+              addPreviewLog(data.message, 'info', generateLogId);
+            }
+          } else if (data.type === 'cache-cleanup-delete') {
+            console.log(`[Cache Cleanup] ${data.message}`);
+            if (addPreviewLog) {
+              addPreviewLog(data.message, 'info', generateLogId);
+            }
+          } else if (data.type === 'cache-cleanup-complete') {
+            console.log(`[Cache Cleanup] ${data.message}`);
+            if (addPreviewLog) {
+              addPreviewLog(data.message, 'info', generateLogId);
+              if (data.log && data.log.length > 0) {
+                // Log all cleanup details
+                data.log.forEach(logLine => {
+                  if (logLine !== data.message) {
+                    addPreviewLog(logLine, 'info', generateLogId);
+                  }
+                });
+              }
+            }
+          } else if (data.type === 'cache-cleanup-error') {
+            console.error(`[Cache Cleanup Error] ${data.message}`);
+            if (addPreviewLog) {
+              addPreviewLog(data.message, 'error', generateLogId);
+            }
+          }
           
           if (data.type === 'serverLog' && serverOutput) {
             const line = document.createElement('div');
@@ -71,9 +128,44 @@ window.PreviewWebSocket = (function() {
             showServerUpdateNotification();
           }
           
+          if (data.type === 'server-restart-request') {
+            // Trigger the same restart flow as server update
+            // This will show the notification and allow user to restart, or auto-restart if callback provided
+            if (restartServerCallback) {
+              // Auto-restart immediately
+              restartServerCallback();
+            } else if (showServerUpdateNotification) {
+              // Show notification for manual restart
+              showServerUpdateNotification();
+            }
+          }
+          
           if (data.type === 'fileAdded' || data.type === 'fileDeleted' || 
               data.type === 'directoryAdded' || data.type === 'directoryDeleted') {
             handleFileSystemEvent(data, loadFileTree);
+          } else if (data.type === 'server-command-response') {
+            const commandsOutput = document.getElementById('terminalCommandsOutput');
+            if (commandsOutput) {
+              // Handle clear command
+              if (data.message === 'CLEAR_TERMINAL') {
+                commandsOutput.innerHTML = '';
+              } else {
+                const lines = (data.message || (data.success ? 'Command executed successfully' : 'Command failed')).split('\n');
+                lines.forEach(lineText => {
+                  if (lineText.trim()) {
+                    const line = document.createElement('div');
+                    line.className = `terminal-line ${data.success ? 'info' : 'error'}`;
+                    line.textContent = lineText;
+                    commandsOutput.appendChild(line);
+                  }
+                });
+              }
+              commandsOutput.scrollTop = commandsOutput.scrollHeight;
+            }
+          } else if (data.type === 'reconnect-request') {
+            console.log('Server requested reconnect - closing connection to reconnect...');
+            // Close with code 1001 to trigger reconnection
+            ws.close(1001, 'Reconnect requested by server');
           } else if (data.type === 'fileChanged' && previewSettings.autoRefreshPreview) {
             const normalizePath = (p) => {
               const pathStr = typeof p === 'function' ? p() : (typeof p === 'string' ? p : String(p || ''));

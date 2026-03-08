@@ -271,26 +271,31 @@ window.PreviewTerminal = (function() {
       }
     },
 
-    setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception) {
+    setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception, wsRef) {
       const tabs = document.querySelectorAll('.terminal-tab');
       const tabContents = document.querySelectorAll('.terminal-tab-content');
       const clientInput = document.getElementById('terminalClientInput');
       const powershellInput = document.getElementById('terminalPowerShellInput');
       const logInput = document.getElementById('terminalLogInput');
+      const commandsInput = document.getElementById('terminalCommandsInput');
       const clientOutput = document.getElementById('terminalClientOutput');
       const serverOutput = document.getElementById('terminalServerOutput');
       const powershellOutput = document.getElementById('terminalPowerShellOutput');
+      const commandsOutput = document.getElementById('terminalCommandsOutput');
       
       const clientHistory = this.createCommandHistory('client');
       const powershellHistory = this.createCommandHistory('powershell');
       const logHistory = this.createCommandHistory('log');
+      const commandsHistory = this.createCommandHistory('commands');
       
       let clientHistoryIndex = -1;
       let powershellHistoryIndex = -1;
       let logHistoryIndex = -1;
+      let commandsHistoryIndex = -1;
       let clientCurrentInput = '';
       let powershellCurrentInput = '';
       let logCurrentInput = '';
+      let commandsCurrentInput = '';
       
       if (clientInput) {
         clientInput.disabled = false;
@@ -627,6 +632,70 @@ window.PreviewTerminal = (function() {
               } catch (err) {
                 addPreviewLog(`Error: ${err.message}`, 'error');
               }
+            }
+          }
+        });
+      }
+      
+      if (commandsInput && commandsOutput) {
+        commandsInput.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const history = commandsHistory.load();
+            if (history.length === 0) return;
+            
+            if (commandsHistoryIndex === -1) {
+              commandsCurrentInput = commandsInput.value;
+              commandsHistoryIndex = history.length;
+            }
+            
+            if (commandsHistoryIndex > 0) {
+              commandsHistoryIndex--;
+              commandsInput.value = history[commandsHistoryIndex];
+            }
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const history = commandsHistory.load();
+            
+            if (commandsHistoryIndex === -1) return;
+            
+            if (commandsHistoryIndex < history.length - 1) {
+              commandsHistoryIndex++;
+              commandsInput.value = history[commandsHistoryIndex];
+            } else {
+              commandsHistoryIndex = -1;
+              commandsInput.value = commandsCurrentInput;
+            }
+          } else if (e.key === 'Enter') {
+            const command = commandsInput.value.trim();
+            if (command) {
+              commandsHistory.add(command);
+              commandsHistoryIndex = -1;
+              commandsCurrentInput = '';
+              
+              const line = document.createElement('div');
+              line.className = 'terminal-line log';
+              line.textContent = `$> ${command}`;
+              commandsOutput.appendChild(line);
+              commandsOutput.scrollTop = commandsOutput.scrollHeight;
+              
+              // Send command to server via WebSocket
+              const ws = wsRef && wsRef.current ? wsRef.current : (wsRef && wsRef.ws ? wsRef.ws : null);
+              if (ws && ws.readyState === 1) {
+                ws.send(JSON.stringify({
+                  type: 'server-command',
+                  command: command,
+                  args: []
+                }));
+              } else {
+                const errorLine = document.createElement('div');
+                errorLine.className = 'terminal-line error';
+                errorLine.textContent = 'Error: WebSocket not connected';
+                commandsOutput.appendChild(errorLine);
+                commandsOutput.scrollTop = commandsOutput.scrollHeight;
+              }
+              
+              commandsInput.value = '';
             }
           }
         });

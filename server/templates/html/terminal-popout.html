@@ -11,12 +11,13 @@
   <div class="popout-header">
     <div class="popout-title">Terminal - Popout</div>
     <div style="display: flex; align-items: center; gap: 8px;">
-      <div class="terminal-tabs">
-        <button class="terminal-tab active" data-tab="client">Client</button>
-        <button class="terminal-tab" data-tab="server">Server</button>
-        <button class="terminal-tab" data-tab="powershell">PowerShell</button>
-        <button class="terminal-tab" data-tab="log">Log</button>
-      </div>
+    <div class="terminal-tabs">
+      <button class="terminal-tab active" data-tab="client">Client</button>
+      <button class="terminal-tab" data-tab="server">Server</button>
+      <button class="terminal-tab" data-tab="commands">Commands</button>
+      <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+      <button class="terminal-tab" data-tab="log">Log</button>
+    </div>
       <button class="popout-close" id="closePopout">✕ Close</button>
     </div>
   </div>
@@ -30,6 +31,13 @@
     </div>
     <div class="terminal-tab-content" id="terminalServer">
       <div class="terminal-output" id="terminalServerOutput"></div>
+    </div>
+    <div class="terminal-tab-content" id="terminalCommands">
+      <div class="terminal-output" id="terminalCommandsOutput"></div>
+      <div class="terminal-input-container">
+        <span class="terminal-prompt">$></span>
+        <input type="text" class="terminal-input" id="terminalCommandsInput" placeholder="Type server commands (help, ping, status, restart, reconnect)...">
+      </div>
     </div>
     <div class="terminal-tab-content" id="terminalPowerShell">
       <div class="terminal-output" id="terminalPowerShellOutput"></div>

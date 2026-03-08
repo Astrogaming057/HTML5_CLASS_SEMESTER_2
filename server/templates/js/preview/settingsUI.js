@@ -38,11 +38,13 @@ window.PreviewSettingsUI = (function() {
           const editorTabSize = document.getElementById('editorTabSize');
           const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
           const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+          const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
           
           PreviewSettings.setSettings({
             autoRefreshPreview: autoRefreshPreview ? autoRefreshPreview.checked : true,
             pageTheme: pageTheme ? pageTheme.value : 'dark',
             customThemeCSS: customThemeCSS ? customThemeCSS.value : '',
+            applyThemeToPreviewFrame: applyThemeToPreviewFrame ? applyThemeToPreviewFrame.checked : false,
             editorFontSize: editorFontSize ? parseInt(editorFontSize.value) : 14,
             editorTheme: editorTheme ? editorTheme.value : 'vs-dark',
             editorWordWrap: editorWordWrap ? editorWordWrap.checked : false,

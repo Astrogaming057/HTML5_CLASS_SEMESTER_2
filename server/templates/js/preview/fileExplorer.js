@@ -58,7 +58,7 @@ window.PreviewFileExplorer = (function() {
         });
     },
 
-    renderFileTree(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone) {
+    async renderFileTree(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone) {
       if (!files || files.length === 0) {
         fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
         return;
@@ -75,6 +75,30 @@ window.PreviewFileExplorer = (function() {
       });
       
       fileTree.innerHTML = '';
+      
+      // Check for modified files (in cache but different from saved)
+      const modifiedFiles = new Set();
+      const checkPromises = files
+        .filter(file => !file.isDirectory)
+        .map(async (file) => {
+          try {
+            const cacheResponse = await fetch('/__api__/files/editor?path=' + encodeURIComponent(file.path));
+            const cacheData = await cacheResponse.json();
+            
+            if (cacheData.success && cacheData.exists) {
+              const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(file.path));
+              const fileData = await fileResponse.json();
+              
+              if (fileData.success && cacheData.content !== fileData.content) {
+                modifiedFiles.add(file.path);
+              }
+            }
+          } catch (error) {
+            // Ignore errors, just don't mark as modified
+          }
+        });
+      
+      await Promise.all(checkPromises);
       
       files.forEach(file => {
         const item = document.createElement('div');
@@ -101,6 +125,15 @@ window.PreviewFileExplorer = (function() {
         
         item.appendChild(icon);
         item.appendChild(name);
+        
+        // Add "M" indicator for modified files
+        if (!file.isDirectory && modifiedFiles.has(file.path)) {
+          const modifiedIndicator = document.createElement('span');
+          modifiedIndicator.className = 'file-tree-modified';
+          modifiedIndicator.textContent = 'M';
+          modifiedIndicator.title = 'Modified (unsaved changes)';
+          item.appendChild(modifiedIndicator);
+        }
         
         item.setAttribute('draggable', 'true');
         item.draggable = true;

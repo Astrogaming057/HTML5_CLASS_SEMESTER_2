@@ -24,18 +24,37 @@ window.PreviewEditorManager = (function() {
       }
     },
 
-    async switchToFile(newPath, getFilePath, isDirty, customConfirm, fileName, getCurrentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState) {
+    async switchToFile(newPath, getFilePath, isDirty, customConfirm, fileName, getCurrentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState, skipCache) {
       const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
       const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
       
-      if (newPath === filePath) return;
+      if (newPath === filePath && !skipCache) return;
       
+      if (!skipCache) {
       const isDirtyValue = typeof isDirty === 'object' && isDirty.current !== undefined ? isDirty.current : isDirty;
       if (isDirtyValue) {
-        const confirmed = await customConfirm('You have unsaved changes. Switch file anyway?');
+        const confirmed = await customConfirm('You have unsaved changes. Switch file anyway?', true);
         if (!confirmed) {
           return;
         }
+        if (confirmed === 'discard') {
+          const currentPath = typeof getFilePath === 'function' ? getFilePath() : '';
+          if (currentPath) {
+            await fetch('/__api__/files/editor', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: currentPath })
+            });
+            const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(currentPath));
+            const fileData = await fileResponse.json();
+            if (fileData.success) {
+              if (typeof isDirty === 'object' && isDirty.current !== undefined) {
+                isDirty.current = false;
+              }
+            }
+          }
+        }
+      }
       }
       
       const updatedPath = newPath;
@@ -67,7 +86,7 @@ window.PreviewEditorManager = (function() {
       }
     },
 
-    async loadFile(path, status, editor, previewFrame, previewSettings, fileTree, getLanguage, customCacheDialog, showImagePreview, showHtmlPreview, interceptPreviewLinks, setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange) {
+    async loadFile(path, status, editor, previewFrame, previewSettings, fileTree, getLanguage, customCacheDialog, showImagePreview, showHtmlPreview, interceptPreviewLinks, setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange, skipCache, isPreviewPinned) {
       status.textContent = 'Loading...';
       status.className = 'status';
       
@@ -98,7 +117,7 @@ window.PreviewEditorManager = (function() {
           return { originalContent: originalContent.current, isDirty: isDirty.current };
         }
         
-        if (cacheData.success && cacheData.exists && cacheData.content !== fileData.content) {
+        if (!skipCache && cacheData.success && cacheData.exists && cacheData.content !== fileData.content && customCacheDialog) {
           const choice = await customCacheDialog(cacheData.content, fileData.content, path);
           
           if (choice === 'pull') {
@@ -110,12 +129,15 @@ window.PreviewEditorManager = (function() {
               body: JSON.stringify({ path: path })
             });
             
-            let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-            if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-              previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+            const pinned = typeof isPreviewPinned === 'function' ? isPreviewPinned() : false;
+            if (!pinned) {
+              let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+              if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+                previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+              }
+              previewUrl += '&t=' + Date.now();
+              previewFrame.src = previewUrl;
             }
-            previewUrl += '&t=' + Date.now();
-            previewFrame.src = previewUrl;
           } else {
             status.textContent = 'Ready';
             status.className = 'status';
@@ -158,8 +180,9 @@ window.PreviewEditorManager = (function() {
         }, 100);
         
         const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
+        const pinned = typeof isPreviewPinned === 'function' ? isPreviewPinned() : false;
         
-        if (!isPreviewPoppedOut && previewFrame) {
+        if (!isPreviewPoppedOut && previewFrame && !pinned) {
           const previewPanel = previewFrame.closest('#previewPanel');
           const isPreviewCollapsed = previewPanel && previewPanel.classList.contains('collapsed');
           

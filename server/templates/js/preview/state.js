@@ -211,10 +211,21 @@ window.PreviewState = (function() {
                   expectedId = 'terminalServer';
                 } else if (tabName === 'log') {
                   expectedId = 'terminalLog';
+                } else if (tabName === 'commands') {
+                  expectedId = 'terminalCommands';
+                } else {
+                  expectedId = `terminal${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
                 }
                 
                 if (content.id === expectedId) {
                   content.classList.add('active');
+                  content.style.display = 'flex';
+                  
+                  const inputContainer = content.querySelector('.terminal-input-container');
+                  if (inputContainer) {
+                    inputContainer.style.display = 'flex';
+                  }
+                  
                   const input = content.querySelector('.terminal-input');
                   if (input) {
                     input.disabled = false;

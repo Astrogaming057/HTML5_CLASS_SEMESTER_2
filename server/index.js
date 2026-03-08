@@ -5,13 +5,15 @@ const config = require('./config');
 const { setupFileServer } = require('./routes/fileServer');
 const { setupAPI, setWebSocketManager } = require('./routes/api');
 const { setupEditorRoutes } = require('./routes/editor');
-const { setupPreviewRoutes, setupPreviewContentRoutes } = require('./routes/preview');
+const { setupPreviewRoutes, setupPreviewContentRoutes, setupPreviewResourceRoutes } = require('./routes/preview');
 const popoutsRouter = require('./routes/popouts');
 const { setupFileWatcher } = require('./watcher/fileWatcher');
 const WebSocketManager = require('./websocket/websocketHandler');
 const AutoLauncher = require('./browser/autoLauncher');
 const { setupStatusRoutes } = require('./templates/status/statusHandler');
 const logger = require('./utils/logger');
+const { cleanupCache } = require('./utils/cacheCleanup');
+const ServerCommands = require('./utils/serverCommands');
 
 const app = express();
 app.use(express.json({ limit: '100mb' }));
@@ -21,6 +23,8 @@ const server = http.createServer(app);
 logger.info('Initializing server...', { port: config.PORT, baseDir: config.BASE_DIR });
 
 const wsManager = new WebSocketManager();
+const serverCommands = new ServerCommands(wsManager, server, config.BASE_DIR);
+wsManager.setServerCommands(serverCommands);
 wsManager.setup(server);
 logger.setWebSocketManager(wsManager);
 logger.info('WebSocket server initialized');
@@ -74,6 +78,9 @@ logger.info('Preview routes configured');
 app.use('/__preview-content__', setupPreviewContentRoutes(config.BASE_DIR, wsManager));
 logger.info('Preview content routes configured');
 
+app.use('/__preview-resource__', setupPreviewResourceRoutes(config.BASE_DIR));
+logger.info('Preview resource routes configured');
+
 app.use('/__popout__', popoutsRouter);
 logger.info('Popout routes configured');
 
@@ -90,10 +97,43 @@ server.listen(config.PORT, () => {
 
   const autoLauncher = new AutoLauncher(config.PORT, wsManager);
   autoLauncher.setup();
+  
+  // Start cache cleanup interval (every 30 seconds)
+  logger.info('Starting cache cleanup scheduler (every 30 seconds)');
+  const cleanupInterval = setInterval(async () => {
+    try {
+      await cleanupCache(config.BASE_DIR, wsManager);
+    } catch (error) {
+      logger.error('Cache cleanup interval error', error);
+    }
+  }, 30000); // 30 seconds
+  
+  // Run initial cleanup after 5 seconds
+  const initialCleanupTimeout = setTimeout(async () => {
+    try {
+      logger.info('Running initial cache cleanup');
+      await cleanupCache(config.BASE_DIR, wsManager);
+    } catch (error) {
+      logger.error('Initial cache cleanup error', error);
+    }
+  }, 5000);
+  
+  // Store cleanup interval for shutdown
+  global.__cleanupInterval = cleanupInterval;
+  global.__initialCleanupTimeout = initialCleanupTimeout;
 });
 
 const shutdown = () => {
   logger.info('Shutting down gracefully...');
+  
+  // Clear cleanup intervals
+  if (global.__cleanupInterval) {
+    clearInterval(global.__cleanupInterval);
+    logger.info('Cache cleanup interval cleared');
+  }
+  if (global.__initialCleanupTimeout) {
+    clearTimeout(global.__initialCleanupTimeout);
+  }
   
   wsManager.close();
   

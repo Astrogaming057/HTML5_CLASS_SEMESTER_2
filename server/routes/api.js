@@ -387,48 +387,13 @@ function setupAPI(baseDir) {
 
   router.post('/restart', async (req, res) => {
     try {
-      logger.info('Server restart requested');
+      logger.info('Server restart requested via API');
       res.json({ success: true, message: 'Server restarting...' });
       
+      // Use the shared restart function
       setTimeout(() => {
-        const { spawn } = require('child_process');
-        const path = require('path');
-        const fs = require('fs');
-        
-        const isWindows = process.platform === 'win32';
-        const serverDir = path.join(__dirname, '../..');
-        const serverFile = path.join(__dirname, '../index.js');
-        
-        if (isWindows) {
-          const startBat = path.join(serverDir, 'start.bat');
-          if (fs.existsSync(startBat)) {
-            spawn('cmd.exe', ['/c', 'timeout', '/t', '2', '/nobreak', '>', 'nul', '&&', 'start', 'cmd.exe', '/k', startBat], {
-              cwd: serverDir,
-              detached: true,
-              stdio: 'ignore',
-              shell: true
-            });
-          } else {
-            const serverPath = path.join(__dirname, '..');
-            spawn('cmd.exe', ['/c', 'timeout', '/t', '2', '/nobreak', '>', 'nul', '&&', 'start', 'cmd.exe', '/k', 'cd', '/d', serverPath, '&&', 'node', 'index.js'], {
-              cwd: serverDir,
-              detached: true,
-              stdio: 'ignore',
-              shell: true
-            });
-          }
-        } else {
-          const newProcess = spawn('node', [serverFile], {
-            cwd: path.join(__dirname, '..'),
-            detached: true,
-            stdio: 'ignore'
-          });
-          newProcess.unref();
-        }
-        
-        setTimeout(() => {
-          process.exit(0);
-        }, 2000);
+        const { restartServer } = require('../utils/serverRestart');
+        restartServer();
       }, 100);
     } catch (error) {
       logger.error('API: Error restarting server', error);

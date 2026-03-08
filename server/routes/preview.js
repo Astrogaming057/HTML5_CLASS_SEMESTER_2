@@ -59,6 +59,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'editorManager.js'),
         'utf-8'
       );
+      const tabManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'tabManager.js'),
+        'utf-8'
+      );
       const websocketJs = await fs.readFile(
         path.join(previewModulesDir, 'websocket.js'),
         'utf-8'
@@ -95,6 +99,18 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'events.js'),
         'utf-8'
       );
+      const fileSearchJs = await fs.readFile(
+        path.join(previewModulesDir, 'fileSearch.js'),
+        'utf-8'
+      );
+      const globalSearchJs = await fs.readFile(
+        path.join(previewModulesDir, 'globalSearch.js'),
+        'utf-8'
+      );
+      const gitPanelJs = await fs.readFile(
+        path.join(previewModulesDir, 'gitPanel.js'),
+        'utf-8'
+      );
       const initializationJs = await fs.readFile(
         path.join(previewModulesDir, 'initialization.js'),
         'utf-8'
@@ -121,6 +137,8 @@ async function loadPreviewTemplates() {
         previewManagerJs,
         '// Editor Manager',
         editorManagerJs,
+        '// Tab Manager',
+        tabManagerJs,
         '// WebSocket',
         websocketJs,
         '// Terminal',
@@ -139,6 +157,12 @@ async function loadPreviewTemplates() {
         settingsUIJs,
         '// Events',
         eventsJs,
+        '// File Search',
+        fileSearchJs,
+        '// Global Search',
+        globalSearchJs,
+        '// Git Panel',
+        gitPanelJs,
         '// Initialization',
         initializationJs,
         '// Main',
@@ -295,6 +319,31 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       
       if (isHTML) {
         modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
+        
+        const rewriteResourceLink = (tag, attr) => {
+          const regex = new RegExp(`<${tag}[^>]+${attr}=["']([^"']+)["'][^>]*>`, 'gi');
+          modifiedContent = modifiedContent.replace(regex, (match, url) => {
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('#')) {
+              return match;
+            }
+            
+            let resourcePath = url;
+            if (!resourcePath.startsWith('/')) {
+              resourcePath = fileDir ? '/' + fileDir + '/' + resourcePath : '/' + resourcePath;
+            }
+            resourcePath = resourcePath.replace(/^\/+/, '').replace(/\\/g, '/');
+            
+            const resourceExt = resourcePath.split('.').pop().toLowerCase();
+            if (resourceExt === 'css' || resourceExt === 'js') {
+              const cacheUrl = `/__preview-resource__?file=${encodeURIComponent(resourcePath)}&t=${Date.now()}`;
+              return match.replace(url, cacheUrl);
+            }
+            return match;
+          });
+        };
+        
+        rewriteResourceLink('link', 'href');
+        rewriteResourceLink('script', 'src');
         
         modifiedContent = modifiedContent.replace(/console\.(log|info|warn|error|debug|trace|table|group|groupEnd|groupCollapsed|time|timeEnd|timeLog|timeStamp|clear|dir|dirxml|assert|count|countReset|profile|profileEnd)\s*\(/gi, (match, method) => {
           return `debug_Injected_Console.${method}(`;
@@ -628,6 +677,31 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       if (isHTML) {
         modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
         
+        const rewriteResourceLink = (tag, attr) => {
+          const regex = new RegExp(`<${tag}[^>]+${attr}=["']([^"']+)["'][^>]*>`, 'gi');
+          modifiedContent = modifiedContent.replace(regex, (match, url) => {
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('data:') || url.startsWith('#')) {
+              return match;
+            }
+            
+            let resourcePath = url;
+            if (!resourcePath.startsWith('/')) {
+              resourcePath = fileDir ? '/' + fileDir + '/' + resourcePath : '/' + resourcePath;
+            }
+            resourcePath = resourcePath.replace(/^\/+/, '').replace(/\\/g, '/');
+            
+            const resourceExt = resourcePath.split('.').pop().toLowerCase();
+            if (resourceExt === 'css' || resourceExt === 'js') {
+              const cacheUrl = `/__preview-resource__?file=${encodeURIComponent(resourcePath)}&t=${Date.now()}`;
+              return match.replace(url, cacheUrl);
+            }
+            return match;
+          });
+        };
+        
+        rewriteResourceLink('link', 'href');
+        rewriteResourceLink('script', 'src');
+        
         modifiedContent = modifiedContent.replace(/console\.(log|info|warn|error|debug|trace|table|group|groupEnd|groupCollapsed|time|timeEnd|timeLog|timeStamp|clear|dir|dirxml|assert|count|countReset|profile|profileEnd)\s*\(/gi, (match, method) => {
           return `debug_Injected_Console.${method}(`;
         });
@@ -834,11 +908,94 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  return router;
+}
+
+function setupPreviewResourceRoutes(baseDir) {
+  const router = express.Router();
+  
+  router.get('/', async (req, res) => {
+    try {
+      const filePath = req.query.file;
+      if (!filePath) {
+        return res.status(400).send('No file specified');
+      }
+
+      const normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const editorPath = path.join(editorDir, normalizedPath);
+      const resolvedEditorPath = path.resolve(editorPath);
+      
+      let content = undefined;
+      let useEditorFile = false;
+      
+      if (isPathSafe(resolvedEditorPath, baseDir)) {
+        try {
+          const editorStats = await fs.stat(resolvedEditorPath);
+          if (!editorStats.isDirectory()) {
+            content = await fs.readFile(resolvedEditorPath, 'utf-8');
+            useEditorFile = true;
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            logger.warn('Preview resource: Error checking ide_editor_cache folder', { path: filePath, error: error.message });
+          }
+        }
+      }
+      
+      if (!useEditorFile) {
+        const cachedContent = previewCache.get(filePath);
+        if (cachedContent !== undefined) {
+          content = cachedContent;
+        } else {
+          const fullPath = path.join(baseDir, filePath);
+          const resolvedPath = path.resolve(fullPath);
+
+          if (!isPathSafe(resolvedPath, baseDir)) {
+            return res.status(403).send('Forbidden');
+          }
+
+          try {
+            const stats = await fs.stat(resolvedPath);
+            if (stats.isDirectory()) {
+              return res.status(400).send('Cannot serve directory');
+            }
+            content = await fs.readFile(resolvedPath, 'utf-8');
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              return res.status(404).send('File not found');
+            }
+            throw error;
+          }
+        }
+      }
+
+      const fileName = filePath.split('/').pop() || filePath;
+      const ext = fileName.split('.').pop().toLowerCase();
+      
+      let contentType = 'text/plain';
+      if (ext === 'css') {
+        contentType = 'text/css';
+      } else if (ext === 'js') {
+        contentType = 'application/javascript';
+      }
+      
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(content);
+    } catch (error) {
+      logger.error('Error serving preview resource', error);
+      res.status(500).send('Error: ' + error.message);
+    }
+  });
+
   return router;
 }
 
 module.exports = {
   servePreview,
   setupPreviewRoutes,
-  setupPreviewContentRoutes
+  setupPreviewContentRoutes,
+  setupPreviewResourceRoutes
 };

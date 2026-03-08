@@ -1,13 +1,26 @@
 window.PreviewEvents = (function() {
   return {
-    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel) {
+    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch) {
       document.addEventListener('keydown', (e) => {
+        // Don't trigger shortcuts when typing in inputs/editors
+        const target = e.target;
+        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+        
         if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
           e.preventDefault();
           toggleFileExplorer();
-        } else if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+          // Ctrl+Shift+F for global search
           e.preventDefault();
-          togglePreviewPanel();
+          if (openGlobalSearch && typeof openGlobalSearch === 'function') {
+            openGlobalSearch();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !isInput) {
+          // Ctrl+P for file search (only if not in input)
+          e.preventDefault();
+          if (openFileSearch && typeof openFileSearch === 'function') {
+            openFileSearch();
+          }
         }
       });
     },

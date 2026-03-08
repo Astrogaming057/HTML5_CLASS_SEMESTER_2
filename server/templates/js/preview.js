@@ -46,6 +46,10 @@ require(['vs/editor/editor.main'], function() {
   const togglePreview = document.getElementById('togglePreview');
   const contextMenu = document.getElementById('contextMenu');
   const resizerEditor = document.getElementById('resizerEditor');
+  const editorTabsContainer = document.getElementById('editorTabsContainer');
+  const pinPreviewBtn = document.getElementById('pinPreviewBtn');
+  const previewPinned = { current: false };
+  const previewPinnedPath = { current: null };
   
   const filePathRef = { current: filePath };
   const currentDirRef = { currentDir: '' };
@@ -117,7 +121,9 @@ require(['vs/editor/editor.main'], function() {
       wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog,
       showServerUpdateNotification,
       (data) => handleFileSystemEvent(data),
-      previewSettings, () => filePathRef.current, previewFrame, loadFileTree
+      previewSettings, () => filePathRef.current, previewFrame, loadFileTree,
+      () => previewPinned.current,
+      () => PreviewServer.restartServer(editor, filePathRef.current, isDirty, saveFile, ws.current)
     );
     ws.current = wsRef.ws;
   }
@@ -182,7 +188,7 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function setupTerminal() {
-    PreviewTerminal.setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception);
+    PreviewTerminal.setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception, ws);
   }
   
   function openEditorPopout() {
@@ -204,7 +210,9 @@ require(['vs/editor/editor.main'], function() {
       wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog,
       showServerUpdateNotification,
       (data) => handleFileSystemEvent(data),
-      previewSettings, () => filePathRef.current, previewFrame, loadFileTree
+      previewSettings, () => filePathRef.current, previewFrame, loadFileTree,
+      () => previewPinned.current,
+      () => PreviewServer.restartServer(editor, filePathRef.current, isDirty, saveFile, ws.current)
     );
     ws.current = wsRef.ws;
   }
@@ -281,13 +289,52 @@ require(['vs/editor/editor.main'], function() {
   }
   
   async function switchToFile(newPath) {
+    await PreviewTabManager.openTab(newPath);
+  }
+
+  async function switchToFileInternal(newPath, skipCache = false) {
+    if (skipCache) {
+      const openTabs = PreviewTabManager.getOpenTabs();
+      if (openTabs.includes(newPath)) {
+        fileName.textContent = newPath.split('/').pop();
+        const newDir = newPath.split('/').slice(0, -1).join('/') || '';
+        if (newDir !== currentDirRef.currentDir) {
+          loadFileTree(newDir);
+        } else {
+          updateActiveFileTreeItem(newPath);
+        }
+        filePathRef.current = newPath;
+        filePath = newPath;
+        PreviewTabManager.updateActiveTab(newPath);
+        
+        syncChannel.postMessage({
+          type: 'file-changed',
+          filePath: newPath
+        });
+        
+        const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
+        if (isPreviewPoppedOut) {
+          PreviewPopouts.enforcePreviewCollapsed(previewPanel);
+          PreviewPopouts.updatePreviewPopout(newPath, () => previewSettings);
+        }
+        if (PreviewPopouts.getEditorPopout() && !PreviewPopouts.getEditorPopout().closed) {
+          PreviewPopouts.updateEditorPopout(newPath, () => previewSettings);
+        }
+        
+        saveState();
+        return;
+      }
+    }
+    
     const updatedPath = await PreviewEditorManager.switchToFile(
       newPath, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir,
-      loadFileTree, updateActiveFileTreeItem, loadFile, saveState
+      loadFileTree, updateActiveFileTreeItem, (path) => loadFile(path, skipCache), saveState, skipCache
     );
     if (updatedPath) {
       filePathRef.current = updatedPath;
       filePath = updatedPath;
+      
+      PreviewTabManager.updateActiveTab(updatedPath);
       
       const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
       
@@ -313,20 +360,26 @@ require(['vs/editor/editor.main'], function() {
     PreviewEditorManager.updateStatus(isDirty.current, status);
   }
   
-  async function loadFile(path) {
+  async function loadFile(path, skipCache = false) {
+    filePathRef.current = path;
+    filePath = path;
+    
     const result = await PreviewEditorManager.loadFile(
       path, status, editor, previewFrame, previewSettings, fileTree,
       getLanguage,
-      (cached, live, filePath) => customCacheDialog(cached, live, filePath),
+      skipCache ? null : ((cached, live, filePath) => customCacheDialog(cached, live, filePath)),
       showImagePreview, showHtmlPreview, interceptPreviewLinks,
-      setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange
+      setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange, skipCache,
+      () => previewPinned.current
     );
     if (result) {
       if (result.originalContent !== undefined) {
         originalContent.current = result.originalContent;
+        PreviewTabManager.setTabContent(path, editor.getValue(), result.originalContent);
       }
       if (result.isDirty !== undefined) {
         isDirty.current = result.isDirty;
+        PreviewTabManager.updateTabDirtyState(path, result.isDirty, result.originalContent);
       }
     }
     
@@ -351,6 +404,13 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function updatePreview(content) {
+    if (previewPinned.current && previewPinnedPath.current) {
+      PreviewManager.updatePreview(
+        null, previewFrame, () => previewPinnedPath.current, previewSettings, syncChannel,
+        () => interceptPreviewLinks(), (content) => updatePreviewFallback(content)
+      );
+      return;
+    }
     PreviewManager.updatePreview(
       content, previewFrame, () => filePathRef.current, previewSettings, syncChannel,
       () => interceptPreviewLinks(), (content) => updatePreviewFallback(content)
@@ -389,6 +449,11 @@ require(['vs/editor/editor.main'], function() {
         }
         if (result.isDirty !== undefined) {
           isDirty.current = result.isDirty;
+        }
+        const currentPath = filePathRef.current;
+        if (currentPath) {
+          PreviewTabManager.updateTabDirtyState(currentPath, result.isDirty || false, result.originalContent || originalContent.current);
+          PreviewTabManager.setTabContent(currentPath, editor.getValue(), result.originalContent || originalContent.current);
         }
       }
     });
@@ -473,7 +538,7 @@ require(['vs/editor/editor.main'], function() {
   PreviewSyncChannel.setupSyncChannel(
     syncChannel, () => filePathRef.current, editor, originalContent, isDirty,
     updateStatus, previewFrame, handleTerminalCommand, editorPanel, previewPanel,
-    updatePreviewVisibility, updateTerminalVisibility
+    updatePreviewVisibility, updateTerminalVisibility, () => previewPinned.current
   );
   
   const popoutEditorBtn = document.getElementById('popoutEditor');
@@ -485,7 +550,20 @@ require(['vs/editor/editor.main'], function() {
   }
   
   PreviewEvents.setupPanelToggleHandlers(toggleExplorer, togglePreview, toggleFileExplorer, togglePreviewPanel);
-  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel);
+  
+  function openFileSearch() {
+    PreviewFileSearch.open((filePath) => {
+      PreviewEditorManager.switchToFile(filePath, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState, false);
+    });
+  }
+  
+  function openGlobalSearch() {
+    PreviewGlobalSearch.open((filePath) => {
+      PreviewEditorManager.switchToFile(filePath, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState, false);
+    }, editor);
+  }
+  
+  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch);
   
   function toggleFileExplorer() {
     PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
@@ -554,6 +632,42 @@ require(['vs/editor/editor.main'], function() {
   editor = PreviewEditorSetup.createEditor(editorContainer, language, previewSettings);
   PreviewSettings.applyPreviewSettings(editor);
   
+  PreviewTabManager.initialize(
+    editorTabsContainer,
+    switchToFileInternal,
+    () => filePathRef.current,
+    () => isDirty.current,
+    customConfirm,
+    updateActiveFileTreeItem,
+    loadFileTree,
+    () => currentDirRef.currentDir,
+    () => editor ? editor.getValue() : '',
+    (content, originalContent, filePath) => {
+      if (editor) {
+        isApplyingExternalChange.current = true;
+        if (filePath) {
+          filePathRef.current = filePath;
+          filePath = filePath;
+          fileName.textContent = filePath.split('/').pop();
+          const newDir = filePath.split('/').slice(0, -1).join('/') || '';
+          if (newDir !== currentDirRef.currentDir) {
+            loadFileTree(newDir);
+          } else {
+            updateActiveFileTreeItem(filePath);
+          }
+        }
+        editor.setValue(content);
+        if (originalContent !== undefined) {
+          originalContent.current = originalContent;
+        }
+        isDirty.current = content !== originalContent;
+        updateStatus();
+        updatePreview(content);
+        isApplyingExternalChange.current = false;
+      }
+    }
+  );
+  
   window.__previewEditor = editor;
   window.__previewFilePath = () => filePathRef.current;
   window.__previewUpdatePreview = updatePreview;
@@ -567,12 +681,22 @@ require(['vs/editor/editor.main'], function() {
   
   PreviewEditorSetup.setupEditorListeners(
     editor, () => filePathRef.current, syncChannel, originalContent, isDirty,
-    updateStatus, updatePreview, saveToEditorTimeout, isApplyingExternalChange
+    updateStatus, updatePreview, saveToEditorTimeout, isApplyingExternalChange,
+    () => {
+      const currentPath = filePathRef.current;
+      if (currentPath) {
+        PreviewTabManager.updateTabDirtyState(currentPath, isDirty.current, originalContent.current);
+      }
+    }
   );
   
   PreviewEvents.setupPopstate(
     filePathRef, fileName, currentDirRef, loadFileTree, updateActiveFileTreeItem, loadFile, saveState
   );
+  
+  if (filePath) {
+    PreviewTabManager.openTabWithoutConfirm(filePath);
+  }
   
   loadFile(filePath);
   
@@ -580,6 +704,31 @@ require(['vs/editor/editor.main'], function() {
     saveBtn, refreshBtn, closeBtn, backToFilesBtn, updatePreview, filePath, customConfirm,
     isDirty, openPreviewPopout, openTerminalPopout, togglePreviewPanel
   );
+  
+  if (pinPreviewBtn) {
+    pinPreviewBtn.addEventListener('click', () => {
+      previewPinned.current = !previewPinned.current;
+      if (previewPinned.current) {
+        previewPinnedPath.current = filePathRef.current;
+        pinPreviewBtn.style.opacity = '1';
+        pinPreviewBtn.style.color = 'var(--border-active)';
+        pinPreviewBtn.title = 'Unpin Preview';
+      } else {
+        previewPinnedPath.current = null;
+        pinPreviewBtn.style.opacity = '0.7';
+        pinPreviewBtn.style.color = '';
+        pinPreviewBtn.title = 'Pin Preview to Current Page';
+        updatePreview(editor ? editor.getValue() : '');
+      }
+    });
+  }
+
+  const gitPanelBtn = document.getElementById('gitPanelBtn');
+  if (gitPanelBtn) {
+    gitPanelBtn.addEventListener('click', () => {
+      PreviewGitPanel.toggle();
+    });
+  }
   
   PreviewSettingsUI.setupSettingsEventHandlers(
     settingsBtn, settingsPanel, settingsCloseBtn, saveSettingsBtn, resetSettingsBtn2,
@@ -614,6 +763,19 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function updatePreview(content) {
+    if (previewPinned.current && previewPinnedPath.current) {
+      const pinnedPath = previewPinnedPath.current;
+      let previewUrl = '/__preview-content__?file=' + encodeURIComponent(pinnedPath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+      if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+        previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+      }
+      previewUrl += '&t=' + Date.now();
+      previewFrame.src = previewUrl;
+      previewFrame.onload = () => {
+        interceptPreviewLinks();
+      };
+      return;
+    }
     PreviewManager.updatePreview(
       content, previewFrame, () => filePathRef.current, previewSettings, syncChannel,
       () => interceptPreviewLinks(), (content) => updatePreviewFallback(content)
@@ -658,6 +820,11 @@ require(['vs/editor/editor.main'], function() {
         }
         if (result.isDirty !== undefined) {
           isDirty.current = result.isDirty;
+        }
+        const currentPath = filePathRef.current;
+        if (currentPath) {
+          PreviewTabManager.updateTabDirtyState(currentPath, result.isDirty || false, result.originalContent || originalContent.current);
+          PreviewTabManager.setTabContent(currentPath, editor.getValue(), result.originalContent || originalContent.current);
         }
       }
     });

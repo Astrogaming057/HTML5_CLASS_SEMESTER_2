@@ -29,6 +29,7 @@
       <div class="panel-header">
         <button id="backBtn" class="back-btn" title="Go Back">←</button>
         <span>📁 Files</span>
+        <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
         <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
       </div>
       <div class="file-tree" id="fileTree">
@@ -43,6 +44,7 @@
           <div class="terminal-tabs">
             <button class="terminal-tab active" data-tab="client">Client</button>
             <button class="terminal-tab" data-tab="server">Server</button>
+            <button class="terminal-tab" data-tab="commands">Commands</button>
             <button class="terminal-tab" data-tab="powershell">PowerShell</button>
             <button class="terminal-tab" data-tab="log">Log</button>
           </div>
@@ -61,6 +63,13 @@
           </div>
           <div class="terminal-tab-content" id="terminalServer">
             <div class="terminal-output" id="terminalServerOutput"></div>
+          </div>
+          <div class="terminal-tab-content" id="terminalCommands">
+            <div class="terminal-output" id="terminalCommandsOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">$></span>
+              <input type="text" class="terminal-input" id="terminalCommandsInput" placeholder="Type server commands (help, ping, status, restart, reconnect)...">
+            </div>
           </div>
           <div class="terminal-tab-content" id="terminalPowerShell">
             <div class="terminal-output" id="terminalPowerShellOutput"></div>
@@ -85,6 +94,7 @@
         <span>Editor</span>
         <button id="popoutEditor" class="popout-btn" title="Pop out Editor">⤢</button>
       </div>
+      <div class="editor-tabs-container" id="editorTabsContainer"></div>
       <div id="editor"></div>
     </div>
     <div class="resizer resizer-editor" id="resizerEditor"></div>
@@ -93,6 +103,7 @@
         <span id="previewTitle">Preview</span>
         <div>
         <button id="backToPreviewBtn" class="back-btn" title="Back to HTML Preview" style="display: none;">← Back</button>
+        <button id="pinPreviewBtn" class="toggle-btn" title="Pin Preview to Current Page">📌</button>
         <button id="refreshBtn" class="toggle-btn" title="Refresh Preview">🔄</button>
         <button id="popoutPreview" class="popout-btn" title="Pop out Preview">⤢</button>
         <button id="togglePreview" class="toggle-btn" title="Toggle Preview">◀</button>
@@ -145,6 +156,7 @@
       </div>
       <div class="custom-prompt-footer">
         <button class="btn btn-primary" id="customConfirmOk">OK</button>
+        <button class="btn btn-secondary" id="customConfirmDiscard">Discard</button>
         <button class="btn btn-secondary" id="customConfirmCancel">Cancel</button>
       </div>
     </div>
@@ -310,6 +322,16 @@ Example:
 
 You can copy any theme file and modify it, or create your own!"></textarea>
           <p class="setting-description">1. Select "Custom" from the theme dropdown above. 2. Enter your CSS here (use :root for CSS variables). 3. Click "Save Settings" to apply. Use the buttons above to load examples.</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Apply Theme to Preview Frame</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="applyThemeToPreviewFrame">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Apply the selected theme to the preview frame container</span>
+          </label>
+          <p class="setting-description">When enabled, the preview frame border and background will use the selected theme colors</p>
         </div>
         
         <div class="setting-group">
