@@ -14,6 +14,8 @@ let jsContent = null;
 async function loadPreviewTemplates() {
   if (!htmlTemplate) {
     const templatesDir = path.join(__dirname, '..', 'templates');
+    const jsDir = path.join(templatesDir, 'js');
+    const previewModulesDir = path.join(jsDir, 'preview');
     
     htmlTemplate = await fs.readFile(
       path.join(templatesDir, 'html', 'preview.html'),
@@ -23,10 +25,132 @@ async function loadPreviewTemplates() {
       path.join(templatesDir, 'css', 'preview.css'),
       'utf-8'
     );
+    
+    try {
+      const utilsJs = await fs.readFile(
+        path.join(previewModulesDir, 'utils.js'),
+        'utf-8'
+      );
+      const settingsJs = await fs.readFile(
+        path.join(previewModulesDir, 'settings.js'),
+        'utf-8'
+      );
+      const popoutsJs = await fs.readFile(
+        path.join(previewModulesDir, 'popouts.js'),
+        'utf-8'
+      );
+      const uiJs = await fs.readFile(
+        path.join(previewModulesDir, 'ui.js'),
+        'utf-8'
+      );
+      const stateJs = await fs.readFile(
+        path.join(previewModulesDir, 'state.js'),
+        'utf-8'
+      );
+      const serverJs = await fs.readFile(
+        path.join(previewModulesDir, 'server.js'),
+        'utf-8'
+      );
+      const previewManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'previewManager.js'),
+        'utf-8'
+      );
+      const editorManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'editorManager.js'),
+        'utf-8'
+      );
+      const websocketJs = await fs.readFile(
+        path.join(previewModulesDir, 'websocket.js'),
+        'utf-8'
+      );
+      const terminalJs = await fs.readFile(
+        path.join(previewModulesDir, 'terminal.js'),
+        'utf-8'
+      );
+      const fileExplorerJs = await fs.readFile(
+        path.join(previewModulesDir, 'fileExplorer.js'),
+        'utf-8'
+      );
+      const resizersJs = await fs.readFile(
+        path.join(previewModulesDir, 'resizers.js'),
+        'utf-8'
+      );
+      const syncChannelJs = await fs.readFile(
+        path.join(previewModulesDir, 'syncChannel.js'),
+        'utf-8'
+      );
+      const editorSetupJs = await fs.readFile(
+        path.join(previewModulesDir, 'editorSetup.js'),
+        'utf-8'
+      );
+      const terminalUIJs = await fs.readFile(
+        path.join(previewModulesDir, 'terminalUI.js'),
+        'utf-8'
+      );
+      const settingsUIJs = await fs.readFile(
+        path.join(previewModulesDir, 'settingsUI.js'),
+        'utf-8'
+      );
+      const eventsJs = await fs.readFile(
+        path.join(previewModulesDir, 'events.js'),
+        'utf-8'
+      );
+      const initializationJs = await fs.readFile(
+        path.join(previewModulesDir, 'initialization.js'),
+        'utf-8'
+      );
+      const mainJs = await fs.readFile(
+        path.join(jsDir, 'preview.js'),
+        'utf-8'
+      );
+      
+      jsContent = [
+        '// Utils',
+        utilsJs,
+        '// Settings',
+        settingsJs,
+        '// Popouts',
+        popoutsJs,
+        '// UI',
+        uiJs,
+        '// State',
+        stateJs,
+        '// Server',
+        serverJs,
+        '// Preview Manager',
+        previewManagerJs,
+        '// Editor Manager',
+        editorManagerJs,
+        '// WebSocket',
+        websocketJs,
+        '// Terminal',
+        terminalJs,
+        '// File Explorer',
+        fileExplorerJs,
+        '// Resizers',
+        resizersJs,
+        '// Sync Channel',
+        syncChannelJs,
+        '// Editor Setup',
+        editorSetupJs,
+        '// Terminal UI',
+        terminalUIJs,
+        '// Settings UI',
+        settingsUIJs,
+        '// Events',
+        eventsJs,
+        '// Initialization',
+        initializationJs,
+        '// Main',
+        mainJs
+      ].join('\n\n');
+    } catch (error) {
+      logger.error('Error loading preview module files', error);
     jsContent = await fs.readFile(
-      path.join(templatesDir, 'js', 'preview.js'),
+        path.join(jsDir, 'preview.js'),
       'utf-8'
     );
+    }
   }
 }
 

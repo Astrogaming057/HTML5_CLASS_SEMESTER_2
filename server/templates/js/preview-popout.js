@@ -7,43 +7,51 @@ const previewImage = document.getElementById('previewImage');
 const channel = new BroadcastChannel('preview-sync');
 
 function updatePreview() {
-  if (!filePath) return;
+  const pathToUse = currentFilePath || filePath;
+  if (!pathToUse) return;
   
-  const ext = filePath.split('.').pop().toLowerCase();
+  const ext = pathToUse.split('.').pop().toLowerCase();
   const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'];
   
   if (imageExts.includes(ext)) {
     previewFrame.style.display = 'none';
     imagePreview.style.display = 'flex';
-    previewImage.src = `/${filePath}`;
+    previewImage.src = `/${pathToUse}`;
   } else {
     imagePreview.style.display = 'none';
     previewFrame.style.display = 'block';
-    previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+    previewFrame.src = `/__preview-content__?file=${encodeURIComponent(pathToUse)}&t=${Date.now()}`;
   }
 }
 
 let currentContent = null;
 
+let currentFilePath = filePath;
+
 channel.addEventListener('message', (event) => {
-  if (event.data.type === 'preview-update') {
+  if (event.data.type === 'file-changed') {
+    currentFilePath = event.data.filePath;
+    const newUrl = `/__popout__/preview?file=${encodeURIComponent(currentFilePath)}`;
+    window.history.pushState({ file: currentFilePath }, '', newUrl);
+    updatePreview();
+  } else if (event.data.type === 'preview-update') {
     if (previewFrame.style.display !== 'none') {
-      previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+      previewFrame.src = `/__preview-content__?file=${encodeURIComponent(currentFilePath)}&t=${Date.now()}`;
     }
   } else if (event.data.type === 'preview-refresh') {
     if (previewFrame.style.display !== 'none') {
-      previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+      previewFrame.src = `/__preview-content__?file=${encodeURIComponent(currentFilePath)}&t=${Date.now()}`;
     }
   } else if (event.data.type === 'preview-content') {
     currentContent = event.data.content;
     if (previewFrame.style.display !== 'none' && currentContent) {
-      fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
+      fetch('/__preview-content__?file=' + encodeURIComponent(currentFilePath), {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: currentContent
       })
       .then(() => {
-        previewFrame.src = `/__preview-content__?file=${encodeURIComponent(filePath)}&t=${Date.now()}`;
+        previewFrame.src = `/__preview-content__?file=${encodeURIComponent(currentFilePath)}&t=${Date.now()}`;
       })
       .catch(err => {
         console.error('Error updating preview content:', err);

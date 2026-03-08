@@ -4,25 +4,15 @@ const forceLoad = urlParams.get('force') === 'true' || urlParams.get('noRestore'
 let currentDir = '';
 
 let editor = null;
-let originalContent = '';
-let isDirty = false;
+const originalContent = { current: '' };
+const isDirty = { current: false };
 let previewFrame = null;
 let fileTree = null;
-let ws = null;
-
-let editorPopout = null;
-let previewPopout = null;
-let terminalPopout = null;
+const ws = { current: null };
 
 const syncChannel = new BroadcastChannel('preview-sync');
 
-function getLanguage(filePath) {
-  const ext = filePath.split('.').pop().toLowerCase();
-  if (ext === 'html' || ext === 'htm') {
-    return 'html';
-  }
-  return 'html';
-}
+const getLanguage = PreviewUtils.getLanguage;
 
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
@@ -57,713 +47,406 @@ require(['vs/editor/editor.main'], function() {
   const contextMenu = document.getElementById('contextMenu');
   const resizerEditor = document.getElementById('resizerEditor');
   
-  if (!filePath) {
-    status.textContent = 'Error: No file specified';
-    status.className = 'status error';
+  const filePathRef = { current: filePath };
+  const currentDirRef = { currentDir: '' };
+  const isRestoringStateRef = { current: true };
+  const terminalAtBottomRef = { current: false };
+  const saveToEditorTimeout = { current: null };
+  
+  const initResult = PreviewInitialization.initializeState(filePath, forceLoad, currentDirRef);
+  if (initResult.error) {
+    const status = document.getElementById('status');
+    if (status) {
+      status.textContent = 'Error: ' + initResult.error;
+      status.className = 'status error';
+    }
     return;
   }
   
-  currentDir = filePath.split('/').slice(0, -1).join('/') || '';
-  
+  currentDir = currentDirRef.currentDir;
   fileName.textContent = filePath.split('/').pop();
   const language = getLanguage(filePath);
   
-  let isRestoringState = true;
-  
-  let previewSettings = {
-    autoRefreshPreview: true,
-    pageTheme: 'dark',
-    customThemeCSS: '',
-    editorFontSize: 14,
-    editorTheme: 'vs-dark',
-    editorWordWrap: false,
-    editorLineNumbers: true,
-    editorTabSize: 4,
-    defaultExplorerVisible: true,
-    defaultTerminalVisible: false
-  };
-  
-  function loadPreviewSettings() {
-    const saved = localStorage.getItem('previewSettings');
-    if (saved) {
-      try {
-        previewSettings = { ...previewSettings, ...JSON.parse(saved) };
-      } catch (e) {
-        console.error('Error loading preview settings:', e);
-      }
-    }
-    applyPreviewSettings();
-  }
-  
-  function savePreviewSettings() {
-    try {
-      localStorage.setItem('previewSettings', JSON.stringify(previewSettings));
-    } catch (e) {
-      console.error('Error saving preview settings:', e);
-    }
-  }
-  
-  async function loadTheme(themeName) {
-    try {
-      const themeStyle = document.getElementById('theme-style');
-      if (!themeStyle) {
-        console.error('Theme style element not found');
-        return;
-      }
-      
-      if (themeName === 'custom') {
-        const customCSS = previewSettings.customThemeCSS || '';
-        if (customCSS.trim() === '') {
-          // Fallback to dark theme if custom CSS is empty
-          const response = await fetch(`/__api__/theme?name=dark`);
-          if (response.ok) {
-            const themeCss = await response.text();
-            themeStyle.textContent = themeCss;
-          } else {
-            console.error('Failed to load fallback theme:', response.status);
-          }
-        } else {
-          themeStyle.textContent = customCSS;
-        }
-      } else {
-        const response = await fetch(`/__api__/theme?name=${encodeURIComponent(themeName)}`);
-        if (response.ok) {
-          const themeCss = await response.text();
-          themeStyle.textContent = themeCss;
-        } else {
-          console.error('Failed to load theme:', response.status);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading theme:', error);
-    }
-  }
-  
-  function applyPreviewSettings() {
-    if (editor) {
-      editor.updateOptions({
-        fontSize: previewSettings.editorFontSize,
-        theme: previewSettings.editorTheme,
-        wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
-        lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
-        tabSize: previewSettings.editorTabSize
-      });
-    }
-    
-    loadTheme(previewSettings.pageTheme);
-    
-    if (settingsPanel) {
-      const autoRefreshPreview = document.getElementById('autoRefreshPreview');
-      const pageTheme = document.getElementById('pageTheme');
-      const customThemeCSS = document.getElementById('customThemeCSS');
-      const customThemeGroup = document.getElementById('customThemeGroup');
-      const editorFontSize = document.getElementById('editorFontSize');
-      const editorTheme = document.getElementById('editorTheme');
-      const editorWordWrap = document.getElementById('editorWordWrap');
-      const editorLineNumbers = document.getElementById('editorLineNumbers');
-      const editorTabSize = document.getElementById('editorTabSize');
-      const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
-      const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
-      
-      if (autoRefreshPreview) autoRefreshPreview.checked = previewSettings.autoRefreshPreview;
-      if (pageTheme) {
-        pageTheme.value = previewSettings.pageTheme;
-        if (customThemeGroup) {
-          customThemeGroup.style.display = previewSettings.pageTheme === 'custom' ? 'block' : 'none';
-        }
-      }
-      if (customThemeCSS) customThemeCSS.value = previewSettings.customThemeCSS || '';
-      if (editorFontSize) editorFontSize.value = previewSettings.editorFontSize;
-      if (editorTheme) editorTheme.value = previewSettings.editorTheme;
-      if (editorWordWrap) editorWordWrap.checked = previewSettings.editorWordWrap;
-      if (editorLineNumbers) editorLineNumbers.checked = previewSettings.editorLineNumbers;
-      if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
-      if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
-      if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
-    }
-  }
-  
-  let originalTheme = null;
-  
-  function openSettings() {
-    if (settingsPanel) {
-      originalTheme = previewSettings.pageTheme;
-      applyPreviewSettings();
-      settingsPanel.style.display = 'flex';
-      
-      const pageTheme = document.getElementById('pageTheme');
-      if (pageTheme) {
-        pageTheme.addEventListener('change', handleThemePreview);
-      }
-    }
-  }
-  
-  function closeSettings() {
-    if (settingsPanel) {
-      const pageTheme = document.getElementById('pageTheme');
-      if (pageTheme) {
-        pageTheme.removeEventListener('change', handleThemePreview);
-      }
-      
-      if (originalTheme !== null && originalTheme !== previewSettings.pageTheme) {
-        loadTheme(originalTheme);
-        previewSettings.pageTheme = originalTheme;
-      }
-      
-      originalTheme = null;
-      settingsPanel.style.display = 'none';
-    }
-  }
-  
-  function handleThemePreview() {
-    const pageTheme = document.getElementById('pageTheme');
-    const customThemeGroup = document.getElementById('customThemeGroup');
-    
-    if (pageTheme && pageTheme.value) {
-      // Show/hide custom theme textarea immediately
-      if (customThemeGroup) {
-        customThemeGroup.style.display = pageTheme.value === 'custom' ? 'block' : 'none';
-      }
-      // Preview the theme
-      loadTheme(pageTheme.value);
-    }
-  }
-  
-  loadPreviewSettings();
+  PreviewSettings.loadPreviewSettings();
+  const previewSettings = PreviewSettings.getSettings();
   
   const receivedLogIds = new Set();
+  const generateLogId = PreviewUtils.generateLogId;
   
-  function generateLogId(message, logType, timestamp) {
-    return `${message}_${logType}_${timestamp}`;
+  const customPrompt = PreviewUtils.customPrompt;
+  const customConfirm = PreviewUtils.customConfirm;
+  
+  PreviewInitialization.initializeVisibility(resizerEditor, previewPanel);
+  
+  function loadFileTree(dir) {
+    PreviewFileExplorer.loadFileTree(
+      dir, fileTree, currentDirRef, updateBackButton, saveState,
+      (files, dir) => renderFileTree(files, dir),
+      (dir) => fetchDirectoryListing(dir)
+    );
+    currentDir = currentDirRef.currentDir;
   }
   
-  if (!forceLoad) {
-    const savedState = localStorage.getItem('previewState');
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState);
-        if (state.currentDir && state.currentDir !== currentDir) {
-          currentDir = state.currentDir;
-          console.log('Restored directory from state:', currentDir);
-        }
-      } catch (err) {
-        console.error('Error parsing saved state:', err);
-      }
-    }
-  } else {
-    console.log('Force load mode: skipping state restoration');
+  function fetchDirectoryListing(dir) {
+    PreviewFileExplorer.fetchDirectoryListing(dir, fileTree, (files, dir) => renderFileTree(files, dir));
   }
   
-  setupFileExplorer();
+  function renderFileTree(files, dir) {
+    PreviewFileExplorer.renderFileTree(
+      files, dir, fileTree, () => filePathRef.current,
+      loadFileTree, switchToFile, showContextMenu, renameFile,
+      moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone
+    );
+  }
   
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      if (forceLoad) {
-        console.log('Force load: loading file directly without state restoration');
-        loadFile(filePath);
-        updateExplorerVisibility();
-        updatePreviewVisibility();
-        if (terminalPanel) {
-          updateTerminalVisibility();
-        }
-      } else {
-        restoreState();
-        updateExplorerVisibility();
-        updatePreviewVisibility();
-        if (terminalPanel) {
-          updateTerminalVisibility();
-        }
-      }
-      isRestoringState = false;
-      console.log('State restoration complete - saving enabled');
-    }, 300);
-  });
+  function showParentFolderDropZone(currentDir) {
+    PreviewFileExplorer.showParentFolderDropZone(currentDir, fileTree, moveFileToFolder);
+  }
   
-  setupContextMenu();
+  function hideParentFolderDropZone() {
+    PreviewFileExplorer.hideParentFolderDropZone(fileTree);
+  }
   
-  setupDragAndDrop();
+  function moveFileToFolder(filePath, targetFolderPath) {
+    PreviewFileExplorer.moveFileToFolder(filePath, targetFolderPath, loadFileTree, switchToFile, status, isDirty);
+  }
   
-  setupTerminal();
+  function setupWebSocket() {
+    const wsRef = { ws: null };
+    wsRef.ws = PreviewWebSocket.setupWebSocket(
+      wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog,
+      showServerUpdateNotification,
+      (data) => handleFileSystemEvent(data),
+      previewSettings, () => filePathRef.current, previewFrame, loadFileTree
+    );
+    ws.current = wsRef.ws;
+  }
   
-  setupWebSocket();
+  function handleFileSystemEvent(data) {
+    PreviewWebSocket.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
+  }
   
-  syncChannel.addEventListener('message', (event) => {
-    const data = event.data;
-    
-    if (data.type === 'editor-content' && data.filePath === filePath && editor) {
-      const currentValue = editor.getValue();
-      if (currentValue !== data.content) {
-        const position = editor.getPosition();
-        const scrollTop = editor.getScrollTop();
-        editor.setValue(data.content);
-        originalContent = data.content;
-        isDirty = data.isDirty || false;
-        updateStatus();
-        if (position) {
-          editor.setPosition(position);
-          editor.setScrollTop(scrollTop);
-        }
-      }
-    }
-    
-    if (data.type === 'editor-cursor' && data.filePath === filePath && editor) {
-      const pos = data.position;
-      if (pos) {
-        editor.setPosition(pos);
-        editor.revealPositionInCenter(pos);
-      }
-    }
-    
-    if (data.type === 'preview-refresh-request') {
-      if (previewFrame && previewFrame.style.display !== 'none') {
-        previewFrame.src = previewFrame.src;
-      }
-    }
-    
-    if (data.type === 'terminal-output') {
-      const { tab, output, append } = data;
-      let tabName = tab;
-      if (tab === 'powershell') {
-        tabName = 'PowerShell';
-      } else {
-        tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-      }
-      const outputEl = document.getElementById(`terminal${tabName}Output`);
-      if (outputEl) {
-        if (append) {
-          outputEl.textContent += output;
-        } else {
-          outputEl.textContent = output;
-        }
-        outputEl.scrollTop = outputEl.scrollHeight;
-      }
-    }
-    
-    if (data.type === 'terminal-clear') {
-      const { tab } = data;
-      let tabName = tab;
-      if (tab === 'powershell') {
-        tabName = 'PowerShell';
-      } else {
-        tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-      }
-      const outputEl = document.getElementById(`terminal${tabName}Output`);
-      if (outputEl) {
-        outputEl.textContent = '';
-      }
-    }
-    
-    if (data.type === 'terminal-command') {
-      handleTerminalCommand(data.tab, data.command);
-    }
-    
-    if (data.type === 'popout-closed') {
-      if (data.popoutType === 'editor') {
-        editorPopout = null;
-        if (editorPanel) {
-          editorPanel.classList.remove('collapsed');
-        }
-      } else if (data.popoutType === 'preview') {
-        previewPopout = null;
-        if (previewPanel) {
-          previewPanel.classList.remove('collapsed');
-          updatePreviewVisibility();
-        }
-      } else if (data.popoutType === 'terminal') {
-        terminalPopout = null;
-        const terminalPanelEl = document.getElementById('terminalPanel');
-        if (terminalPanelEl) {
-          terminalPanelEl.classList.remove('collapsed');
-          const toggleTerminalBtn = document.getElementById('toggleTerminal');
-          if (toggleTerminalBtn) {
-            toggleTerminalBtn.textContent = '−';
-          }
-          const resizerTerminalEl = document.getElementById('resizerTerminal');
-          if (resizerTerminalEl) {
-            resizerTerminalEl.style.display = 'block';
-          }
-          const terminalReopenBarEl = document.getElementById('terminalReopenBar');
-          if (terminalReopenBarEl) {
-            terminalReopenBarEl.style.display = 'none';
-          }
-        }
-      }
-    }
-  });
+  function setupDragAndDrop() {
+    PreviewFileExplorer.setupDragAndDrop(fileTree, () => currentDirRef.currentDir, handleFileDrop);
+  }
+  
+  function handleFileDrop(files, targetDir) {
+    PreviewFileExplorer.handleFileDrop(files, targetDir, uploadFile);
+  }
+  
+  function uploadFile(file, targetDir) {
+    PreviewFileExplorer.uploadFile(file, targetDir, status, isDirty, loadFileTree, () => currentDirRef.currentDir);
+  }
+  
+  function setupContextMenu() {
+    PreviewFileExplorer.setupContextMenu(
+      contextMenu, fileTree, createNewFile, createNewFolder, renameFile, deleteFile,
+      (e, path, isDirectory, name, onlyCreate) => showContextMenu(e, path, isDirectory, name, onlyCreate)
+    );
+  }
+  
+  function showContextMenu(e, path, isDirectory, name, onlyCreate = false) {
+    PreviewFileExplorer.showContextMenu(e, path, isDirectory, name, contextMenu, onlyCreate);
+  }
+  
+  async function createNewFile() {
+    await PreviewFileExplorer.createNewFile(customPrompt, () => currentDirRef.currentDir, loadFileTree, switchToFile);
+  }
+  
+  async function createNewFolder() {
+    await PreviewFileExplorer.createNewFolder(customPrompt, () => currentDirRef.currentDir, loadFileTree);
+  }
+  
+  async function renameFile(path, oldName, isDirectory) {
+    await PreviewFileExplorer.renameFile(path, oldName, isDirectory, customPrompt, () => currentDirRef.currentDir, loadFileTree, () => filePathRef.current, switchToFile);
+  }
+  
+  async function deleteFile(path, isDirectory) {
+    await PreviewFileExplorer.deleteFile(path, isDirectory, customConfirm, () => currentDirRef.currentDir, loadFileTree, () => filePathRef.current);
+  }
+  
+  function setupFileExplorer() {
+    PreviewFileExplorer.setupFileExplorer(() => currentDirRef.currentDir, loadFileTree);
+  }
+  
+  function addPreviewLog(message, type = 'log') {
+    PreviewTerminal.addPreviewLog(message, type, receivedLogIds, generateLogId, syncChannel, ws.current);
+  }
+  
+  function setupPreviewLogInterception() {
+    PreviewTerminal.setupPreviewLogInterception(receivedLogIds, generateLogId, addPreviewLog, syncChannel, ws.current);
+  }
+  
+  function handleTerminalCommand(tab, command) {
+    PreviewTerminal.handleTerminalCommand(tab, command, syncChannel, previewFrame);
+  }
+  
+  function setupTerminal() {
+    PreviewTerminal.setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception);
+  }
   
   function openEditorPopout() {
-    console.log('openEditorPopout called, filePath:', filePath);
-    if (editorPopout && !editorPopout.closed) {
-      editorPopout.focus();
-      return;
-    }
-    
-    const url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}`;
-    console.log('Opening editor popout:', url);
-    editorPopout = window.open(url, 'editor-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
-    
-    if (!editorPopout) {
-      console.error('Failed to open editor popout - popup blocked?');
-      alert('Popup blocked. Please allow popups for this site.');
-    }
+    PreviewPopouts.openEditorPopout(() => filePathRef.current);
   }
   
   function openPreviewPopout() {
-    console.log('openPreviewPopout called, filePath:', filePath);
-    if (previewPopout && !previewPopout.closed) {
-      previewPopout.focus();
-      return;
+    PreviewPopouts.openPreviewPopout(() => filePathRef.current, previewPanel);
+  }
+  
+  function openTerminalPopout() {
+    const terminalPanelEl = document.getElementById('terminalPanel');
+    PreviewPopouts.openTerminalPopout(terminalPanelEl, updateTerminalVisibility);
+  }
+  
+  function setupWebSocket() {
+    const wsRef = { ws: null };
+    wsRef.ws = PreviewWebSocket.setupWebSocket(
+      wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog,
+      showServerUpdateNotification,
+      (data) => handleFileSystemEvent(data),
+      previewSettings, () => filePathRef.current, previewFrame, loadFileTree
+    );
+    ws.current = wsRef.ws;
+  }
+  
+  function handleFileSystemEvent(data) {
+    PreviewWebSocket.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
+  }
+  
+  function showServerUpdateNotification() {
+    PreviewServer.showServerUpdateNotification(() => {
+      PreviewServer.restartServer(editor, filePathRef.current, isDirty, saveFile, ws.current);
+    });
+  }
+  
+  function goBackFolder() {
+    const newDir = PreviewUI.goBackFolder(currentDirRef.currentDir, loadFileTree, updateBackButton);
+    if (newDir !== currentDirRef.currentDir) {
+      currentDirRef.currentDir = newDir;
+      currentDir = newDir;
+    }
+  }
+  
+  function updateBackButton() {
+    PreviewUI.updateBackButton(backBtn, currentDirRef.currentDir);
+  }
+  
+  function toggleFileExplorer() {
+    PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
+  }
+  
+  function updateExplorerVisibility() {
+    PreviewUI.updateExplorerVisibility(fileExplorerPanel);
+  }
+  
+  function refreshPreview() {
+    PreviewManager.refreshPreview(
+      previewFrame, () => filePathRef.current, previewSettings,
+      () => interceptPreviewLinks()
+    );
+  }
+  
+  function togglePreviewPanel() {
+    PreviewUI.togglePreviewPanel(previewPanel, togglePreview, updatePreviewVisibility, saveState, refreshPreview);
+  }
+  
+  function updatePreviewVisibility() {
+    PreviewUI.updatePreviewVisibility(previewPanel, editorPanel, resizerEditor);
+  }
+  
+  function updateTerminalVisibility() {
+    PreviewTerminalUI.updateTerminalVisibility(terminalPanel, toggleTerminal, resizerTerminal, terminalReopenBar);
+  }
+  
+  function updateTerminalPositionButtons() {
+    PreviewTerminalUI.updateTerminalPositionButtons(moveTerminalToBottom, moveTerminalToExplorer, terminalAtBottomRef.current);
+  }
+  
+  function moveTerminalToBottomPosition() {
+    PreviewTerminalUI.moveTerminalToBottomPosition(
+      terminalPanel, container, fileExplorerPanel, terminalAtBottomRef,
+      updateTerminalPositionButtons, saveState
+    );
+  }
+  
+  function moveTerminalToExplorerPosition() {
+    PreviewTerminalUI.moveTerminalToExplorerPosition(
+      terminalPanel, container, fileExplorerPanel, terminalReopenBar, terminalAtBottomRef,
+      updateTerminalPositionButtons, saveState
+    );
+  }
+  
+  function updateActiveFileTreeItem(path) {
+    PreviewEditorManager.updateActiveFileTreeItem(path, fileTree);
+  }
+  
+  async function switchToFile(newPath) {
+    const updatedPath = await PreviewEditorManager.switchToFile(
+      newPath, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir,
+      loadFileTree, updateActiveFileTreeItem, loadFile, saveState
+    );
+    if (updatedPath) {
+      filePathRef.current = updatedPath;
+      filePath = updatedPath;
+      
+      const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
+      
+      if (isPreviewPoppedOut) {
+        PreviewPopouts.enforcePreviewCollapsed(previewPanel);
+      }
+      
+      syncChannel.postMessage({
+        type: 'file-changed',
+        filePath: updatedPath
+      });
+      
+      if (isPreviewPoppedOut) {
+        PreviewPopouts.updatePreviewPopout(updatedPath);
+      }
+      if (PreviewPopouts.getEditorPopout() && !PreviewPopouts.getEditorPopout().closed) {
+        PreviewPopouts.updateEditorPopout(updatedPath);
+      }
+    }
+  }
+  
+  function updateStatus() {
+    PreviewEditorManager.updateStatus(isDirty.current, status);
+  }
+  
+  async function loadFile(path) {
+    const result = await PreviewEditorManager.loadFile(
+      path, status, editor, previewFrame, previewSettings, fileTree,
+      getLanguage,
+      (cached, live, filePath) => customCacheDialog(cached, live, filePath),
+      showImagePreview, showHtmlPreview, interceptPreviewLinks,
+      setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange
+    );
+    if (result) {
+      if (result.originalContent !== undefined) {
+        originalContent.current = result.originalContent;
+      }
+      if (result.isDirty !== undefined) {
+        isDirty.current = result.isDirty;
+      }
     }
     
-    const url = `/__popout__/preview?file=${encodeURIComponent(filePath)}`;
-    console.log('Opening preview popout:', url);
-    previewPopout = window.open(url, 'preview-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
+    const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
     
-    if (!previewPopout) {
-      console.error('Failed to open preview popout - popup blocked?');
-      alert('Popup blocked. Please allow popups for this site.');
-      return;
-    }
-    
-    if (previewPanel) {
-      previewPanel.classList.add('collapsed');
+    if (isPreviewPoppedOut) {
+      PreviewPopouts.enforcePreviewCollapsed(previewPanel);
       updatePreviewVisibility();
     }
   }
   
-  function openTerminalPopout() {
-    console.log('openTerminalPopout called');
-    if (terminalPopout && !terminalPopout.closed) {
-      terminalPopout.focus();
-      return;
-    }
-    
-    const url = `/__popout__/terminal`;
-    console.log('Opening terminal popout:', url);
-    terminalPopout = window.open(url, 'terminal-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
-    
-    if (!terminalPopout) {
-      console.error('Failed to open terminal popout - popup blocked?');
-      alert('Popup blocked. Please allow popups for this site.');
-      return;
-    }
-    
-    const terminalPanelEl = document.getElementById('terminalPanel');
-    if (terminalPanelEl) {
-      terminalPanelEl.classList.add('collapsed');
-      const toggleTerminalBtn = document.getElementById('toggleTerminal');
-      if (toggleTerminalBtn) {
-        toggleTerminalBtn.textContent = '+';
-      }
-      const resizerTerminalEl = document.getElementById('resizerTerminal');
-      if (resizerTerminalEl) {
-        resizerTerminalEl.style.display = 'none';
-      }
-      const terminalReopenBarEl = document.getElementById('terminalReopenBar');
-      if (terminalReopenBarEl) {
-        terminalReopenBarEl.style.display = 'flex';
-      }
-    }
+  async function customCacheDialog(cachedContent, liveContent, filePath) {
+    const actualFilePath = typeof filePath === 'function' ? filePath() : filePath;
+    return PreviewEditorManager.customCacheDialog(
+      cachedContent, liveContent, actualFilePath, getLanguage, previewSettings,
+      (content, getFilePath, previewFrame, isLive) => updateCachePreview(content, getFilePath, previewFrame, isLive)
+    );
   }
   
-  function handleTerminalCommand(tab, command) {
-    let tabName = tab;
-    if (tab === 'powershell') {
-      tabName = 'PowerShell';
-    } else {
-      tabName = tab.charAt(0).toUpperCase() + tab.slice(1);
-    }
-    const outputEl = document.getElementById(`terminal${tabName}Output`);
-    if (!outputEl) {
-      console.error('Terminal output element not found for tab:', tab, 'element ID:', `terminal${tabName}Output`);
-      return;
-    }
-    
-    if (tab === 'client') {
-      outputEl.textContent += `> ${command}\n`;
-      try {
-        const result = eval(command);
-        outputEl.textContent += `${result}\n`;
-      } catch (err) {
-        outputEl.textContent += `Error: ${err.message}\n`;
-      }
-      outputEl.scrollTop = outputEl.scrollHeight;
-      
-      syncChannel.postMessage({
-        type: 'terminal-output',
-        tab: tab,
-        output: outputEl.textContent,
-        append: false
-      });
-    } else if (tab === 'powershell') {
-      fetch('/__api__/terminal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: command, type: 'powershell' })
-      })
-      .then(res => res.json())
-      .then(data => {
-        const commandLine = document.createElement('div');
-        commandLine.className = 'terminal-line log';
-        commandLine.textContent = `PS> ${command}`;
-        outputEl.appendChild(commandLine);
-        
-        if (data.success) {
-          if (data.output && data.output.trim()) {
-            const lines = data.output.split('\n');
-            lines.forEach(line => {
-              if (line.trim()) {
-                const lineEl = document.createElement('div');
-                lineEl.className = 'terminal-line info';
-                lineEl.textContent = line;
-                outputEl.appendChild(lineEl);
-                
-                syncChannel.postMessage({
-                  type: 'terminal-output',
-                  tab: tab,
-                  output: line + '\n',
-                  append: true,
-                  lineType: 'info'
-                });
-              }
-            });
-          }
-          if (data.error && data.error.trim()) {
-            const errorLines = data.error.split('\n');
-            errorLines.forEach(line => {
-              if (line.trim()) {
-                let lineType = 'warn';
-                if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
-                  lineType = 'error';
-                } else if (line.toLowerCase().includes('warning')) {
-                  lineType = 'warn';
-                }
-                
-                const lineEl = document.createElement('div');
-                lineEl.className = `terminal-line ${lineType}`;
-                lineEl.textContent = line;
-                outputEl.appendChild(lineEl);
-                
-                syncChannel.postMessage({
-                  type: 'terminal-output',
-                  tab: tab,
-                  output: line + '\n',
-                  append: true,
-                  lineType: lineType
-                });
-              }
-            });
-          }
-        } else {
-          const errorLine = document.createElement('div');
-          errorLine.className = 'terminal-line error';
-          errorLine.textContent = `Error: ${data.error || 'Command failed'}`;
-          outputEl.appendChild(errorLine);
-          
-          if (data.stderr) {
-            const stderrLine = document.createElement('div');
-            stderrLine.className = 'terminal-line error';
-            stderrLine.textContent = data.stderr;
-            outputEl.appendChild(stderrLine);
-            
-            syncChannel.postMessage({
-              type: 'terminal-output',
-              tab: tab,
-              output: data.stderr + '\n',
-              append: true,
-              lineType: 'error'
-            });
-          }
-          
-          syncChannel.postMessage({
-            type: 'terminal-output',
-            tab: tab,
-            output: `Error: ${data.error || 'Command failed'}\n`,
-            append: true,
-            lineType: 'error'
-          });
+  async function updateCachePreview(content, getFilePath, previewFrame, isLive = false) {
+    await PreviewEditorManager.updateCachePreview(content, getFilePath, previewFrame, isLive, previewSettings);
+  }
+  
+  function updatePreview(content) {
+    PreviewManager.updatePreview(
+      content, previewFrame, () => filePathRef.current, previewSettings, syncChannel,
+      () => interceptPreviewLinks(), (content) => updatePreviewFallback(content)
+    );
+  }
+  
+  function showImagePreview(imagePath) {
+    PreviewManager.showImagePreview(
+      imagePath, previewFrame, imagePreview, previewImage, previewTitle, backToPreviewBtn
+    );
+  }
+  
+  function showHtmlPreview() {
+    PreviewManager.showHtmlPreview(imagePreview, previewFrame, previewTitle, backToPreviewBtn);
+  }
+  
+  function interceptPreviewLinks() {
+    PreviewManager.interceptPreviewLinks(
+      previewFrame, () => filePathRef.current,
+      (imagePath) => showImagePreview(imagePath),
+      (targetPath) => switchToFile(targetPath)
+    );
+  }
+  
+  async function updatePreviewFallback(content) {
+    await PreviewManager.updatePreviewFallback(content, () => filePathRef.current, previewFrame, previewSettings);
+  }
+  
+  function saveFile() {
+    PreviewEditorManager.saveFile(
+      editor, filePathRef.current, status, ws.current, originalContent, isDirty, updateStatus, saveToEditorTimeout
+    ).then(result => {
+      if (result) {
+        if (result.originalContent !== undefined) {
+          originalContent.current = result.originalContent;
         }
-        
-        outputEl.scrollTop = outputEl.scrollHeight;
-        
-        syncChannel.postMessage({
-          type: 'terminal-output',
-          tab: tab,
-          output: `PS> ${command}\n`,
-          append: true,
-          lineType: 'log'
-        });
-      })
-      .catch(err => {
-        const errorLine = document.createElement('div');
-        errorLine.className = 'terminal-line error';
-        errorLine.textContent = `Network Error: ${err.message}`;
-          outputEl.appendChild(errorLine);
-          outputEl.scrollTop = outputEl.scrollHeight;
-          
-          syncChannel.postMessage({
-          type: 'terminal-output',
-          tab: tab,
-          output: `Network Error: ${err.message}\n`,
-          append: true,
-          lineType: 'error'
-        });
-      });
-    } else if (tab === 'log') {
-      if (previewFrame && previewFrame.contentWindow) {
-        try {
-          const result = previewFrame.contentWindow.eval(command);
-          outputEl.textContent += `> ${command}\n${result}\n`;
-        } catch (err) {
-          outputEl.textContent += `> ${command}\nError: ${err.message}\n`;
+        if (result.isDirty !== undefined) {
+          isDirty.current = result.isDirty;
         }
-      outputEl.scrollTop = outputEl.scrollHeight;
-      
-      syncChannel.postMessage({
-          type: 'terminal-output',
-          tab: tab,
-          output: outputEl.textContent,
-          append: false
-        });
       }
-    }
-  }
-  
-  toggleExplorer.addEventListener('click', () => {
-    toggleFileExplorer();
-  });
-  
-  togglePreview.addEventListener('click', () => {
-    togglePreviewPanel();
-  });
-  
-  const popoutEditorBtn = document.getElementById('popoutEditor');
-  const popoutPreviewBtn = document.getElementById('popoutPreview');
-  const popoutTerminalBtn = document.getElementById('popoutTerminal');
-  
-  if (popoutEditorBtn) {
-    popoutEditorBtn.disabled = true;
-    popoutEditorBtn.style.opacity = '0.5';
-    popoutEditorBtn.style.cursor = 'not-allowed';
-    popoutEditorBtn.title = 'Editor popout disabled';
-  }
-  
-  if (popoutPreviewBtn) {
-    popoutPreviewBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Preview popout clicked');
-      openPreviewPopout();
     });
   }
   
-  if (popoutTerminalBtn) {
-    popoutTerminalBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Terminal popout clicked');
-      openTerminalPopout();
-    });
+  function saveState() {
+    PreviewState.saveState(isRestoringStateRef.current, filePathRef.current, currentDirRef.currentDir, fileExplorerPanel, previewPanel, editorPanel, terminalAtBottomRef.current);
   }
   
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-      e.preventDefault();
-      toggleFileExplorer();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-      e.preventDefault();
-      togglePreviewPanel();
-    }
-  });
-  
-  function toggleFileExplorer() {
-    const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
-    console.log('toggleFileExplorer called, current state:', isCollapsed);
-    fileExplorerPanel.classList.toggle('collapsed');
-    const newState = fileExplorerPanel.classList.contains('collapsed');
-    console.log('toggleFileExplorer new state:', newState);
-    toggleExplorer.textContent = newState ? '▶' : '◀';
-    updateExplorerVisibility();
-    updateBackButton();
-    saveState();
-  }
-  
-  function updateExplorerVisibility() {
-    const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
-    const explorerReopenBar = document.getElementById('explorerReopenBar');
-    const resizerExplorer = document.getElementById('resizerExplorer');
-    
-    console.log('updateExplorerVisibility, collapsed:', isCollapsed);
-    
-    if (explorerReopenBar) {
-      explorerReopenBar.style.display = isCollapsed ? 'flex' : 'none';
-      console.log('Explorer reopen bar display:', explorerReopenBar.style.display);
-    }
-    
-    if (resizerExplorer) {
-      resizerExplorer.style.display = isCollapsed ? 'none' : 'block';
+  function restoreState() {
+    const terminalPanel = document.getElementById('terminalPanel');
+    const result = PreviewState.restoreState(
+      forceLoad, filePathRef.current, currentDirRef.currentDir, previewSettings,
+      fileExplorerPanel, toggleExplorer, previewPanel, togglePreview,
+      editorPanel, terminalPanel, fileName, loadFileTree, loadFile,
+      updateExplorerVisibility, updatePreviewVisibility, updateTerminalVisibility,
+      moveTerminalToBottomPosition, moveTerminalToExplorerPosition
+    );
+    if (result) {
+      if (result.filePath !== filePathRef.current) {
+        filePathRef.current = result.filePath;
+        filePath = result.filePath;
+      }
+      if (result.currentDir !== currentDirRef.currentDir) {
+        currentDirRef.currentDir = result.currentDir;
+        currentDir = result.currentDir;
+      }
     }
   }
   
-  function togglePreviewPanel() {
-    const isCollapsed = previewPanel.classList.contains('collapsed');
-    console.log('togglePreviewPanel called, current state:', isCollapsed);
-    previewPanel.classList.toggle('collapsed');
-    const newState = previewPanel.classList.contains('collapsed');
-    console.log('togglePreviewPanel new state:', newState);
-    
-    updatePreviewVisibility();
-    togglePreview.textContent = newState ? '▶' : '◀';
-    saveState();
+  function resetSettings() {
+    const terminalPanel = document.getElementById('terminalPanel');
+    PreviewState.resetSettings(
+      fileExplorerPanel, toggleExplorer, previewPanel, togglePreview,
+      editorPanel, terminalPanel, updateExplorerVisibility,
+      updatePreviewVisibility, updateTerminalVisibility, status
+    );
   }
   
-  function updatePreviewVisibility() {
-    const isCollapsed = previewPanel.classList.contains('collapsed');
-    const previewReopenBar = document.getElementById('previewReopenBar');
+  function setupResizers() {
     const container = document.querySelector('.preview-container');
+    const resizerExplorer = document.getElementById('resizerExplorer');
+    const resizerEditor = document.getElementById('resizerEditor');
+    const resizerTerminal = document.getElementById('resizerTerminal');
+    const terminalPanel = document.getElementById('terminalPanel');
     
-    console.log('updatePreviewVisibility, collapsed:', isCollapsed);
-    
-    if (resizerEditor) {
-      resizerEditor.style.display = isCollapsed ? 'none' : 'block';
-    }
-    
-    if (previewReopenBar) {
-      previewReopenBar.style.display = isCollapsed ? 'flex' : 'none';
-      console.log('Preview reopen bar display:', previewReopenBar.style.display);
-    }
-    
-    if (container) {
-      if (isCollapsed) {
-        container.classList.add('preview-collapsed');
-      } else {
-        container.classList.remove('preview-collapsed');
-      }
-    }
-    
-    if (isCollapsed) {
-      const currentWidth = editorPanel.style.width;
-      if (currentWidth && currentWidth !== '') {
-        editorPanel.dataset.previousWidth = currentWidth;
-      }
-      editorPanel.style.flex = '1 1 auto';
-      editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
-      editorPanel.style.width = '';
-    } else {
-      if (editorPanel.dataset.previousWidth) {
-        editorPanel.style.width = editorPanel.dataset.previousWidth;
-        editorPanel.style.flex = 'none';
-        delete editorPanel.dataset.previousWidth;
-      } else if (!editorPanel.style.width || editorPanel.style.width === '') {
-        editorPanel.style.flex = '1 1 auto';
-      }
-    }
+    PreviewResizers.setupResizers(
+      container, resizerExplorer, resizerEditor, resizerTerminal, terminalPanel,
+      fileExplorerPanel, previewPanel, editorPanel, terminalAtBottomRef, saveState
+    );
   }
   
-  if (resizerEditor && previewPanel) {
-    if (previewPanel.classList.contains('collapsed')) {
-      resizerEditor.style.display = 'none';
-    }
+  function handleWindowResize() {
+    PreviewResizers.handleWindowResize(() => adjustPanelsOnResize());
+  }
+  
+  function adjustPanelsOnResize() {
+    PreviewResizers.adjustPanelsOnResize(fileExplorerPanel, previewPanel, editorPanel);
   }
   
   const toggleTerminal = document.getElementById('toggleTerminal');
@@ -775,2542 +458,178 @@ require(['vs/editor/editor.main'], function() {
   const moveTerminalToExplorer = document.getElementById('moveTerminalToExplorer');
   const container = document.querySelector('.preview-container');
   
-  let terminalAtBottom = false;
+  setupFileExplorer();
+  
+  PreviewInitialization.restoreOrLoadFile(
+    forceLoad, filePath, loadFile, updateExplorerVisibility, updatePreviewVisibility,
+    updateTerminalVisibility, restoreState, terminalPanel, isRestoringStateRef
+  );
+  
+  setupContextMenu();
+  setupDragAndDrop();
+  setupTerminal();
+  setupWebSocket();
+  
+  PreviewSyncChannel.setupSyncChannel(
+    syncChannel, () => filePathRef.current, editor, originalContent, isDirty,
+    updateStatus, previewFrame, handleTerminalCommand, editorPanel, previewPanel,
+    updatePreviewVisibility, updateTerminalVisibility
+  );
+  
+  const popoutEditorBtn = document.getElementById('popoutEditor');
+  if (popoutEditorBtn) {
+    popoutEditorBtn.disabled = true;
+    popoutEditorBtn.style.opacity = '0.5';
+    popoutEditorBtn.style.cursor = 'not-allowed';
+    popoutEditorBtn.title = 'Editor popout disabled';
+  }
+  
+  PreviewEvents.setupPanelToggleHandlers(toggleExplorer, togglePreview, toggleFileExplorer, togglePreviewPanel);
+  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel);
+  
+  function toggleFileExplorer() {
+    PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
+  }
+  
+  function updateExplorerVisibility() {
+    PreviewUI.updateExplorerVisibility(fileExplorerPanel);
+  }
+  
+  function togglePreviewPanel() {
+    PreviewUI.togglePreviewPanel(previewPanel, togglePreview, updatePreviewVisibility, saveState, refreshPreview);
+  }
+  
+  function updatePreviewVisibility() {
+    PreviewUI.updatePreviewVisibility(previewPanel, editorPanel, resizerEditor);
+  }
+  
+  if (resizerEditor && previewPanel) {
+    if (previewPanel.classList.contains('collapsed')) {
+      resizerEditor.style.display = 'none';
+    }
+  }
   
   function updateTerminalVisibility() {
-    if (!terminalPanel) return;
-    const isCollapsed = terminalPanel.classList.contains('collapsed');
-    
-    if (toggleTerminal) {
-      toggleTerminal.textContent = isCollapsed ? '+' : '−';
-    }
-    
-    if (resizerTerminal) {
-      resizerTerminal.style.display = isCollapsed ? 'none' : 'block';
-    }
-    
-    if (terminalReopenBar) {
-      terminalReopenBar.style.display = isCollapsed ? 'flex' : 'none';
-    }
+    PreviewTerminalUI.updateTerminalVisibility(terminalPanel, toggleTerminal, resizerTerminal, terminalReopenBar);
   }
   
   function updateTerminalPositionButtons() {
-    if (moveTerminalToBottom) {
-      moveTerminalToBottom.style.display = terminalAtBottom ? 'none' : 'inline-block';
-    }
-    if (moveTerminalToExplorer) {
-      moveTerminalToExplorer.style.display = terminalAtBottom ? 'inline-block' : 'none';
-    }
+    PreviewTerminalUI.updateTerminalPositionButtons(moveTerminalToBottom, moveTerminalToExplorer, terminalAtBottomRef.current);
   }
   
   function moveTerminalToBottomPosition() {
-    if (!terminalPanel || !container || !fileExplorerPanel) return;
-    
-    const fileTree = document.getElementById('fileTree');
-    if (fileTree && terminalPanel.parentNode === fileExplorerPanel) {
-      fileExplorerPanel.removeChild(terminalPanel);
-    }
-    
-    let mainContentWrapper = container.querySelector('.main-content-wrapper');
-    if (!mainContentWrapper) {
-      mainContentWrapper = document.createElement('div');
-      mainContentWrapper.className = 'main-content-wrapper';
-      
-      const children = Array.from(container.children);
-      children.forEach(child => {
-        if (child !== terminalPanel && 
-            !child.classList.contains('main-content-wrapper')) {
-          mainContentWrapper.appendChild(child);
-        }
-      });
-      
-      container.appendChild(mainContentWrapper);
-    }
-    
-    container.appendChild(terminalPanel);
-    
-    terminalPanel.classList.add('at-bottom');
-    container.classList.add('terminal-at-bottom');
-    terminalAtBottom = true;
-    
-    updateTerminalPositionButtons();
-    saveState();
+    PreviewTerminalUI.moveTerminalToBottomPosition(
+      terminalPanel, container, fileExplorerPanel, terminalAtBottomRef,
+      updateTerminalPositionButtons, saveState
+    );
   }
   
   function moveTerminalToExplorerPosition() {
-    if (!terminalPanel || !container || !fileExplorerPanel) return;
-    
-    const mainContentWrapper = container.querySelector('.main-content-wrapper');
-    if (mainContentWrapper) {
-      const children = Array.from(mainContentWrapper.children);
-      children.forEach(child => {
-        container.insertBefore(child, mainContentWrapper);
-      });
-      container.removeChild(mainContentWrapper);
-    }
-    
-    if (terminalPanel.parentNode === container) {
-      container.removeChild(terminalPanel);
-    }
-    
-    const fileTree = document.getElementById('fileTree');
-    if (fileTree) {
-      fileExplorerPanel.insertBefore(terminalReopenBar, fileTree.nextSibling);
-      fileExplorerPanel.insertBefore(terminalPanel, terminalReopenBar.nextSibling);
-    } else {
-      fileExplorerPanel.appendChild(terminalReopenBar);
-      fileExplorerPanel.appendChild(terminalPanel);
-    }
-    
-    terminalPanel.classList.remove('at-bottom');
-    container.classList.remove('terminal-at-bottom');
-    terminalAtBottom = false;
-    
-    updateTerminalPositionButtons();
-    saveState();
+    PreviewTerminalUI.moveTerminalToExplorerPosition(
+      terminalPanel, container, fileExplorerPanel, terminalReopenBar, terminalAtBottomRef,
+      updateTerminalPositionButtons, saveState
+    );
   }
   
-  if (toggleTerminal && terminalPanel) {
-    toggleTerminal.addEventListener('click', () => {
-      terminalPanel.classList.toggle('collapsed');
-      updateTerminalVisibility();
-      saveState();
-    });
-  }
-  
-  if (moveTerminalToBottom && terminalPanel) {
-    moveTerminalToBottom.addEventListener('click', () => {
-      moveTerminalToBottomPosition();
-    });
-  }
-  
-  if (moveTerminalToExplorer && terminalPanel) {
-    moveTerminalToExplorer.addEventListener('click', () => {
-      moveTerminalToExplorerPosition();
-    });
-  }
-  
-  if (reopenTerminalBtn && terminalPanel) {
-    reopenTerminalBtn.addEventListener('click', () => {
-      terminalPanel.classList.remove('collapsed');
-      updateTerminalVisibility();
-      saveState();
-    });
-  }
+  PreviewTerminalUI.setupTerminalEventHandlers(
+    toggleTerminal, terminalPanel, updateTerminalVisibility, saveState,
+    moveTerminalToBottom, moveTerminalToExplorer, moveTerminalToBottomPosition,
+    moveTerminalToExplorerPosition, reopenTerminalBtn
+  );
   
   updateTerminalPositionButtons();
   
   const reopenExplorerBtn = document.getElementById('reopenExplorerBtn');
-  if (reopenExplorerBtn && fileExplorerPanel) {
-    reopenExplorerBtn.addEventListener('click', () => {
-      console.log('Reopen explorer clicked');
-      fileExplorerPanel.classList.remove('collapsed');
-      updateExplorerVisibility();
-      saveState();
-    });
-  }
-  
   const reopenPreviewBtn = document.getElementById('reopenPreviewBtn');
-  if (reopenPreviewBtn && previewPanel) {
-    reopenPreviewBtn.addEventListener('click', () => {
-      console.log('Reopen preview clicked');
-      previewPanel.classList.remove('collapsed');
-      updatePreviewVisibility();
-      togglePreview.textContent = '◀';
-      saveState();
-    });
-  }
   
-  // Don't initialize visibility here - let restoreState() handle it
-  // This prevents resetting to defaults before state is restored
+  PreviewEvents.setupReopenHandlers(
+    reopenExplorerBtn, fileExplorerPanel, updateExplorerVisibility, saveState,
+    reopenPreviewBtn, previewPanel, updatePreviewVisibility, togglePreview, refreshPreview
+  );
   
-  // Back button
-  backBtn.addEventListener('click', () => {
-    goBackFolder();
-  });
-  
-  function goBackFolder() {
-    if (!currentDir || currentDir === '/') return;
-    
-    const parentDir = currentDir.split('/').slice(0, -1).join('/') || '/';
-    loadFileTree(parentDir);
-    currentDir = parentDir;
-    updateBackButton();
-  }
-  
-  function updateBackButton() {
-    backBtn.disabled = !currentDir || currentDir === '/';
-  }
+  PreviewEvents.setupBackButton(backBtn, goBackFolder);
   
   updateBackButton();
   
-  // Create Monaco Editor instance
-  editor = monaco.editor.create(editorContainer, {
-    value: '',
-    language: language,
-    theme: previewSettings.editorTheme,
-    fontSize: previewSettings.editorFontSize,
-    fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-    lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
-    roundedSelection: false,
-    scrollBeyondLastLine: false,
-    readOnly: false,
-    cursorStyle: 'line',
-    automaticLayout: true,
-    minimap: {
-      enabled: true
-    },
-    wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
-    formatOnPaste: true,
-    formatOnType: true,
-    tabSize: previewSettings.editorTabSize,
-    insertSpaces: true,
-    detectIndentation: true,
-    renderWhitespace: 'selection',
-    renderLineHighlight: 'all',
-    bracketPairColorization: {
-      enabled: true
-    }
-  });
+  editor = PreviewEditorSetup.createEditor(editorContainer, language, previewSettings);
+  PreviewSettings.applyPreviewSettings(editor);
   
-  applyPreviewSettings();
+  window.__previewEditor = editor;
+  window.__previewFilePath = () => filePathRef.current;
+  window.__previewUpdatePreview = updatePreview;
+  window.__previewSaveFile = saveFile;
+  window.__previewSyncChannel = syncChannel;
+  window.__previewIsDirty = isDirty;
+  window.__previewCustomConfirm = customConfirm;
   
-  // Handle browser back/forward buttons
-  window.addEventListener('popstate', (e) => {
-    if (e.state && e.state.file) {
-      const newPath = e.state.file;
-      if (newPath !== filePath) {
-        // Don't check for unsaved changes on back/forward
-        filePath = newPath;
-        fileName.textContent = newPath.split('/').pop();
-        const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-        if (newDir !== currentDir) {
-          currentDir = newDir;
-          loadFileTree(currentDir);
-        } else {
-          // Just update the active item if we're in the same directory
-          updateActiveFileTreeItem(newPath);
-        }
-        loadFile(newPath);
-        saveState();
-      }
-    }
-  });
+  const isApplyingExternalChange = { current: false };
+  window.__previewIsApplyingExternalChange = isApplyingExternalChange;
   
-  // Load file content
+  PreviewEditorSetup.setupEditorListeners(
+    editor, () => filePathRef.current, syncChannel, originalContent, isDirty,
+    updateStatus, updatePreview, saveToEditorTimeout, isApplyingExternalChange
+  );
+  
+  PreviewEvents.setupPopstate(
+    filePathRef, fileName, currentDirRef, loadFileTree, updateActiveFileTreeItem, loadFile, saveState
+  );
+  
   loadFile(filePath);
   
-  // Track changes and update preview
-  let saveToEditorTimeout = null;
+  PreviewEvents.setupButtonHandlers(
+    saveBtn, refreshBtn, closeBtn, backToFilesBtn, updatePreview, filePath, customConfirm,
+    isDirty, openPreviewPopout, openTerminalPopout, togglePreviewPanel
+  );
   
-  editor.onDidChangeModelContent(() => {
-      // Sync to popout windows
-      syncChannel.postMessage({
-        type: 'editor-content',
-        filePath: filePath,
-        content: editor.getValue(),
-        isDirty: editor.getValue() !== originalContent
-      });
-      
-      // Sync cursor position
-      const position = editor.getPosition();
-      if (position) {
-        syncChannel.postMessage({
-          type: 'editor-cursor',
-          filePath: filePath,
-          position: position
-        });
-      }
-      
-    const currentContent = editor.getValue();
-    isDirty = currentContent !== originalContent;
-    updateStatus();
-    updatePreview(currentContent);
-    
-    // Save to ide_editor_cache folder for live preview
-    if (saveToEditorTimeout) {
-      clearTimeout(saveToEditorTimeout);
-    }
-    saveToEditorTimeout = setTimeout(() => {
-      if (!filePath) {
-        console.error('Cannot save to ide_editor_cache folder: filePath is not set');
-        return;
-      }
-      
-      fetch('/__api__/files/editor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: currentContent })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success) {
-          console.error('Error saving to ide_editor_cache folder:', data.error);
-        }
-      })
-      .catch(err => {
-        console.error('Error saving to ide_editor_cache folder:', err);
-      });
-    }, 50);
-  });
+  PreviewSettingsUI.setupSettingsEventHandlers(
+    settingsBtn, settingsPanel, settingsCloseBtn, saveSettingsBtn, resetSettingsBtn2,
+    resetSettingsBtn, status, editor, customConfirm, resetSettings
+  );
   
-  // Save on Ctrl+S
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-    saveFile();
-  });
+  PreviewEvents.setupBeforeUnload(isDirty, ws, saveState);
   
-  // Save button
-  saveBtn.addEventListener('click', saveFile);
-  
-  // Refresh preview button
-  refreshBtn.addEventListener('click', () => {
-    updatePreview(editor.getValue());
-    // Broadcast refresh to popout windows
-    syncChannel.postMessage({
-      type: 'preview-refresh'
-    });
-  });
-  
-  // Back to Files button
-  if (backToFilesBtn) {
-    backToFilesBtn.addEventListener('click', () => {
-      const dirPath = filePath.split('/').slice(0, -1).join('/') || '';
-      const targetPath = dirPath ? '/' + dirPath + '/' : '/';
-      window.location.href = targetPath;
-    });
+  if (previewPanel) {
+    PreviewPopouts.setupPreviewPanelObserver(previewPanel);
   }
-  
-  // Close button
-  closeBtn.addEventListener('click', async () => {
-    if (isDirty) {
-      const confirmed = await customConfirm('You have unsaved changes. Are you sure you want to close?');
-      if (!confirmed) {
-      return;
-      }
-    }
-    window.close();
-  });
-  
-  // Settings button
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => {
-      console.log('Settings button clicked');
-      openSettings();
-    });
-  } else {
-    console.error('Settings button not found!');
-  }
-  
-  if (!settingsPanel) {
-    console.error('Settings panel not found!');
-  }
-  
-  if (settingsCloseBtn) {
-    settingsCloseBtn.addEventListener('click', closeSettings);
-  }
-  
-  if (settingsPanel) {
-    settingsPanel.addEventListener('click', (e) => {
-      if (e.target === settingsPanel) {
-        closeSettings();
-      }
-    });
-  }
-  
-  if (saveSettingsBtn) {
-    saveSettingsBtn.addEventListener('click', () => {
-      const autoRefreshPreview = document.getElementById('autoRefreshPreview');
-      const pageTheme = document.getElementById('pageTheme');
-      const customThemeCSS = document.getElementById('customThemeCSS');
-      const editorFontSize = document.getElementById('editorFontSize');
-      const editorTheme = document.getElementById('editorTheme');
-      const editorWordWrap = document.getElementById('editorWordWrap');
-      const editorLineNumbers = document.getElementById('editorLineNumbers');
-      const editorTabSize = document.getElementById('editorTabSize');
-      const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
-      const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
-      
-      previewSettings.autoRefreshPreview = autoRefreshPreview ? autoRefreshPreview.checked : true;
-      previewSettings.pageTheme = pageTheme ? pageTheme.value : 'dark';
-      previewSettings.customThemeCSS = customThemeCSS ? customThemeCSS.value : '';
-      previewSettings.editorFontSize = editorFontSize ? parseInt(editorFontSize.value) : 14;
-      previewSettings.editorTheme = editorTheme ? editorTheme.value : 'vs-dark';
-      previewSettings.editorWordWrap = editorWordWrap ? editorWordWrap.checked : false;
-      previewSettings.editorLineNumbers = editorLineNumbers ? editorLineNumbers.checked : true;
-      previewSettings.editorTabSize = editorTabSize ? parseInt(editorTabSize.value) : 4;
-      previewSettings.defaultExplorerVisible = defaultExplorerVisible ? defaultExplorerVisible.checked : true;
-      previewSettings.defaultTerminalVisible = defaultTerminalVisible ? defaultTerminalVisible.checked : false;
-      
-      const pageThemeEl = document.getElementById('pageTheme');
-      if (pageThemeEl) {
-        pageThemeEl.removeEventListener('change', handleThemePreview);
-      }
-      
-      originalTheme = null;
-      savePreviewSettings();
-      
-      loadTheme(previewSettings.pageTheme).then(() => {
-        applyPreviewSettings();
-        closeSettings();
-        
-        status.textContent = 'Settings saved';
-        status.className = 'status saved';
-        setTimeout(() => {
-          status.textContent = 'Ready';
-          status.className = 'status';
-        }, 2000);
-      }).catch((error) => {
-        console.error('Error applying theme:', error);
-        applyPreviewSettings();
-        closeSettings();
-        
-        status.textContent = 'Settings saved (theme load failed)';
-        status.className = 'status error';
-        setTimeout(() => {
-          status.textContent = 'Ready';
-          status.className = 'status';
-        }, 2000);
-      });
-    });
-  }
-  
-  const loadDarkExampleBtn = document.getElementById('loadDarkExampleBtn');
-  const loadLightExampleBtn = document.getElementById('loadLightExampleBtn');
-  const clearCustomThemeBtn = document.getElementById('clearCustomThemeBtn');
-  
-  if (loadDarkExampleBtn) {
-    loadDarkExampleBtn.addEventListener('click', async () => {
-      try {
-        const response = await fetch('/__api__/theme?name=dark');
-        if (response.ok) {
-          const darkCSS = await response.text();
-          const customThemeCSS = document.getElementById('customThemeCSS');
-          if (customThemeCSS) {
-            customThemeCSS.value = darkCSS;
-          }
-        }
-      } catch (error) {
-        console.error('Error loading dark example:', error);
-      }
-    });
-  }
-  
-  if (loadLightExampleBtn) {
-    loadLightExampleBtn.addEventListener('click', async () => {
-      try {
-        const response = await fetch('/__api__/theme?name=light');
-        if (response.ok) {
-          const lightCSS = await response.text();
-          const customThemeCSS = document.getElementById('customThemeCSS');
-          if (customThemeCSS) {
-            customThemeCSS.value = lightCSS;
-          }
-        }
-      } catch (error) {
-        console.error('Error loading light example:', error);
-      }
-    });
-  }
-  
-  if (clearCustomThemeBtn) {
-    clearCustomThemeBtn.addEventListener('click', () => {
-      const customThemeCSS = document.getElementById('customThemeCSS');
-      if (customThemeCSS) {
-        customThemeCSS.value = '';
-      }
-    });
-  }
-  
-  if (resetSettingsBtn2) {
-    resetSettingsBtn2.addEventListener('click', () => {
-      previewSettings = {
-        autoRefreshPreview: true,
-        pageTheme: 'dark',
-        customThemeCSS: '',
-        editorFontSize: 14,
-        editorTheme: 'vs-dark',
-        editorWordWrap: false,
-        editorLineNumbers: true,
-        editorTabSize: 4,
-        defaultExplorerVisible: true,
-        defaultTerminalVisible: false
-      };
-      
-      const pageThemeEl = document.getElementById('pageTheme');
-      if (pageThemeEl) {
-        pageThemeEl.value = 'dark';
-      }
-      
-      loadTheme('dark').then(() => {
-        applyPreviewSettings();
-        originalTheme = 'dark';
-        
-        status.textContent = 'Settings reset to defaults (preview)';
-        status.className = 'status saved';
-        setTimeout(() => {
-          status.textContent = 'Ready';
-          status.className = 'status';
-        }, 2000);
-      });
-    });
-  }
-  
-  // Reset settings button
-  if (resetSettingsBtn) {
-    resetSettingsBtn.addEventListener('click', async () => {
-      const confirmed = await customConfirm('Are you sure you want to reset all settings? This will clear panel sizes, positions, and preferences.');
-      if (confirmed) {
-        resetSettings();
-      }
-    });
-  }
-  
-  // Warn before closing with unsaved changes
-  window.addEventListener('beforeunload', (e) => {
-    if (isDirty) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
   
   // Setup resizers
   setupResizers();
   
-  // Setup file explorer
-  function setupFileExplorer() {
-    // Load file tree for current directory
-    loadFileTree(currentDir || '/');
-  }
-  
-  // Custom prompt function (replaces browser prompt which doesn't work in sandboxed iframe)
-  function customPrompt(title, defaultValue = '') {
-    return new Promise((resolve) => {
-      const dialog = document.getElementById('customPromptDialog');
-      const input = document.getElementById('customPromptInput');
-      const titleEl = document.getElementById('customPromptTitle');
-      const okBtn = document.getElementById('customPromptOk');
-      const cancelBtn = document.getElementById('customPromptCancel');
-      const closeBtn = document.getElementById('customPromptClose');
-      
-      titleEl.textContent = title;
-      input.value = defaultValue;
-      dialog.style.display = 'flex';
-      input.focus();
-      input.select();
-      
-      const cleanup = () => {
-        dialog.style.display = 'none';
-        input.value = '';
-        okBtn.onclick = null;
-        cancelBtn.onclick = null;
-        closeBtn.onclick = null;
-        input.onkeydown = null;
-      };
-      
-      const handleOk = () => {
-        const value = input.value.trim();
-        cleanup();
-        resolve(value || null);
-      };
-      
-      const handleCancel = () => {
-        cleanup();
-        resolve(null);
-      };
-      
-      okBtn.onclick = handleOk;
-      cancelBtn.onclick = handleCancel;
-      closeBtn.onclick = handleCancel;
-      
-      input.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          handleOk();
-        } else if (e.key === 'Escape') {
-          handleCancel();
-        }
-      };
-      
-      // Close on background click
-      dialog.onclick = (e) => {
-        if (e.target === dialog) {
-          handleCancel();
-        }
-      };
-    });
-  }
-  
-  function customConfirm(message) {
-    return new Promise((resolve) => {
-      const dialog = document.getElementById('customConfirmDialog');
-      const messageEl = document.getElementById('customConfirmMessage');
-      const okBtn = document.getElementById('customConfirmOk');
-      const cancelBtn = document.getElementById('customConfirmCancel');
-      const closeBtn = document.getElementById('customConfirmClose');
-      
-      messageEl.textContent = message;
-      dialog.style.display = 'flex';
-      okBtn.focus();
-      
-      const cleanup = () => {
-        dialog.style.display = 'none';
-        okBtn.onclick = null;
-        cancelBtn.onclick = null;
-        closeBtn.onclick = null;
-        dialog.onkeydown = null;
-      };
-      
-      const handleOk = () => {
-        cleanup();
-        resolve(true);
-      };
-      
-      const handleCancel = () => {
-        cleanup();
-        resolve(false);
-      };
-      
-      okBtn.onclick = handleOk;
-      cancelBtn.onclick = handleCancel;
-      closeBtn.onclick = handleCancel;
-      
-      // Handle keyboard
-      const handleKeydown = (e) => {
-        if (e.key === 'Enter') {
-          handleOk();
-        } else if (e.key === 'Escape') {
-          handleCancel();
-        }
-      };
-      dialog.onkeydown = handleKeydown;
-      
-      // Close on background click
-      dialog.onclick = (e) => {
-        if (e.target === dialog) {
-          handleCancel();
-        }
-      };
-    });
-  }
-  
-  function loadFileTree(dir) {
-    fileTree.innerHTML = '<div class="file-tree-loading">Loading...</div>';
-    
-    // Update current directory
-    currentDir = dir;
-    updateBackButton();
-    saveState();
-    
-    // Fetch directory listing
-    const apiPath = dir === '/' ? '/' : dir;
-    fetch('/__api__/files?path=' + encodeURIComponent(apiPath) + '&list=true')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.files) {
-          renderFileTree(data.files, dir);
-        } else {
-          fileTree.innerHTML = '<div class="file-tree-loading">Error loading files</div>';
-        }
-      })
-      .catch(() => {
-        // Fallback: try to get directory listing
-        fetchDirectoryListing(dir);
-      });
-  }
-  
-  function fetchDirectoryListing(dir) {
-    fetch(dir === '/' ? '/' : dir)
-      .then(res => res.text())
-      .then(html => {
-        // Parse HTML to extract file list (simplified approach)
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const links = doc.querySelectorAll('table a[href]');
-        const files = [];
-        
-        links.forEach(link => {
-          const href = link.getAttribute('href');
-          const name = link.textContent.trim();
-          if (href && !href.startsWith('..') && !href.startsWith('http')) {
-            const fullPath = dir === '/' ? href : dir + '/' + href;
-            files.push({
-              name: name,
-              path: fullPath.replace(/\/+/g, '/'),
-              isDirectory: href.endsWith('/')
-            });
-          }
-        });
-        
-        renderFileTree(files, dir);
-      })
-      .catch(() => {
-        fileTree.innerHTML = '<div class="file-tree-loading">Error loading directory</div>';
-      });
-  }
-  
-  function renderFileTree(files, dir) {
-    if (!files || files.length === 0) {
-      fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
-      return;
-    }
-    
-    // Filter out ide_editor_cache folder
-    files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
-    
-    // Sort: folders first, then files
-    files.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
-    
-    fileTree.innerHTML = '';
-    
-    files.forEach(file => {
-      const item = document.createElement('div');
-      item.className = 'file-tree-item' + (file.isDirectory ? ' file-tree-folder' : '');
-      item.dataset.path = file.path;
-      item.dataset.isDirectory = file.isDirectory;
-      item.dataset.name = file.name;
-      
-      // Normalize paths for comparison
-      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
-      const normalizedFilepath = file.path.replace(/\/+/g, '/');
-      if (normalizedFilepath === normalizedCurrentPath) {
-        item.classList.add('active');
-      }
-      
-      const icon = document.createElement('span');
-      icon.className = 'file-tree-item-icon';
-      if (!file.isDirectory) {
-        icon.textContent = '📄';
-      }
-      
-      const name = document.createElement('span');
-      name.className = 'file-tree-item-name';
-      name.textContent = file.name;
-      
-      item.appendChild(icon);
-      item.appendChild(name);
-      
-      // Make files and folders draggable FIRST (before click handlers)
-      // Set both attribute and property to ensure it works
-      item.setAttribute('draggable', 'true');
-      item.draggable = true;
-      
-      // Track if we're dragging to prevent click navigation
-      let isDragging = false;
-      let dragStartTime = 0;
-      let mouseDownTime = 0;
-      let mouseDownPos = { x: 0, y: 0 };
-      
-      // Track mousedown to detect drag vs click
-      // Don't prevent default or stop propagation - it might interfere with drag
-      item.addEventListener('mousedown', (e) => {
-        mouseDownTime = Date.now();
-        mouseDownPos = { x: e.clientX, y: e.clientY };
-        // Don't prevent default or stop propagation - let drag start naturally
-      });
-      
-      item.addEventListener('dragstart', (e) => {
-        // Ensure dataTransfer is available
-        if (!e.dataTransfer) {
-          console.error('dataTransfer not available in dragstart');
-          e.preventDefault();
-          return false;
-        }
-        
-        isDragging = true;
-        dragStartTime = Date.now();
-        
-        // Set effectAllowed BEFORE setting data
-        e.dataTransfer.effectAllowed = 'move';
-        
-        // Use the full path from dataset - ensure it's the absolute path
-        const fullPath = file.path;
-        
-        // Set data - must be done synchronously in dragstart
-        // Only set text/plain - some browsers have issues with multiple types
-        try {
-          e.dataTransfer.setData('text/plain', fullPath);
-        } catch (err) {
-          console.error('Error setting drag data:', err);
-          e.preventDefault();
-          return false;
-        }
-        
-        item.classList.add('dragging');
-        
-        // Don't prevent default or stop propagation - let the drag happen naturally
-        // CRITICAL: Don't return false or preventDefault here - it will cancel the drag
-        
-        // Show parent folder drop zone AFTER a small delay to avoid interfering with drag
-        setTimeout(() => {
-          showParentFolderDropZone(dir);
-        }, 0);
-      });
-      
-      item.addEventListener('dragend', (e) => {
-        item.classList.remove('dragging');
-        hideParentFolderDropZone();
-        // Remove drag-over classes from all items
-        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
-          el.classList.remove('drag-over');
-        });
-        // Reset dragging flag after a short delay to allow click to be ignored
-        setTimeout(() => {
-          isDragging = false;
-        }, 100);
-      });
-      
-      // Left click - check if we just dragged
-      if (file.isDirectory) {
-        item.addEventListener('click', (e) => {
-          // Don't navigate if we just finished dragging
-          if (isDragging || item.classList.contains('dragging')) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-          }
-          e.stopPropagation();
-          // Navigate to folder
-          loadFileTree(file.path);
-        });
-      } else {
-        item.addEventListener('click', (e) => {
-          // Don't switch file if we just finished dragging
-          if (isDragging || item.classList.contains('dragging')) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-          }
-          e.stopPropagation();
-          switchToFile(file.path);
-        });
-      }
-      
-      // Right click for context menu
-      item.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showContextMenu(e, file.path, file.isDirectory, file.name);
-      });
-      
-      // Double click to rename
-      item.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        renameFile(file.path, file.name, file.isDirectory);
-      });
-      
-      // Drag and drop for folders (accept file and folder drops)
-      if (file.isDirectory) {
-        item.addEventListener('dragover', (e) => {
-          // Only allow if dragging a file/folder (not external files)
-          const hasTextPlain = e.dataTransfer.types.includes('text/plain');
-          if (hasTextPlain) {
-          e.preventDefault();
-          e.stopPropagation();
-            e.dataTransfer.dropEffect = 'move';
-          item.classList.add('drag-over');
-          }
-        }, false);
-        
-        item.addEventListener('dragleave', (e) => {
-          // Only remove drag-over if we're actually leaving the item (not just moving to a child)
-          if (!item.contains(e.relatedTarget)) {
-          e.preventDefault();
-          e.stopPropagation();
-          item.classList.remove('drag-over');
-          }
-        });
-        
-        item.addEventListener('drop', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          // Clear all drag-over classes
-          document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
-            el.classList.remove('drag-over');
-          });
-          
-          const draggedFilePath = e.dataTransfer.getData('text/plain');
-          
-          if (draggedFilePath && draggedFilePath.trim()) {
-            // Don't allow dropping on itself or its children
-            if (draggedFilePath !== file.path && !file.path.startsWith(draggedFilePath + '/')) {
-              // Move file/folder to this folder
-              moveFileToFolder(draggedFilePath, file.path);
-            }
-          } else {
-            // Handle external file drops
-          const files = e.dataTransfer.files;
-          if (files.length > 0) {
-            handleFileDrop(files, file.path);
-            }
-          }
-        });
-      }
-      
-      fileTree.appendChild(item);
-    });
-  }
-  
-  // Show parent folder drop zone ("...")
-  function showParentFolderDropZone(currentDir) {
-    if (!currentDir || currentDir === '/') return; // Already at root
-    
-    // Check if parent folder already exists
-    let parentItem = fileTree.querySelector('.file-tree-item[data-path="__parent__"]');
-    if (!parentItem) {
-      parentItem = document.createElement('div');
-      parentItem.className = 'file-tree-item file-tree-folder file-tree-parent';
-      parentItem.dataset.path = '__parent__';
-      parentItem.dataset.isDirectory = 'true';
-      parentItem.dataset.name = '...';
-      
-      //const icon = document.createElement('span');
-      //icon.className = 'file-tree-item-icon';
-      //icon.textContent = '📁';
-      
-      const name = document.createElement('span');
-      name.className = 'file-tree-item-name';
-      name.textContent = '...';
-      
-      //parentItem.appendChild(icon);
-      parentItem.appendChild(name);
-      
-      // Add drop handlers
-      parentItem.addEventListener('dragover', (e) => {
-        const hasTextPlain = e.dataTransfer.types.includes('text/plain');
-        if (hasTextPlain) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.dataTransfer.dropEffect = 'move';
-          parentItem.classList.add('drag-over');
-        }
-      }, false);
-      
-      parentItem.addEventListener('dragleave', (e) => {
-        // Only remove drag-over if we're actually leaving the item
-        if (!parentItem.contains(e.relatedTarget)) {
-          e.preventDefault();
-          e.stopPropagation();
-          parentItem.classList.remove('drag-over');
-        }
-      });
-      
-      parentItem.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Clear all drag-over classes
-        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
-          el.classList.remove('drag-over');
-        });
-        
-        const draggedFilePath = e.dataTransfer.getData('text/plain');
-        
-        if (draggedFilePath && draggedFilePath.trim()) {
-          // Get parent directory
-          const parentDir = currentDir.split('/').slice(0, -1).join('/') || '/';
-          moveFileToFolder(draggedFilePath, parentDir);
-        }
-      });
-      
-      // Insert at the beginning
-      fileTree.insertBefore(parentItem, fileTree.firstChild);
-    }
-  }
-  
-  // Hide parent folder drop zone
-  function hideParentFolderDropZone() {
-    const parentItem = fileTree.querySelector('.file-tree-item[data-path="__parent__"]');
-    if (parentItem) {
-      parentItem.remove();
-    }
-  }
-  
-  // Move file or folder to a folder
-  function moveFileToFolder(filePath, targetFolderPath) {
-    const fileName = filePath.split('/').pop();
-    const newPath = targetFolderPath === '/' ? fileName : targetFolderPath + '/' + fileName;
-    
-    // Don't move if it's the same location
-    const currentDir = filePath.split('/').slice(0, -1).join('/') || '/';
-    if (currentDir === targetFolderPath) {
-      return;
-    }
-    
-    // Determine if it's a directory by checking if it exists in the file tree
-    const item = document.querySelector(`.file-tree-item[data-path="${filePath}"]`);
-    const isDirectory = item ? item.dataset.isDirectory === 'true' : false;
-    
-    fetch('/__api__/files', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        path: filePath, 
-        newPath: newPath, 
-        isDirectory: isDirectory 
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        // Reload file tree
-        loadFileTree(currentDir);
-        // If this was the current file, switch to new path
-        if (filePath === filePath) {
-          switchToFile(newPath);
-        }
-        // Reload target directory if different (to show the moved file)
-        if (targetFolderPath !== currentDir) {
-          // Reload after a short delay to ensure move completed
-          setTimeout(() => {
-            // Only reload if we're viewing that directory
-            if (currentDir === targetFolderPath) {
-              loadFileTree(targetFolderPath);
-            }
-          }, 100);
-        }
-        status.textContent = `Moved ${fileName}`;
-        status.className = 'status saved';
-        setTimeout(() => {
-          if (!isDirty) {
-            status.textContent = 'Ready';
-            status.className = 'status';
-          }
-        }, 2000);
-      } else {
-        alert('Error: ' + data.error);
-      }
-    })
-    .catch(err => {
-      alert('Error moving file: ' + err.message);
-    });
-  }
-  
-  function setupDragAndDrop() {
-    // Enable drag and drop on file tree for external files
-    fileTree.addEventListener('dragover', (e) => {
-      // Only prevent default for external file drops (has files)
-      // For internal drags (text/plain), let the folder items handle it
-      if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      e.stopPropagation();
-      fileTree.classList.add('drag-over');
-      }
-    });
-    
-    fileTree.addEventListener('dragleave', (e) => {
-      // Only remove class if we're leaving the file tree entirely
-      if (!fileTree.contains(e.relatedTarget)) {
-        e.preventDefault();
-        e.stopPropagation();
-        fileTree.classList.remove('drag-over');
-      }
-    });
-    
-    fileTree.addEventListener('drop', (e) => {
-      // Only handle external file drops here
-      if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      e.stopPropagation();
-      fileTree.classList.remove('drag-over');
-      
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        // Check if we dropped over a folder
-        const target = e.target.closest('.file-tree-folder');
-        if (target && target.dataset.path) {
-          // Drop into specific folder
-          handleFileDrop(files, target.dataset.path);
-        } else {
-          // Drop into current directory
-          handleFileDrop(files, currentDir || '/');
-          }
-        }
-      }
-    });
-  }
-  
-  function handleFileDrop(files, targetDir) {
-    const normalizedDir = targetDir === '/' ? '' : targetDir.replace(/^\/+|\/+$/g, '');
-    
-    // Upload each file
-    Array.from(files).forEach((file) => {
-      uploadFile(file, normalizedDir);
-    });
-  }
-  
-  function uploadFile(file, targetDir) {
-    const fileName = file.name;
-    const targetPath = targetDir ? targetDir + '/' + fileName : fileName;
-    
-    // Show upload status
-    status.textContent = `Uploading ${fileName}...`;
-    status.className = 'status saving';
-    
-    // Read file content
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      let content = e.target.result;
-      let isBinary = false;
-      
-      // If it's a data URL (binary file), extract the base64 part
-      if (typeof content === 'string' && content.startsWith('data:')) {
-        isBinary = true;
-        // Extract base64 content (remove data:type;base64, prefix)
-        const base64Match = content.match(/^data:[^;]+;base64,(.+)$/);
-        if (base64Match) {
-          content = base64Match[1];
-        } else {
-          // Fallback: try to extract after comma
-          const commaIndex = content.indexOf(',');
-          if (commaIndex !== -1) {
-            content = content.substring(commaIndex + 1);
-          }
-        }
-      }
-      
-      // Upload file via API
-      fetch('/__api__/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          path: targetPath, 
-          content: content,
-          isDirectory: false,
-          isBinary: isBinary
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          // Reload file tree
-          loadFileTree(currentDir);
-          status.textContent = `Uploaded ${fileName}`;
-          status.className = 'status saved';
-          setTimeout(() => {
-            if (!isDirty) {
-              status.textContent = 'Ready';
-              status.className = 'status';
-            }
-          }, 2000);
-        } else {
-          status.textContent = 'Error: ' + data.error;
-          status.className = 'status error';
-        }
-      })
-      .catch(err => {
-        status.textContent = 'Error uploading file';
-        status.className = 'status error';
-        console.error(err);
-      });
-    };
-    
-    reader.onerror = () => {
-      status.textContent = 'Error reading file';
-      status.className = 'status error';
-    };
-    
-    // Determine how to read the file
-    const textTypes = ['text/', 'application/json', 'application/javascript', 'application/xml'];
-    const isTextFile = textTypes.some(type => file.type.startsWith(type)) || 
-                       file.type === '' || 
-                       fileName.endsWith('.txt') || 
-                       fileName.endsWith('.html') || 
-                       fileName.endsWith('.css') || 
-                       fileName.endsWith('.js') ||
-                       fileName.endsWith('.json') ||
-                       fileName.endsWith('.md');
-    
-    if (isTextFile) {
-      reader.readAsText(file);
-    } else {
-      // For binary files, read as data URL (base64)
-      reader.readAsDataURL(file);
-    }
-  }
-  
-  function setupContextMenu() {
-    // Close context menu when clicking elsewhere
-    document.addEventListener('click', () => {
-      contextMenu.style.display = 'none';
-    });
-    
-    // Context menu items
-    document.getElementById('contextNewFile').addEventListener('click', () => {
-      createNewFile();
-      contextMenu.style.display = 'none';
-    });
-    
-    document.getElementById('contextNewFolder').addEventListener('click', () => {
-      createNewFolder();
-      contextMenu.style.display = 'none';
-    });
-    
-    document.getElementById('contextRename').addEventListener('click', () => {
-      const path = contextMenu.dataset.path;
-      const name = contextMenu.dataset.name;
-      const isDir = contextMenu.dataset.isDirectory === 'true';
-      renameFile(path, name, isDir);
-      contextMenu.style.display = 'none';
-    });
-    
-    document.getElementById('contextDelete').addEventListener('click', () => {
-      const path = contextMenu.dataset.path;
-      const isDir = contextMenu.dataset.isDirectory === 'true';
-      deleteFile(path, isDir);
-      contextMenu.style.display = 'none';
-    });
-    
-    // Right-click on empty space in file tree
-    fileTree.addEventListener('contextmenu', (e) => {
-      if (e.target === fileTree || e.target.classList.contains('file-tree-loading')) {
-        e.preventDefault();
-        showContextMenu(e, '', false, '', true); // Empty space - only show create options
-      }
-    });
-  }
-  
-  function showContextMenu(e, path, isDirectory, name, onlyCreate = false) {
-    contextMenu.dataset.path = path;
-    contextMenu.dataset.name = name;
-    contextMenu.dataset.isDirectory = isDirectory;
-    
-    // Position menu
-    contextMenu.style.display = 'block';
-    contextMenu.style.left = e.pageX + 'px';
-    contextMenu.style.top = e.pageY + 'px';
-    
-    // Show/hide menu items
-    document.getElementById('contextRename').style.display = onlyCreate ? 'none' : 'block';
-    document.getElementById('contextDelete').style.display = onlyCreate ? 'none' : 'block';
-    document.querySelector('.context-menu-divider').style.display = onlyCreate ? 'none' : 'block';
-  }
-  
-  async function createNewFile() {
-    const fileName = await customPrompt('Enter file name:');
-    if (!fileName) return;
-    
-    const newPath = currentDir ? currentDir + '/' + fileName : fileName;
-    
-    fetch('/__api__/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: newPath, content: '', isDirectory: false })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        loadFileTree(currentDir);
-        // Open the new file
-        switchToFile(newPath);
-      } else {
-        alert('Error: ' + data.error);
-      }
-    })
-    .catch(err => {
-      alert('Error creating file: ' + err.message);
-    });
-  }
-  
-  async function createNewFolder() {
-    const folderName = await customPrompt('Enter folder name:');
-    if (!folderName) return;
-    
-    const newPath = currentDir ? currentDir + '/' + folderName : folderName;
-    
-    fetch('/__api__/files', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: newPath, content: '', isDirectory: true })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        loadFileTree(currentDir);
-      } else {
-        alert('Error: ' + data.error);
-      }
-    })
-    .catch(err => {
-      alert('Error creating folder: ' + err.message);
-    });
-  }
-  
-  async function renameFile(path, oldName, isDirectory) {
-    const newName = await customPrompt('Enter new name:', oldName);
-    if (!newName || newName === oldName) return;
-    
-    const parentDir = path.split('/').slice(0, -1).join('/') || '';
-    const newPath = parentDir ? parentDir + '/' + newName : newName;
-    
-    fetch('/__api__/files', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: path, newPath: newPath, isDirectory: isDirectory })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        loadFileTree(currentDir);
-        // If this is the current file, switch to new path
-        if (path === filePath) {
-          switchToFile(newPath);
-        }
-      } else {
-        alert('Error: ' + data.error);
-      }
-    })
-    .catch(err => {
-      alert('Error renaming: ' + err.message);
-    });
-  }
-  
-  async function deleteFile(path, isDirectory) {
-    const confirmed = await customConfirm(`Are you sure you want to delete ${isDirectory ? 'folder' : 'file'} "${path.split('/').pop()}"?`);
-    if (!confirmed) {
-      return;
-    }
-    
-    fetch('/__api__/files', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: path, isDirectory: isDirectory })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        loadFileTree(currentDir);
-        // If this was the current file, close it
-        if (path === filePath) {
-          alert('File was deleted. Please close this tab.');
-        }
-      } else {
-        alert('Error: ' + data.error);
-      }
-    })
-    .catch(err => {
-      alert('Error deleting: ' + err.message);
-    });
-  }
-  
-  function setupWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = protocol + '//' + window.location.host;
-    ws = new WebSocket(wsUrl);
-    
-    const serverOutput = document.getElementById('terminalServerOutput');
-    
-    ws.onopen = () => {
-      console.log('Preview WebSocket connected');
-    };
-    
-    ws.onclose = () => {
-      console.log('Preview WebSocket disconnected - Reconnecting...');
-      // Reconnect after 2 seconds
-      setTimeout(setupWebSocket, 2000);
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Handle server logs
-        if (data.type === 'serverLog' && serverOutput) {
-          const line = document.createElement('div');
-          line.className = `terminal-line ${data.level || 'log'}`;
-          const metaStr = data.meta && Object.keys(data.meta).length > 0 
-            ? ' ' + JSON.stringify(data.meta) 
-            : '';
-          line.textContent = `[${new Date(data.timestamp).toLocaleTimeString()}] ${data.message}${metaStr}`;
-          serverOutput.appendChild(line);
-          serverOutput.scrollTop = serverOutput.scrollHeight;
-          
-          // Sync to terminal popout
-          syncChannel.postMessage({
-            type: 'terminal-output',
-            tab: 'server',
-            output: line.textContent + '\n',
-            append: true
-          });
-        }
-        
-        // Handle preview logs from WebSocket
-        if (data.type === 'preview-log') {
-          const { message, logType, timestamp } = data;
-          const logId = generateLogId(message, logType || 'log', timestamp || new Date().toISOString());
-          
-          if (!receivedLogIds.has(logId)) {
-            receivedLogIds.add(logId);
-            addPreviewLog(message, logType || 'log');
-          }
-        }
-        
-        // Handle preview log clear
-        if (data.type === 'preview-log-clear') {
-          const output = document.getElementById('terminalLogOutput');
-          if (output) {
-            output.textContent = '';
-            receivedLogIds.clear();
-          }
-          
-          syncChannel.postMessage({
-            type: 'terminal-clear',
-            tab: 'log'
-          });
-        }
-        
-        // Handle server update notifications
-        if (data.type === 'serverUpdateAvailable') {
-          showServerUpdateNotification();
-        }
-        
-        
-        // Handle file system events
-        if (data.type === 'fileAdded' || data.type === 'fileDeleted' || 
-            data.type === 'directoryAdded' || data.type === 'directoryDeleted') {
-          handleFileSystemEvent(data);
-        } else if (data.type === 'fileChanged' && previewSettings.autoRefreshPreview) {
-          // If the current file was changed externally, refresh preview
-          const normalizePath = (p) => p.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
-          const currentPathNormalized = normalizePath(filePath);
-          const changedPathNormalized = normalizePath(data.path);
-          
-          if (currentPathNormalized === changedPathNormalized) {
-            // Refresh preview if current file changed
-            let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-            if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-              previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-            }
-            previewUrl += '&t=' + Date.now();
-            previewFrame.src = previewUrl;
-          }
-        }
-      } catch (err) {
-        console.error('Error parsing WebSocket message:', err);
-      }
-    };
-  }
-  
-  function handleFileSystemEvent(data) {
-    // Normalize paths for comparison
-    const normalizePath = (p) => p.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
-    const eventPath = normalizePath(data.path);
-    const currentDirNormalized = normalizePath(currentDir || '/');
-    
-    // Check if the event is in the current directory or a parent
-    const isInCurrentDir = eventPath.startsWith(currentDirNormalized + '/') || 
-                          eventPath === currentDirNormalized ||
-                          currentDirNormalized === '/';
-    
-    // Check if it's a parent directory change that affects current directory
-    const isParentChange = currentDirNormalized.startsWith(eventPath + '/');
-    
-    if (isInCurrentDir || isParentChange) {
-      // Reload file tree to reflect changes
-      loadFileTree(currentDir);
-    }
-  }
-  
-  // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    if (ws) {
-      ws.close();
-    }
-  });
-  
-  // Handle window resize to adjust panel sizes
-  let resizeTimeout;
-  const RESIZER_WIDTH = 4;
-  const MIN_EXPLORER_WIDTH = 150;
-  const MIN_EDITOR_WIDTH = 200;
-  const MIN_PREVIEW_WIDTH = 200;
-  
   function handleWindowResize() {
-    // Debounce resize events
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      adjustPanelsOnResize();
-    }, 100);
+    PreviewResizers.handleWindowResize(() => adjustPanelsOnResize());
   }
   
   function adjustPanelsOnResize() {
-    const container = document.querySelector('.preview-container');
-    if (!container) return;
-    
-    const containerRect = container.getBoundingClientRect();
-    const containerWidth = containerRect.width;
-    
-    const explorerCollapsed = fileExplorerPanel.classList.contains('collapsed');
-    const previewCollapsed = previewPanel.classList.contains('collapsed');
-    
-    // Calculate available width
-    const explorerResizerWidth = explorerCollapsed ? 0 : RESIZER_WIDTH;
-    const editorResizerWidth = previewCollapsed ? 0 : RESIZER_WIDTH;
-    const availableWidth = containerWidth - explorerResizerWidth - editorResizerWidth;
-    
-    // Get current panel widths
-    const currentExplorerWidth = explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth;
-    const currentEditorWidth = editorPanel.offsetWidth;
-    const currentPreviewWidth = previewCollapsed ? 0 : previewPanel.offsetWidth;
-    const totalCurrentWidth = currentExplorerWidth + currentEditorWidth + currentPreviewWidth + explorerResizerWidth + editorResizerWidth;
-    
-    // If panels exceed container width, adjust them proportionally
-    if (totalCurrentWidth > containerWidth) {
-      const scale = (containerWidth - explorerResizerWidth - editorResizerWidth) / (totalCurrentWidth - explorerResizerWidth - editorResizerWidth);
-      
-      // Adjust explorer width if not collapsed
-      if (!explorerCollapsed && fileExplorerPanel.style.width) {
-        const explorerStyleWidth = parseInt(fileExplorerPanel.style.width) || currentExplorerWidth;
-        const newExplorerWidth = Math.max(MIN_EXPLORER_WIDTH, Math.min(explorerStyleWidth * scale, containerWidth - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2)));
-        fileExplorerPanel.style.width = newExplorerWidth + 'px';
-      }
-      
-      // Adjust editor and preview widths
-      if (previewCollapsed) {
-        // When preview is collapsed, editor takes all available space
-        const newEditorWidth = Math.max(MIN_EDITOR_WIDTH, availableWidth - (explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth));
-        editorPanel.style.flex = 'none';
-        editorPanel.style.width = newEditorWidth + 'px';
-      } else {
-        // When preview is visible, adjust both proportionally
-        if (editorPanel.style.width && previewPanel.style.width) {
-          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
-          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
-          
-          const newEditorWidth = Math.max(MIN_EDITOR_WIDTH, editorStyleWidth * scale);
-          const newPreviewWidth = Math.max(MIN_PREVIEW_WIDTH, previewStyleWidth * scale);
-          
-          // Ensure they fit
-          const totalNeeded = newEditorWidth + newPreviewWidth;
-          const actualAvailable = availableWidth - (explorerCollapsed ? 0 : fileExplorerPanel.offsetWidth);
-          if (totalNeeded > actualAvailable) {
-            const editorRatio = newEditorWidth / totalNeeded;
-            const previewRatio = newPreviewWidth / totalNeeded;
-            editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, actualAvailable * editorRatio) + 'px';
-            previewPanel.style.width = Math.max(MIN_PREVIEW_WIDTH, actualAvailable * previewRatio) + 'px';
-          } else {
-            editorPanel.style.width = newEditorWidth + 'px';
-            previewPanel.style.width = newPreviewWidth + 'px';
-          }
-          
-          editorPanel.style.flex = 'none';
-          previewPanel.style.flex = 'none';
-        } else {
-          // If no fixed widths, let flex handle it
-          editorPanel.style.flex = '1 1 auto';
-          previewPanel.style.flex = '1 1 auto';
-        }
-      }
-    } else {
-      // Panels don't exceed container - expand to fill available space
-      const extraSpace = containerWidth - totalCurrentWidth;
-      
-      if (previewCollapsed) {
-        // When preview is collapsed, editor expands to fill space
-        if (editorPanel.style.width && editorPanel.style.width !== '') {
-          // Expand editor by the extra space
-          const currentEditorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
-          const newEditorWidth = currentEditorStyleWidth + extraSpace;
-          editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, newEditorWidth) + 'px';
-          editorPanel.style.flex = 'none';
-        } else {
-          // Let flex handle expansion
-          editorPanel.style.flex = '1 1 auto';
-          editorPanel.style.width = '';
-        }
-      } else {
-        // When preview is visible, expand both proportionally
-        if (editorPanel.style.width && previewPanel.style.width) {
-          // Get current widths
-          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
-          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
-          const totalPanelWidth = editorStyleWidth + previewStyleWidth;
-          
-          if (totalPanelWidth > 0) {
-            // Distribute extra space proportionally
-            const editorRatio = editorStyleWidth / totalPanelWidth;
-            const previewRatio = previewStyleWidth / totalPanelWidth;
-            
-            const newEditorWidth = editorStyleWidth + (extraSpace * editorRatio);
-            const newPreviewWidth = previewStyleWidth + (extraSpace * previewRatio);
-            
-            editorPanel.style.width = Math.max(MIN_EDITOR_WIDTH, newEditorWidth) + 'px';
-            previewPanel.style.width = Math.max(MIN_PREVIEW_WIDTH, newPreviewWidth) + 'px';
-            editorPanel.style.flex = 'none';
-            previewPanel.style.flex = 'none';
-          }
-        } else {
-          // If no fixed widths, let flex handle expansion
-          editorPanel.style.flex = '1 1 auto';
-          previewPanel.style.flex = '1 1 auto';
-          editorPanel.style.width = '';
-          previewPanel.style.width = '';
-        }
-      }
-      
-      // Ensure minimums are met
-      if (!explorerCollapsed) {
-        const explorerStyleWidth = parseInt(fileExplorerPanel.style.width) || currentExplorerWidth;
-        if (explorerStyleWidth < MIN_EXPLORER_WIDTH) {
-          fileExplorerPanel.style.width = MIN_EXPLORER_WIDTH + 'px';
-        }
-      }
-      
-      if (!previewCollapsed) {
-        if (editorPanel.style.width) {
-          const editorStyleWidth = parseInt(editorPanel.style.width) || currentEditorWidth;
-          if (editorStyleWidth < MIN_EDITOR_WIDTH) {
-            editorPanel.style.width = MIN_EDITOR_WIDTH + 'px';
-          }
-        }
-        if (previewPanel.style.width) {
-          const previewStyleWidth = parseInt(previewPanel.style.width) || currentPreviewWidth;
-          if (previewStyleWidth < MIN_PREVIEW_WIDTH) {
-            previewPanel.style.width = MIN_PREVIEW_WIDTH + 'px';
-          }
-        }
-      }
-    }
-    
-    // Update max-width constraint for explorer
-    if (!explorerCollapsed) {
-      const maxExplorerWidth = previewCollapsed 
-        ? containerWidth - MIN_EDITOR_WIDTH - RESIZER_WIDTH
-        : containerWidth - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
-      const currentExplorerWidth = fileExplorerPanel.offsetWidth;
-      if (currentExplorerWidth > maxExplorerWidth) {
-        fileExplorerPanel.style.width = maxExplorerWidth + 'px';
-      }
-    }
+    PreviewResizers.adjustPanelsOnResize(fileExplorerPanel, previewPanel, editorPanel);
   }
   
-  // Add resize listener
   window.addEventListener('resize', handleWindowResize);
   
-  // Log tab functions (accessible globally)
-  function addPreviewLog(message, type = 'log') {
-    // Get logOutput dynamically to avoid TDZ issues
-    const output = document.getElementById('terminalLogOutput');
-    if (!output) return;
-    
-    // Clear log when "Console injected successfully" appears
-    if (message === 'Console injected successfully') {
-      output.textContent = '';
-      receivedLogIds.clear();
-      
-      // Also clear in terminal popout
-      syncChannel.postMessage({
-        type: 'terminal-clear',
-        tab: 'log'
-      });
-      
-      // Broadcast clear via WebSocket
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'preview-log-clear'
-        }));
-      }
-    }
-    
-    const line = document.createElement('div');
-    line.className = `terminal-line ${type}`;
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-    output.appendChild(line);
-    output.scrollTop = output.scrollHeight;
+  setInterval(() => {
+    adjustPanelsOnResize();
+  }, 5000);
+  
+  async function updateCachePreview(content, getFilePath, previewFrame, isLive = false) {
+    await PreviewEditorManager.updateCachePreview(content, getFilePath, previewFrame, isLive, previewSettings);
   }
-  
-  function setupPreviewLogInterception() {
-    // Only set up listener once
-    if (logMessageListenerSetup) return;
-    logMessageListenerSetup = true;
-    
-    // Listen for postMessage from preview iframe
-    window.addEventListener('message', (event) => {
-      // Security: only accept messages from same origin
-      if (event.data && event.data.type === 'preview-log') {
-        const { message, logType, timestamp } = event.data;
-        const logId = generateLogId(message, logType || 'log', timestamp || new Date().toISOString());
-        
-        if (!receivedLogIds.has(logId)) {
-          receivedLogIds.add(logId);
-          addPreviewLog(message, logType || 'log');
-          
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'preview-log',
-              message: message,
-              logType: logType || 'log',
-              timestamp: timestamp || new Date().toISOString()
-            }));
-          }
-        }
-      } else if (event.data && event.data.type === 'preview-log-clear') {
-        const output = document.getElementById('terminalLogOutput');
-        if (output) {
-          output.textContent = '';
-          receivedLogIds.clear();
-        }
-        
-        syncChannel.postMessage({
-          type: 'terminal-clear',
-          tab: 'log'
-        });
-      }
-    });
-  }
-  
-  function createCommandHistory(terminalType) {
-    const storageKey = `terminalHistory_${terminalType}`;
-    const maxHistory = 100;
-    
-    function loadHistory() {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        return saved ? JSON.parse(saved) : [];
-      } catch (error) {
-        return [];
-      }
-    }
-    
-    function saveHistory(history) {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(history.slice(-maxHistory)));
-      } catch (error) {
-        console.error('Error saving command history:', error);
-      }
-    }
-    
-    function addCommand(command) {
-      if (!command || command.trim() === '') return;
-      const history = loadHistory();
-      const trimmedCommand = command.trim();
-      
-      const index = history.indexOf(trimmedCommand);
-      if (index !== -1) {
-        history.splice(index, 1);
-      }
-      
-      history.push(trimmedCommand);
-      saveHistory(history);
-    }
-    
-    return {
-      load: loadHistory,
-      add: addCommand,
-      maxHistory: maxHistory
-    };
-  }
-  
-  function setupTerminal() {
-    const tabs = document.querySelectorAll('.terminal-tab');
-    const tabContents = document.querySelectorAll('.terminal-tab-content');
-    const clientInput = document.getElementById('terminalClientInput');
-    const powershellInput = document.getElementById('terminalPowerShellInput');
-    const logInput = document.getElementById('terminalLogInput');
-    const clientOutput = document.getElementById('terminalClientOutput');
-    const serverOutput = document.getElementById('terminalServerOutput');
-    const powershellOutput = document.getElementById('terminalPowerShellOutput');
-    
-    const clientHistory = createCommandHistory('client');
-    const powershellHistory = createCommandHistory('powershell');
-    const logHistory = createCommandHistory('log');
-    
-    let clientHistoryIndex = -1;
-    let powershellHistoryIndex = -1;
-    let logHistoryIndex = -1;
-    let clientCurrentInput = '';
-    let powershellCurrentInput = '';
-    let logCurrentInput = '';
-    
-    // Ensure inputs are enabled and visible
-    if (clientInput) {
-      clientInput.disabled = false;
-      clientInput.style.pointerEvents = 'auto';
-    }
-    if (powershellInput) {
-      powershellInput.disabled = false;
-      powershellInput.style.pointerEvents = 'auto';
-    }
-    
-    // Tab switching
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        const tabName = tab.dataset.tab;
-        
-        // Update active tab
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        
-        // Update active content
-        tabContents.forEach(content => {
-          content.classList.remove('active');
-          // Handle different tab name formats - match the actual IDs in HTML
-          let expectedId;
-          if (tabName === 'powershell') {
-            expectedId = 'terminalPowerShell';
-          } else if (tabName === 'client') {
-            expectedId = 'terminalClient';
-          } else if (tabName === 'server') {
-            expectedId = 'terminalServer';
-          } else if (tabName === 'log') {
-            expectedId = 'terminalLog';
-          } else {
-            expectedId = `terminal${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
-          }
-          
-          if (content.id === expectedId) {
-            content.classList.add('active');
-            content.style.display = 'flex';
-            
-            // Make sure input container is visible
-            const inputContainer = content.querySelector('.terminal-input-container');
-            if (inputContainer) {
-              inputContainer.style.display = 'flex';
-            }
-            
-            // Focus input if it exists
-            const input = content.querySelector('.terminal-input');
-            if (input) {
-              input.disabled = false;
-              input.style.pointerEvents = 'auto';
-              input.style.display = 'block';
-              setTimeout(() => {
-                input.focus();
-              }, 100);
-            }
-          } else {
-            content.style.display = 'none';
-          }
-        });
-        
-        // Save active tab
-        saveState();
-      });
-    });
-    
-    // Client terminal - capture console logs
-    const originalLog = console.log;
-    const originalInfo = console.info;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    
-    function addLogToTerminal(message, type = 'log') {
-      const line = document.createElement('div');
-      line.className = `terminal-line ${type}`;
-      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-      clientOutput.appendChild(line);
-      clientOutput.scrollTop = clientOutput.scrollHeight;
-      
-      // Sync to terminal popout
-      syncChannel.postMessage({
-        type: 'terminal-output',
-        tab: 'client',
-        output: line.textContent + '\n',
-        append: true
-      });
-    }
-    
-    console.log = function(...args) {
-      originalLog.apply(console, args);
-      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'log');
-    };
-    
-    console.info = function(...args) {
-      originalInfo.apply(console, args);
-      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'info');
-    };
-    
-    console.warn = function(...args) {
-      originalWarn.apply(console, args);
-      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'warn');
-    };
-    
-    console.error = function(...args) {
-      originalError.apply(console, args);
-      addLogToTerminal(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' '), 'error');
-    };
-    
-    // Client terminal - execute JavaScript
-    if (clientInput) {
-      clientInput.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          const history = clientHistory.load();
-          if (history.length === 0) return;
-          
-          if (clientHistoryIndex === -1) {
-            clientCurrentInput = clientInput.value;
-            clientHistoryIndex = history.length;
-          }
-          
-          if (clientHistoryIndex > 0) {
-            clientHistoryIndex--;
-            clientInput.value = history[clientHistoryIndex];
-          }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          const history = clientHistory.load();
-          
-          if (clientHistoryIndex === -1) return;
-          
-          if (clientHistoryIndex < history.length - 1) {
-            clientHistoryIndex++;
-            clientInput.value = history[clientHistoryIndex];
-          } else {
-            clientHistoryIndex = -1;
-            clientInput.value = clientCurrentInput;
-          }
-        } else if (e.key === 'Enter') {
-          const command = clientInput.value.trim();
-          if (command) {
-            clientHistory.add(command);
-            clientHistoryIndex = -1;
-            clientCurrentInput = '';
-            
-            addLogToTerminal(`> ${command}`, 'log');
-            try {
-              const result = eval(command);
-              if (result !== undefined) {
-                addLogToTerminal(String(result), 'info');
-              }
-            } catch (err) {
-              addLogToTerminal(`Error: ${err.message}`, 'error');
-            }
-            clientInput.value = '';
-            
-            // Sync command execution to popout
-            syncChannel.postMessage({
-              type: 'terminal-command',
-              tab: 'client',
-              command: command
-            });
-          }
-        }
-      });
-    }
-    
-    // PowerShell terminal - execute commands
-    if (powershellInput) {
-      powershellInput.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          if (powershellInput.disabled) return;
-          const history = powershellHistory.load();
-          if (history.length === 0) return;
-          
-          if (powershellHistoryIndex === -1) {
-            powershellCurrentInput = powershellInput.value;
-            powershellHistoryIndex = history.length;
-          }
-          
-          if (powershellHistoryIndex > 0) {
-            powershellHistoryIndex--;
-            powershellInput.value = history[powershellHistoryIndex];
-          }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          if (powershellInput.disabled) return;
-          const history = powershellHistory.load();
-          
-          if (powershellHistoryIndex === -1) return;
-          
-          if (powershellHistoryIndex < history.length - 1) {
-            powershellHistoryIndex++;
-            powershellInput.value = history[powershellHistoryIndex];
-          } else {
-            powershellHistoryIndex = -1;
-            powershellInput.value = powershellCurrentInput;
-          }
-        } else if (e.key === 'Enter') {
-          const command = powershellInput.value.trim();
-          if (command) {
-            powershellHistory.add(command);
-            powershellHistoryIndex = -1;
-            powershellCurrentInput = '';
-            
-            addPowerShellLog(`PS> ${command}`, 'log');
-            powershellInput.value = '';
-            powershellInput.disabled = true;
-            
-            // Show loading indicator
-            const loadingLine = document.createElement('div');
-            loadingLine.className = 'terminal-line info';
-            loadingLine.textContent = 'Executing...';
-            loadingLine.id = 'powershell-loading';
-            powershellOutput.appendChild(loadingLine);
-            powershellOutput.scrollTop = powershellOutput.scrollHeight;
-            
-            // Execute command via API
-            fetch('/__api__/terminal', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ command: command, type: 'powershell' })
-            })
-            .then(res => res.json())
-            .then(data => {
-              // Remove loading indicator
-              const loading = document.getElementById('powershell-loading');
-              if (loading) loading.remove();
-              
-              if (data.success) {
-                // Display output (stdout)
-                if (data.output && data.output.trim()) {
-                  // Split multi-line output
-                  const lines = data.output.split('\n');
-                  lines.forEach(line => {
-                    if (line.trim()) {
-                      addPowerShellLog(line, 'info');
-                    }
-                  });
-                }
-                // Display errors (stderr) - PowerShell often writes to stderr even on success
-                if (data.error && data.error.trim()) {
-                  const errorLines = data.error.split('\n');
-                  errorLines.forEach(line => {
-                    if (line.trim() && !line.includes('Warning:')) {
-                      // Only show actual errors, not warnings
-                      if (line.toLowerCase().includes('error')) {
-                        addPowerShellLog(line, 'error');
-                      } else {
-                        addPowerShellLog(line, 'warn');
-                      }
-                    }
-                  });
-                }
-              } else {
-                addPowerShellLog(`Error: ${data.error}`, 'error');
-                if (data.stderr) {
-                  addPowerShellLog(data.stderr, 'error');
-                }
-              }
-            })
-            .catch(err => {
-              // Remove loading indicator
-              const loading = document.getElementById('powershell-loading');
-              if (loading) loading.remove();
-              
-              addPowerShellLog(`Network Error: ${err.message}`, 'error');
-            })
-            .finally(() => {
-              powershellInput.disabled = false;
-              powershellInput.focus();
-            });
-          }
-        }
-      });
-    }
-    
-    function addPowerShellLog(message, type = 'log') {
-      if (!powershellOutput) return;
-      const line = document.createElement('div');
-      line.className = `terminal-line ${type}`;
-      line.textContent = message;
-      powershellOutput.appendChild(line);
-      powershellOutput.scrollTop = powershellOutput.scrollHeight;
-    }
-    
-    // Setup preview log interception (listens for postMessage from iframe)
-    // This only needs to be called once, not on every iframe load
-    setupPreviewLogInterception();
-    
-    // Log tab - execute code in preview context
-    if (logInput) {
-      logInput.disabled = false;
-      logInput.style.pointerEvents = 'auto';
-      
-      logInput.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          const history = logHistory.load();
-          if (history.length === 0) return;
-          
-          if (logHistoryIndex === -1) {
-            logCurrentInput = logInput.value;
-            logHistoryIndex = history.length;
-          }
-          
-          if (logHistoryIndex > 0) {
-            logHistoryIndex--;
-            logInput.value = history[logHistoryIndex];
-          }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          const history = logHistory.load();
-          
-          if (logHistoryIndex === -1) return;
-          
-          if (logHistoryIndex < history.length - 1) {
-            logHistoryIndex++;
-            logInput.value = history[logHistoryIndex];
-          } else {
-            logHistoryIndex = -1;
-            logInput.value = logCurrentInput;
-          }
-        } else if (e.key === 'Enter') {
-          const command = logInput.value.trim();
-          if (command) {
-            logHistory.add(command);
-            logHistoryIndex = -1;
-            logCurrentInput = '';
-            
-            addPreviewLog(`> ${command}`, 'log');
-            logInput.value = '';
-            
-            try {
-              const iframeWindow = previewFrame?.contentWindow;
-              if (!iframeWindow) {
-                addPreviewLog('Error: Preview iframe not available', 'error');
-                return;
-              }
-              
-              // Execute code in iframe context
-              let result;
-              try {
-                result = iframeWindow.eval(command);
-              } catch (evalErr) {
-                // If eval fails, try as expression
-                try {
-                  result = iframeWindow.eval(`(${command})`);
-                } catch (exprErr) {
-                  throw evalErr;
-                }
-              }
-              
-              if (result !== undefined) {
-                const resultStr = typeof result === 'object' 
-                  ? JSON.stringify(result, null, 2)
-                  : String(result);
-                addPreviewLog(resultStr, 'info');
-              }
-            } catch (err) {
-              addPreviewLog(`Error: ${err.message}`, 'error');
-            }
-          }
-        }
-      });
-    }
-  }
-  
-  function updateActiveFileTreeItem(path) {
-    // Remove active class from all items
-    const allItems = fileTree.querySelectorAll('.file-tree-item');
-    allItems.forEach(item => {
-      item.classList.remove('active');
-    });
-    
-    // Add active class to the current file
-    if (path) {
-      const normalizedPath = path.replace(/\/+/g, '/');
-      const activeItem = Array.from(allItems).find(item => {
-        const itemPath = item.dataset.path.replace(/\/+/g, '/');
-        return itemPath === normalizedPath;
-      });
-      
-      if (activeItem) {
-        activeItem.classList.add('active');
-        // Scroll into view if needed
-        activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    }
-  }
-  
-  async function switchToFile(newPath) {
-    if (newPath === filePath) return;
-    
-    // Check for unsaved changes
-    if (isDirty) {
-      const confirmed = await customConfirm('You have unsaved changes. Switch file anyway?');
-      if (!confirmed) {
-      return;
-      }
-    }
-    
-    // Update file path
-    filePath = newPath;
-    
-    // Update URL without reloading (app-like navigation)
-    const newUrl = '/__preview__?file=' + encodeURIComponent(newPath);
-    window.history.pushState({ file: newPath }, '', newUrl);
-    
-    // Update file name display
-    fileName.textContent = newPath.split('/').pop();
-    
-    // Update current directory
-    const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-    if (newDir !== currentDir) {
-      currentDir = newDir;
-      loadFileTree(currentDir);
-    } else {
-      // Just update the active item if we're in the same directory
-      updateActiveFileTreeItem(newPath);
-    }
-    
-    // Load the new file
-    loadFile(newPath);
-    
-    // Save state
-    saveState();
-  }
-  
-  function updateStatus() {
-    if (isDirty) {
-      status.textContent = 'Modified';
-      status.className = 'status';
-    } else {
-      status.textContent = 'Saved';
-      status.className = 'status saved';
-    }
-  }
-  
-  async function loadFile(path) {
-    status.textContent = 'Loading...';
-    status.className = 'status';
-    
-    // Check if it's an image file - images don't need to be loaded as text
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
-    const isImage = imageExtensions.some(ext => path.toLowerCase().endsWith(ext));
-    
-    if (isImage) {
-      // For images, just show the preview (don't try to load as text)
-      showImagePreview(path);
-      status.textContent = 'Ready';
-      status.className = 'status';
-      // Clear editor or show a message
-      editor.setValue('// Image file - cannot be edited as text');
-      originalContent = '';
-      isDirty = false;
-      updateStatus();
-      return;
-    }
-    
-    try {
-      // Check for cache first
-      const cacheResponse = await fetch('/__api__/files/editor?path=' + encodeURIComponent(path));
-      const cacheData = await cacheResponse.json();
-      
-      // Load actual file
-      const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(path));
-      const fileData = await fileResponse.json();
-      
-      if (!fileData.success) {
-        status.textContent = 'Error: ' + fileData.error;
-        status.className = 'status error';
-        return;
-      }
-      
-      // If cache exists and is different from actual file, show comparison dialog
-      if (cacheData.success && cacheData.exists && cacheData.content !== fileData.content) {
-        const choice = await customCacheDialog(cacheData.content, fileData.content, path);
-        
-        if (choice === 'pull') {
-          // Load from cache
-          fileData.content = cacheData.content;
-        } else if (choice === 'discard') {
-          // Delete cache and reset preview
-          await fetch('/__api__/files/editor', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: path })
-          });
-          
-          // Reset preview
-          let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-          if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-            previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-          }
-          previewUrl += '&t=' + Date.now();
-          previewFrame.src = previewUrl;
-        } else {
-          // User cancelled, don't load
-          status.textContent = 'Ready';
-          status.className = 'status';
-          return;
-        }
-      }
-      
-      // Set language based on file extension BEFORE setting value
-      const detectedLanguage = getLanguage(path);
-      const currentModel = editor.getModel();
-      
-      // Create or get model for this file
-          const normalizedPath = path.replace(/^\/+/, '');
-          let model = monaco.editor.getModels().find(m => {
-            const modelPath = m.uri.path.replace(/^\/+/, '');
-            return modelPath === normalizedPath;
-          });
-          if (!model) {
-            // Create new model
-            const uri = monaco.Uri.parse('file:///' + normalizedPath);
-            model = monaco.editor.createModel(fileData.content, detectedLanguage, uri);
-          } else {
-            // Update existing model
-            model.setValue(fileData.content);
-            monaco.editor.setModelLanguage(model, detectedLanguage);
-          }
-      
-      // Switch editor to this model
-      editor.setModel(model);
-      
-      originalContent = fileData.content;
-      isDirty = false;
-      updateStatus();
-      
-      // Show HTML preview for non-image files
-      showHtmlPreview();
-      // Load initial preview via preview content route
-      let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-      if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-        previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-      }
-      previewUrl += '&t=' + Date.now();
-      previewFrame.src = previewUrl;
-      
-      // Setup link interception after iframe loads
-      previewFrame.onload = () => {
-        interceptPreviewLinks();
-        setTimeout(() => {
-          if (setupPreviewLogInterception) {
-            setupPreviewLogInterception();
-          }
-        }, 100);
-      };
-    } catch (err) {
-      status.textContent = 'Error loading file';
-      status.className = 'status error';
-      console.error(err);
-    }
-  }
-  
-  let cacheEditorInstance = null;
-  let liveEditorInstance = null;
-  
-  async function customCacheDialog(cachedContent, liveContent, filePath) {
-    return new Promise((resolve) => {
-      const dialog = document.getElementById('cacheComparisonDialog');
-      const closeBtn = document.getElementById('cacheComparisonClose');
-      const useCacheBtn = document.getElementById('cacheComparisonUseCache');
-      const useLiveBtn = document.getElementById('cacheComparisonUseLive');
-      const cancelBtn = document.getElementById('cacheComparisonCancel');
-      
-      const detectedLanguage = getLanguage(filePath);
-      
-      const cleanup = () => {
-        dialog.style.display = 'none';
-        if (cacheEditorInstance) {
-          cacheEditorInstance.dispose();
-          cacheEditorInstance = null;
-        }
-        if (liveEditorInstance) {
-          liveEditorInstance.dispose();
-          liveEditorInstance = null;
-        }
-        useCacheBtn.onclick = null;
-        useLiveBtn.onclick = null;
-        cancelBtn.onclick = null;
-        closeBtn.onclick = null;
-        dialog.onkeydown = null;
-        dialog.onclick = null;
-      };
-      
-      const handleUseCache = () => {
-        cleanup();
-        resolve('pull');
-      };
-      
-      const handleUseLive = () => {
-        cleanup();
-        resolve('discard');
-      };
-      
-      const handleCancel = () => {
-        cleanup();
-        resolve('cancel');
-      };
-      
-      useCacheBtn.onclick = handleUseCache;
-      useLiveBtn.onclick = handleUseLive;
-      cancelBtn.onclick = handleCancel;
-      closeBtn.onclick = handleCancel;
-      
-      dialog.onkeydown = (e) => {
-        if (e.key === 'Escape') {
-          handleCancel();
-        }
-      };
-      
-      dialog.onclick = (e) => {
-        if (e.target === dialog) {
-          handleCancel();
-        }
-      };
-      
-      dialog.style.display = 'flex';
-      
-      setTimeout(async () => {
-        const cacheEditorEl = document.getElementById('cacheEditor');
-        const liveEditorEl = document.getElementById('liveEditor');
-        const cachePreview = document.getElementById('cachePreview');
-        const livePreview = document.getElementById('livePreview');
-        
-        if (cacheEditorEl && !cacheEditorInstance) {
-          cacheEditorInstance = monaco.editor.create(cacheEditorEl, {
-            value: cachedContent,
-            language: detectedLanguage,
-            theme: previewSettings.editorTheme,
-            fontSize: previewSettings.editorFontSize,
-            wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
-            lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
-            readOnly: true,
-            minimap: { enabled: false }
-          });
-          
-          cacheEditorInstance.onDidChangeModelContent(() => {
-            const content = cacheEditorInstance.getValue();
-            updateCachePreview(content, filePath, cachePreview, false);
-          });
-          
-          updateCachePreview(cachedContent, filePath, cachePreview, false);
-        }
-        
-        if (liveEditorEl && !liveEditorInstance) {
-          liveEditorInstance = monaco.editor.create(liveEditorEl, {
-            value: liveContent,
-            language: detectedLanguage,
-            theme: previewSettings.editorTheme,
-            fontSize: previewSettings.editorFontSize,
-            wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
-            lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
-            readOnly: true,
-            minimap: { enabled: false }
-          });
-          
-          liveEditorInstance.onDidChangeModelContent(() => {
-            const content = liveEditorInstance.getValue();
-            updateCachePreview(content, filePath, livePreview, true);
-          });
-          
-          updateCachePreview(liveContent, filePath, livePreview, true);
-        }
-      }, 100);
-    });
-  }
-  
-  async function updateCachePreview(content, filePath, previewFrame, isLive = false) {
-    if (!previewFrame) return;
-    
-    try {
-      if (isLive) {
-        let previewUrl = '/__preview-content__/live?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-        }
-        previewUrl += '&t=' + Date.now();
-        previewFrame.src = previewUrl;
-      } else {
-        await fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: content
-        });
-        
-        let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-        }
-        previewUrl += '&t=' + Date.now();
-        previewFrame.src = previewUrl;
-      }
-    } catch (error) {
-      console.error('Error updating cache preview:', error);
-    }
-  }
-  
-  let previewUpdateTimeout = null;
   
   function updatePreview(content) {
-    if (!previewFrame) return;
-    
-    // Broadcast preview update to popout windows with content
-    syncChannel.postMessage({
-      type: 'preview-update'
-    });
-    
-    // Also send the content so popout can update
-    if (content) {
-      syncChannel.postMessage({
-        type: 'preview-content',
-        content: content
-      });
-    }
-    
-    // Debounce preview updates
-    clearTimeout(previewUpdateTimeout);
-    previewUpdateTimeout = setTimeout(() => {
-      // Update preview cache and load via preview content route
-      // This ensures proper base path for loading resources
-      fetch('/__preview-content__?file=' + encodeURIComponent(filePath), {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: content
-      })
-      .then(() => {
-        // Load via preview content route which injects base tag
-        let previewUrl = '/__preview-content__?file=' + encodeURIComponent(filePath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
-        if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
-          previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
-        }
-        previewUrl += '&t=' + Date.now();
-        previewFrame.src = previewUrl;
-        
-        // Setup link interception after iframe loads
-        previewFrame.onload = () => {
-          interceptPreviewLinks();
-          // Log interception is set up via postMessage listener (called once in setupTerminal)
-        };
-      })
-      .catch(err => {
-        console.error('Error updating preview:', err);
-        // Fallback to srcdoc if API fails
-        updatePreviewFallback(content);
-      });
-    }, 300); // Debounce 300ms
+    PreviewManager.updatePreview(
+      content, previewFrame, () => filePathRef.current, previewSettings, syncChannel,
+      () => interceptPreviewLinks(), (content) => updatePreviewFallback(content)
+    );
   }
   
   function showImagePreview(imagePath) {
-    // Hide iframe, show image preview
-    previewFrame.style.display = 'none';
-    imagePreview.style.display = 'flex';
-    
-    // Load image
-    const imageUrl = '/' + imagePath.replace(/^\/+/, '');
-    previewImage.src = imageUrl;
-    previewImage.onerror = () => {
-      previewImage.alt = 'Error loading image';
-    };
-    
-    // Update title and show back button
-    previewTitle.textContent = 'Image: ' + imagePath.split('/').pop();
-    backToPreviewBtn.style.display = 'block';
+    PreviewManager.showImagePreview(
+      imagePath, previewFrame, imagePreview, previewImage, previewTitle, backToPreviewBtn
+    );
   }
   
   function showHtmlPreview() {
-    // Hide image preview, show iframe
-    imagePreview.style.display = 'none';
-    previewFrame.style.display = 'block';
-    
-    // Update title and hide back button
-    previewTitle.textContent = 'Preview';
-    backToPreviewBtn.style.display = 'none';
+    PreviewManager.showHtmlPreview(imagePreview, previewFrame, previewTitle, backToPreviewBtn);
   }
   
-  // Back to HTML preview button
   if (backToPreviewBtn) {
     backToPreviewBtn.addEventListener('click', () => {
       showHtmlPreview();
@@ -3318,1030 +637,33 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function interceptPreviewLinks() {
-    try {
-      const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-      if (!iframeDoc) return;
-      
-      // Intercept image clicks
-      iframeDoc.addEventListener('click', (e) => {
-        const img = e.target.closest('img[src]');
-        if (img) {
-          const src = img.getAttribute('src');
-          if (src && !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Resolve relative path
-            let imagePath = src;
-            if (!src.startsWith('/')) {
-              const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
-              const basePath = fileDir ? fileDir + '/' : '';
-              imagePath = basePath + src;
-            }
-            imagePath = imagePath.replace(/\/+/g, '/').replace(/^\/+/, '');
-            
-            // Check if it's an image
-            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
-            const isImage = imageExtensions.some(ext => imagePath.toLowerCase().endsWith(ext));
-            
-            if (isImage) {
-              showImagePreview(imagePath);
-            }
-          }
-        }
-      }, true);
-      
-      // Intercept link clicks
-      iframeDoc.addEventListener('click', (e) => {
-        const link = e.target.closest('a[href]');
-        if (!link) return;
-        
-        const href = link.getAttribute('href');
-        if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
-          return; // Allow anchor links, mailto, tel
-        }
-        
-        // If it's an external link or has target="_blank", let it open normally
-        if (href.startsWith('http://') || href.startsWith('https://') || link.getAttribute('target') === '_blank') {
-          return;
-        }
-        
-        // Always prevent default for internal links to keep it app-like
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Intercept internal links
-        e.preventDefault();
-        
-        // Resolve relative path
-        let targetPath = href;
-        if (!href.startsWith('/')) {
-          // Relative path - resolve from current file's directory
-          const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
-          const basePath = fileDir ? fileDir + '/' : '';
-          targetPath = basePath + href;
-        }
-        
-        // Normalize path (remove double slashes, etc.)
-        targetPath = targetPath.replace(/\/+/g, '/').replace(/^\/+/, '');
-        
-        // Check if it's an editable file that should be opened in editor
-        const editableExtensions = ['.html', '.htm', '.css', '.js', '.json', '.md', '.txt', '.xml', '.yaml', '.yml'];
-        const isEditable = editableExtensions.some(ext => targetPath.toLowerCase().endsWith(ext));
-        
-        if (isEditable) {
-          // Switch to the file in the editor (app-like, no reload)
-          switchToFile(targetPath);
-        } else {
-          // Check if it's an image file
-          const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
-          const isImage = imageExtensions.some(ext => targetPath.toLowerCase().endsWith(ext));
-          
-          if (isImage) {
-            // Display image in preview
-            showImagePreview(targetPath);
-          } else {
-            // For other files (PDFs, etc.), update preview iframe
-            const previewUrl = '/__preview-content__?file=' + encodeURIComponent(targetPath) + '&t=' + Date.now();
-            previewFrame.src = previewUrl;
-          }
-        }
-      }, true);
-    } catch (err) {
-      console.error('Error intercepting links:', err);
-    }
+    PreviewManager.interceptPreviewLinks(
+      previewFrame, () => filePathRef.current,
+      (imagePath) => showImagePreview(imagePath),
+      (targetPath) => switchToFile(targetPath)
+    );
   }
   
   async function updatePreviewFallback(content) {
-    const fileDir = filePath.split('/').slice(0, -1).join('/') || '';
-    const basePath = fileDir ? '/' + fileDir + '/' : '/';
-    const baseUrl = window.location.origin + basePath;
-    
-    let themeStyles = '';
-    try {
-      const response = await fetch(`/__api__/theme?name=${encodeURIComponent(previewSettings.pageTheme)}`);
-      if (response.ok) {
-        const themeCss = await response.text();
-        themeStyles = `<style id="theme-style">${themeCss}</style>`;
-      }
-    } catch (error) {
-      console.error('Error loading theme for preview fallback:', error);
-    }
-    
-    let modifiedContent = content;
-    modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
-    
-    if (modifiedContent.match(/<head[^>]*>/i)) {
-      modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {
-        return match + `\n<base href="${baseUrl}">${themeStyles}`;
-      });
-    } else if (modifiedContent.match(/<html[^>]*>/i)) {
-      modifiedContent = modifiedContent.replace(/<html[^>]*>/i, (match) => {
-        return match + `\n<head><base href="${baseUrl}">${themeStyles}</head>`;
-      });
-    } else if (modifiedContent.trim().length > 0) {
-      modifiedContent = `<!DOCTYPE html><html><head><base href="${baseUrl}">${themeStyles}</head><body>${modifiedContent}</body></html>`;
-    }
-    
-    previewFrame.srcdoc = modifiedContent;
+    await PreviewManager.updatePreviewFallback(content, () => filePathRef.current, previewFrame, previewSettings);
   }
   
   function saveFile() {
-    const content = editor.getValue();
-    status.textContent = 'Saving...';
-    status.className = 'status saving';
-    
-    if (saveToEditorTimeout) {
-      clearTimeout(saveToEditorTimeout);
-      saveToEditorTimeout = null;
-    }
-    
-    fetch('/__api__/files', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, content: content })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        originalContent = content;
-        isDirty = false;
-        status.textContent = 'Saved';
-        status.className = 'status saved';
-        
-        // Broadcast save event via WebSocket
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'editorSave',
-            path: filePath,
-            content: content
-          }));
+    PreviewEditorManager.saveFile(
+      editor, filePathRef.current, status, ws.current, originalContent, isDirty, updateStatus, saveToEditorTimeout
+    ).then(result => {
+      if (result) {
+        if (result.originalContent !== undefined) {
+          originalContent.current = result.originalContent;
         }
-        
-        setTimeout(() => {
-          if (!isDirty) {
-            status.textContent = 'Ready';
-            status.className = 'status';
-          }
-        }, 2000);
-      } else {
-        status.textContent = 'Error: ' + data.error;
-        status.className = 'status error';
+        if (result.isDirty !== undefined) {
+          isDirty.current = result.isDirty;
+        }
       }
-    })
-    .catch(err => {
-      status.textContent = 'Error saving file';
-      status.className = 'status error';
-      console.error(err);
     });
-  }
-  
-  function setupResizers() {
-    const container = document.querySelector('.preview-container');
-    const resizerExplorer = document.getElementById('resizerExplorer');
-    const resizerEditor = document.getElementById('resizerEditor');
-    const resizerTerminal = document.getElementById('resizerTerminal');
-    const terminalPanel = document.getElementById('terminalPanel');
-    
-    // Global resize state (VS Code style)
-    let activeResizer = null;
-    let startX = 0;
-    let startY = 0;
-    let startWidth = 0;
-    let startHeight = 0;
-    
-    // Constants
-    const MIN_EXPLORER_WIDTH = 150;
-    const MIN_EDITOR_WIDTH = 200;
-    const MIN_PREVIEW_WIDTH = 200;
-    const MIN_TERMINAL_HEIGHT = 100;
-    const MAX_TERMINAL_HEIGHT = 500;
-    const RESIZER_WIDTH = 4;
-    
-    // Global mouse handlers (works even when mouse leaves resizer)
-    function handleGlobalMouseMove(e) {
-      if (!activeResizer) return;
-      
-      // Prevent default to ensure smooth tracking
-      // Don't prevent default if we're over an iframe - let pointer-events handle it
-      if (e.target && e.target.tagName !== 'IFRAME') {
-        e.preventDefault();
-      }
-      e.stopPropagation();
-        
-        const containerRect = container.getBoundingClientRect();
-      
-      switch (activeResizer) {
-        case 'explorer':
-          handleExplorerResize(e, containerRect);
-          break;
-        case 'editor':
-          handleEditorResize(e, containerRect);
-          break;
-        case 'terminal':
-          handleTerminalResize(e, containerRect);
-          break;
-      }
-    }
-    
-    function handleGlobalMouseUp(e) {
-      if (!activeResizer) return;
-        
-      // Clean up global state - remove all listeners
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.body.classList.remove('resizing');
-      window.removeEventListener('mousemove', handleGlobalMouseMove, true);
-      window.removeEventListener('mouseup', handleGlobalMouseUp, true);
-      document.removeEventListener('mousemove', handleGlobalMouseMove, true);
-      document.removeEventListener('mouseup', handleGlobalMouseUp, true);
-      window.removeEventListener('blur', handleGlobalMouseUp, true);
-      
-      // Reset active resizer
-      activeResizer = null;
-      saveState();
-    }
-    
-    // Explorer resizer handler
-    function handleExplorerResize(e, containerRect) {
-      if (fileExplorerPanel.classList.contains('collapsed')) return;
-      
-      const previewCollapsed = previewPanel.classList.contains('collapsed');
-      const deltaX = e.clientX - startX;
-      let newWidth = startWidth + deltaX;
-        
-      // Calculate constraints based on preview state
-      const minWidth = MIN_EXPLORER_WIDTH;
-      let maxWidth;
-      if (previewCollapsed) {
-        // When preview is collapsed, only need to leave room for editor
-        maxWidth = containerRect.width - MIN_EDITOR_WIDTH - RESIZER_WIDTH;
-      } else {
-        // When preview is visible, need room for both editor and preview
-        maxWidth = containerRect.width - MIN_EDITOR_WIDTH - MIN_PREVIEW_WIDTH - (RESIZER_WIDTH * 2);
-      }
-      
-      // Apply constraints
-      newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
-      
-      // Update explorer width
-      fileExplorerPanel.style.width = newWidth + 'px';
-      fileExplorerPanel.style.flex = 'none';
-      
-      // Ensure editor and preview maintain minimum widths
-      const remainingWidth = containerRect.width - newWidth - RESIZER_WIDTH;
-      if (editorPanel && previewPanel) {
-        if (previewCollapsed) {
-          // When preview is collapsed, editor takes remaining space
-          editorPanel.style.flex = '1 1 auto';
-          editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
-        } else {
-          // When preview is visible, both maintain minimums
-          editorPanel.style.flex = '1 1 auto';
-          previewPanel.style.flex = '1 1 auto';
-          editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
-          previewPanel.style.minWidth = MIN_PREVIEW_WIDTH + 'px';
-        }
-      }
-    }
-    
-    // Editor resizer handler
-    function handleEditorResize(e, containerRect) {
-      const previewCollapsed = previewPanel.classList.contains('collapsed');
-        
-      // Cache explorer width to avoid repeated DOM reads
-        const explorerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : fileExplorerPanel.offsetWidth;
-      const explorerResizerWidth = fileExplorerPanel.classList.contains('collapsed') ? 0 : RESIZER_WIDTH;
-      const editorResizerWidth = RESIZER_WIDTH;
-      const availableWidth = containerRect.width - explorerWidth - explorerResizerWidth - (previewCollapsed ? 0 : editorResizerWidth);
-      
-      const deltaX = e.clientX - startX;
-      let newEditorWidth = startWidth + deltaX;
-      
-      if (previewCollapsed) {
-        // When preview is collapsed, editor can take all available space
-        newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth));
-        editorPanel.style.flex = 'none';
-        editorPanel.style.width = newEditorWidth + 'px';
-      } else {
-        // Apply constraints when preview is visible
-        newEditorWidth = Math.max(MIN_EDITOR_WIDTH, Math.min(newEditorWidth, availableWidth - MIN_PREVIEW_WIDTH));
-        const newPreviewWidth = availableWidth - newEditorWidth;
-        
-        // Always apply updates for smoother dragging - don't skip if preview would be too small
-        // Instead, constrain both panels to their minimums
-        if (newPreviewWidth < MIN_PREVIEW_WIDTH) {
-          // If preview would be too small, set it to minimum and adjust editor
-          const constrainedPreviewWidth = MIN_PREVIEW_WIDTH;
-          const constrainedEditorWidth = availableWidth - constrainedPreviewWidth;
-          if (constrainedEditorWidth >= MIN_EDITOR_WIDTH) {
-          editorPanel.style.flex = 'none';
-          previewPanel.style.flex = 'none';
-            editorPanel.style.width = constrainedEditorWidth + 'px';
-            previewPanel.style.width = constrainedPreviewWidth + 'px';
-        }
-        } else {
-          // Both panels meet minimum requirements
-          editorPanel.style.flex = 'none';
-          previewPanel.style.flex = 'none';
-          editorPanel.style.width = newEditorWidth + 'px';
-          previewPanel.style.width = newPreviewWidth + 'px';
-        }
-      }
-    }
-    
-    // Terminal resizer handler
-    function handleTerminalResize(e, containerRect) {
-      if (terminalPanel.classList.contains('collapsed')) return;
-      
-      const deltaY = e.clientY - startY;
-      let newHeight;
-      
-      if (terminalAtBottom) {
-        // When at bottom, dragging up increases height (resizer is above terminal)
-        newHeight = startHeight - deltaY;
-      } else {
-        // When in explorer, dragging down increases height (resizer is above terminal)
-        newHeight = startHeight + deltaY;
-      }
-      
-      // Apply constraints
-      newHeight = Math.max(MIN_TERMINAL_HEIGHT, Math.min(newHeight, MAX_TERMINAL_HEIGHT));
-      
-      terminalPanel.style.height = newHeight + 'px';
-    }
-    
-    // Setup explorer resizer
-    if (resizerExplorer) {
-      resizerExplorer.addEventListener('mousedown', (e) => {
-        if (fileExplorerPanel.classList.contains('collapsed')) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        activeResizer = 'explorer';
-        startX = e.clientX;
-        startWidth = fileExplorerPanel.offsetWidth;
-        
-        // Setup global handlers - use window for better tracking when mouse moves fast
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        document.body.classList.add('resizing');
-        window.addEventListener('mousemove', handleGlobalMouseMove, true);
-        window.addEventListener('mouseup', handleGlobalMouseUp, true);
-        window.addEventListener('blur', handleGlobalMouseUp, true);
-        // Also listen on document as fallback
-        document.addEventListener('mousemove', handleGlobalMouseMove, true);
-        document.addEventListener('mouseup', handleGlobalMouseUp, true);
-      });
-    }
-    
-    // Setup editor resizer
-    if (resizerEditor) {
-      resizerEditor.addEventListener('mousedown', (e) => {
-        if (previewPanel.classList.contains('collapsed')) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        activeResizer = 'editor';
-        startX = e.clientX;
-        startWidth = editorPanel.offsetWidth;
-        
-        // Setup global handlers - use window for better tracking when mouse moves fast
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        document.body.classList.add('resizing');
-        window.addEventListener('mousemove', handleGlobalMouseMove, true);
-        window.addEventListener('mouseup', handleGlobalMouseUp, true);
-        window.addEventListener('blur', handleGlobalMouseUp, true);
-        // Also listen on document as fallback
-        document.addEventListener('mousemove', handleGlobalMouseMove, true);
-        document.addEventListener('mouseup', handleGlobalMouseUp, true);
-      });
-    }
-    
-    // Setup terminal resizer
-    if (resizerTerminal && terminalPanel) {
-      resizerTerminal.addEventListener('mousedown', (e) => {
-        if (terminalPanel.classList.contains('collapsed')) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        activeResizer = 'terminal';
-        startY = e.clientY;
-        startHeight = terminalPanel.offsetHeight;
-        
-        // Setup global handlers - use window for better tracking when mouse moves fast
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
-        document.body.classList.add('resizing');
-        window.addEventListener('mousemove', handleGlobalMouseMove, true);
-        window.addEventListener('mouseup', handleGlobalMouseUp, true);
-        window.addEventListener('blur', handleGlobalMouseUp, true);
-        // Also listen on document as fallback
-        document.addEventListener('mousemove', handleGlobalMouseMove, true);
-        document.addEventListener('mouseup', handleGlobalMouseUp, true);
-      });
-      
-      // Hide resizer if terminal is collapsed
-      if (terminalPanel.classList.contains('collapsed')) {
-        resizerTerminal.style.display = 'none';
-      }
-    }
-  }
-  
-  // State management
-  function saveState() {
-    // Don't save during initialization/restoration
-    if (isRestoringState) {
-      console.log('saveState() called during restoration - skipping');
-      return;
-    }
-    
-    const terminalPanel = document.getElementById('terminalPanel');
-    const toggleTerminal = document.getElementById('toggleTerminal');
-    
-    const explorerCollapsed = fileExplorerPanel.classList.contains('collapsed');
-    const previewCollapsed = previewPanel.classList.contains('collapsed');
-    const terminalCollapsed = terminalPanel ? terminalPanel.classList.contains('collapsed') : false;
-    
-    console.log('=== SAVING STATE ===');
-    console.log('Explorer collapsed:', explorerCollapsed);
-    console.log('Preview collapsed:', previewCollapsed);
-    console.log('Terminal collapsed:', terminalCollapsed);
-    
-    const state = {
-      filePath: filePath,
-      currentDir: currentDir,
-      explorerCollapsed: explorerCollapsed,
-      previewCollapsed: previewCollapsed,
-      terminalCollapsed: terminalCollapsed,
-      terminalHeight: terminalPanel ? (terminalPanel.style.height || '200px') : '200px',
-      terminalAtBottom: terminalAtBottom,
-      explorerWidth: fileExplorerPanel.style.width || '250px',
-      editorWidth: editorPanel.style.width || '',
-      previewWidth: previewPanel.style.width || '',
-      activeTerminalTab: document.querySelector('.terminal-tab.active')?.dataset.tab || 'client'
-    };
-    
-    console.log('Saving state object:', state);
-    
-    try {
-      localStorage.setItem('previewState', JSON.stringify(state));
-      console.log('State saved successfully');
-    } catch (err) {
-      console.error('Error saving state:', err);
-    }
-  }
-  
-  function restoreState() {
-    try {
-      const savedState = localStorage.getItem('previewState');
-      if (!savedState) {
-        console.log('No saved state found - initializing with defaults');
-        
-        if (!previewSettings.defaultExplorerVisible) {
-          fileExplorerPanel.classList.add('collapsed');
-          toggleExplorer.textContent = '▶';
-        }
-        if (!previewSettings.defaultTerminalVisible && terminalPanel) {
-          terminalPanel.classList.add('collapsed');
-          const toggleTerminal = document.getElementById('toggleTerminal');
-          if (toggleTerminal) {
-            toggleTerminal.textContent = '+';
-          }
-        }
-        
-        updateExplorerVisibility();
-        updatePreviewVisibility();
-        if (terminalPanel) {
-          updateTerminalVisibility();
-        }
-        return;
-      }
-      
-      const state = JSON.parse(savedState);
-      console.log('Restoring state:', state);
-      
-      const terminalPanel = document.getElementById('terminalPanel');
-      const resizerTerminal = document.getElementById('resizerTerminal');
-      const toggleTerminal = document.getElementById('toggleTerminal');
-      
-      // Restore file path - switch if different (without reload)
-      // BUT: Don't restore if forceLoad is true (user explicitly wants this file)
-      if (!forceLoad && state.filePath && state.filePath !== filePath) {
-        console.log('Switching to saved file:', state.filePath);
-        // Use switchToFile but skip the unsaved changes check during restore
-        filePath = state.filePath;
-        fileName.textContent = state.filePath.split('/').pop();
-        const newDir = state.filePath.split('/').slice(0, -1).join('/') || '';
-        if (newDir !== currentDir) {
-          currentDir = newDir;
-          loadFileTree(currentDir);
-        }
-        loadFile(state.filePath);
-        // Update URL without reload
-        const newUrl = '/__preview__?file=' + encodeURIComponent(state.filePath);
-        window.history.replaceState({ file: state.filePath }, '', newUrl);
-        // Continue with restoring other state
-      } else if (forceLoad) {
-        console.log('Force load: using file from URL, not restoring saved file');
-      }
-      
-      // Restore explorer state
-      if (state.explorerCollapsed !== undefined) {
-        console.log('=== RESTORING EXPLORER STATE ===');
-        console.log('Saved state explorerCollapsed:', state.explorerCollapsed);
-        console.log('Current explorer has collapsed class:', fileExplorerPanel.classList.contains('collapsed'));
-        
-        // Clear any existing state first
-        fileExplorerPanel.classList.remove('collapsed');
-        console.log('After removing collapsed class, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
-        
-        if (state.explorerCollapsed) {
-          fileExplorerPanel.classList.add('collapsed');
-          toggleExplorer.textContent = '▶';
-          console.log('Added collapsed class, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
-        } else {
-          fileExplorerPanel.classList.remove('collapsed'); // Ensure it's removed
-          toggleExplorer.textContent = '◀';
-          console.log('Explorer should be open, has collapsed:', fileExplorerPanel.classList.contains('collapsed'));
-        }
-        
-        // Update visibility AFTER state is set
-        updateExplorerVisibility();
-        
-        // Force reflow and verify
-        requestAnimationFrame(() => {
-          const height = fileExplorerPanel.offsetHeight;
-          const width = window.getComputedStyle(fileExplorerPanel).width;
-          console.log('Explorer panel offsetHeight:', height);
-          console.log('Explorer panel computed width:', width);
-          console.log('Explorer panel final collapsed state:', fileExplorerPanel.classList.contains('collapsed'));
-        });
-      } else {
-        console.log('No explorer collapsed state in saved state');
-      }
-      if (state.explorerWidth) {
-        console.log('Restoring explorer width:', state.explorerWidth);
-        fileExplorerPanel.style.width = state.explorerWidth;
-      }
-      
-      // Restore preview state
-      if (state.previewCollapsed !== undefined) {
-        console.log('=== RESTORING PREVIEW STATE ===');
-        console.log('Saved state previewCollapsed:', state.previewCollapsed);
-        console.log('Current preview has collapsed class:', previewPanel.classList.contains('collapsed'));
-        
-        // Clear any existing state first
-        previewPanel.classList.remove('collapsed');
-        console.log('After removing collapsed class, has collapsed:', previewPanel.classList.contains('collapsed'));
-        
-        if (state.previewCollapsed) {
-          previewPanel.classList.add('collapsed');
-          togglePreview.textContent = '▶';
-          console.log('Added collapsed class, has collapsed:', previewPanel.classList.contains('collapsed'));
-        } else {
-          previewPanel.classList.remove('collapsed'); // Ensure it's removed
-          togglePreview.textContent = '◀';
-          console.log('Preview should be open, has collapsed:', previewPanel.classList.contains('collapsed'));
-        }
-        
-        // Update visibility AFTER state is set
-        updatePreviewVisibility();
-        
-        // Force reflow and verify
-        requestAnimationFrame(() => {
-          const height = previewPanel.offsetHeight;
-          const width = window.getComputedStyle(previewPanel).width;
-          console.log('Preview panel offsetHeight:', height);
-          console.log('Preview panel computed width:', width);
-          console.log('Preview panel final collapsed state:', previewPanel.classList.contains('collapsed'));
-        });
-      } else {
-        console.log('No preview collapsed state in saved state');
-      }
-      
-      // Restore panel widths
-      if (state.editorWidth) {
-        editorPanel.style.width = state.editorWidth;
-        editorPanel.style.flex = 'none';
-      }
-      if (state.previewWidth) {
-        previewPanel.style.width = state.previewWidth;
-        previewPanel.style.flex = 'none';
-      }
-      
-      // Restore terminal state
-      if (terminalPanel) {
-        // Restore terminal position first
-        if (state.terminalAtBottom !== undefined) {
-          console.log('Restoring terminal position:', state.terminalAtBottom ? 'bottom' : 'explorer');
-          if (state.terminalAtBottom) {
-            moveTerminalToBottomPosition();
-          } else {
-            moveTerminalToExplorerPosition();
-          }
-        }
-        
-        if (state.terminalCollapsed !== undefined) {
-          console.log('Restoring terminal collapsed:', state.terminalCollapsed);
-          if (state.terminalCollapsed) {
-            terminalPanel.classList.add('collapsed');
-          } else {
-            terminalPanel.classList.remove('collapsed');
-            // Restore height only if not collapsed
-            if (state.terminalHeight) {
-              console.log('Restoring terminal height:', state.terminalHeight);
-              terminalPanel.style.height = state.terminalHeight;
-            }
-          }
-          // Update visibility after state is set
-          updateTerminalVisibility();
-          // Force reflow
-          terminalPanel.offsetHeight;
-        } else if (state.terminalHeight) {
-          // If collapsed state not saved, just restore height
-          console.log('Restoring terminal height (no collapsed state):', state.terminalHeight);
-          terminalPanel.style.height = state.terminalHeight;
-        }
-      }
-      
-      // Restore active terminal tab (must happen after terminal is visible and setup)
-      if (state.activeTerminalTab) {
-        console.log('Restoring active terminal tab:', state.activeTerminalTab);
-        // Wait for terminal setup to complete
-        setTimeout(() => {
-          const tab = document.querySelector(`.terminal-tab[data-tab="${state.activeTerminalTab}"]`);
-          if (tab) {
-            console.log('Switching to terminal tab:', tab);
-            // Manually trigger the tab switch logic
-            const tabName = tab.dataset.tab;
-            const tabs = document.querySelectorAll('.terminal-tab');
-            const tabContents = document.querySelectorAll('.terminal-tab-content');
-            
-            // Update active tab
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            
-            // Update active content
-            tabContents.forEach(content => {
-              content.classList.remove('active');
-              let expectedId;
-              if (tabName === 'powershell') {
-                expectedId = 'terminalPowerShell';
-              } else if (tabName === 'client') {
-                expectedId = 'terminalClient';
-              } else if (tabName === 'server') {
-                expectedId = 'terminalServer';
-              } else if (tabName === 'log') {
-                expectedId = 'terminalLog';
-              }
-              
-              if (content.id === expectedId) {
-                content.classList.add('active');
-                // Focus input if it exists
-                const input = content.querySelector('.terminal-input');
-                if (input) {
-                  input.disabled = false;
-                  input.style.pointerEvents = 'auto';
-                  input.style.display = 'block';
-                  setTimeout(() => {
-                    input.focus();
-                  }, 100);
-                }
-              } else {
-                content.style.display = 'none';
-              }
-            });
-          } else {
-            console.warn('Terminal tab not found:', state.activeTerminalTab);
-          }
-        }, 300);
-      }
-      
-      // Restore current directory (only if it's different and file tree is already loaded)
-      if (state.currentDir && state.currentDir !== currentDir) {
-        console.log('Restoring directory:', state.currentDir);
-        currentDir = state.currentDir;
-        // Only reload if file tree is already loaded
-        if (fileTree && fileTree.innerHTML !== '<div class="file-tree-loading">Loading...</div>') {
-          loadFileTree(currentDir);
-        }
-      }
-      
-      console.log('State restored successfully');
-      console.log('Current directory after restore:', currentDir);
-      console.log('Explorer collapsed:', fileExplorerPanel.classList.contains('collapsed'));
-      console.log('Preview collapsed:', previewPanel.classList.contains('collapsed'));
-      console.log('Terminal collapsed:', terminalPanel ? terminalPanel.classList.contains('collapsed') : 'N/A');
-    } catch (err) {
-      console.error('Error restoring state:', err);
-    }
-  }
-  
-  // Reset settings function
-  function resetSettings() {
-    // Clear all localStorage settings
-    localStorage.removeItem('previewState');
-    localStorage.removeItem('fileExplorerSettings');
-    
-    // Reset explorer panel
-    fileExplorerPanel.classList.remove('collapsed');
-    fileExplorerPanel.style.width = '250px';
-    fileExplorerPanel.style.maxWidth = '';
-    fileExplorerPanel.style.flex = '';
-    toggleExplorer.textContent = '◀';
-    
-    // Reset editor panel
-    editorPanel.style.width = '';
-    editorPanel.style.flex = '';
-    editorPanel.style.minWidth = '';
-    editorPanel.style.maxWidth = '';
-    
-    // Reset preview panel
-    previewPanel.classList.remove('collapsed');
-    previewPanel.style.width = '';
-    previewPanel.style.flex = '';
-    previewPanel.style.minWidth = '';
-    previewPanel.style.maxWidth = '';
-    togglePreview.textContent = '◀';
-    
-    // Reset terminal panel
-    if (terminalPanel) {
-      terminalPanel.classList.remove('collapsed');
-      terminalPanel.style.height = '200px';
-      
-      // Reset terminal tab to client
-      const tabs = document.querySelectorAll('.terminal-tab');
-      const tabContents = document.querySelectorAll('.terminal-tab-content');
-      tabs.forEach(t => t.classList.remove('active'));
-      tabContents.forEach(c => {
-        c.classList.remove('active');
-        c.style.display = 'none';
-      });
-      const clientTab = document.querySelector('.terminal-tab[data-tab="client"]');
-      const clientContent = document.getElementById('terminalClient');
-      if (clientTab && clientContent) {
-        clientTab.classList.add('active');
-        clientContent.classList.add('active');
-        clientContent.style.display = 'flex';
-      }
-    }
-    
-    // Update visibility
-    updateExplorerVisibility();
-    updatePreviewVisibility();
-    if (terminalPanel) {
-      updateTerminalVisibility();
-    }
-    
-    // Show feedback
-    status.textContent = 'Settings reset';
-    status.className = 'status saved';
-    setTimeout(() => {
-      status.textContent = 'Ready';
-      status.className = 'status';
-    }, 2000);
-    
-    console.log('Settings reset to defaults');
-  }
-  
-  // Save state on various events
-  window.addEventListener('beforeunload', () => {
-    saveState();
-    if (ws) {
-      ws.close();
-    }
-  });
-  
-  // Save state periodically as well
-  setInterval(saveState, 5000); // Save every 5 seconds
-  
-  // Server update notification
-  let serverUpdateNotificationShown = false;
-  
-  function showServerUpdateNotification() {
-    if (serverUpdateNotificationShown) return;
-    serverUpdateNotificationShown = true;
-    
-    const notification = document.getElementById('serverUpdateNotification');
-    if (!notification) return;
-    
-    notification.style.display = 'block';
-    
-    // Setup buttons
-    const updateNowBtn = document.getElementById('serverUpdateNow');
-    const skipBtn = document.getElementById('serverUpdateSkip');
-    
-    if (updateNowBtn) {
-      updateNowBtn.onclick = () => {
-        notification.style.display = 'none';
-        restartServer();
-      };
-    }
-    
-    if (skipBtn) {
-      skipBtn.onclick = () => {
-        notification.style.display = 'none';
-        serverUpdateNotificationShown = false;
-      };
-    }
-  }
-  
-  async function restartServer() {
-    // Show overlay and freeze screen
-    const overlay = document.getElementById('restartOverlay');
-    const statusEl = document.getElementById('restartStatus');
-    if (overlay) {
-      overlay.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    }
-    
-    // Save current editor state to temp
-    let savedState = null;
-    try {
-      if (editor && editor.getModel()) {
-        const currentContent = editor.getModel().getValue();
-        const currentPath = filePath;
-        savedState = {
-          filePath: currentPath,
-          content: currentContent,
-          cursorPosition: editor.getPosition(),
-          scrollPosition: editor.getScrollTop(),
-          viewState: editor.saveViewState()
-        };
-        // Save to localStorage as temp
-        localStorage.setItem('tempEditorState', JSON.stringify(savedState));
-      }
-    } catch (err) {
-      console.error('Error saving editor state:', err);
-    }
-    
-    // Update status
-    if (statusEl) statusEl.textContent = 'Saving current work...';
-    
-    // Save file if dirty
-    if (isDirty && editor && editor.getModel()) {
-      try {
-        await saveFile();
-      } catch (err) {
-        console.error('Error saving file before restart:', err);
-      }
-    }
-    
-    // Update status
-    if (statusEl) statusEl.textContent = 'Restarting server...';
-    
-    // Close current WebSocket connection
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
-    
-    // Call restart endpoint
-    try {
-      const response = await fetch('/__api__/restart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to restart server');
-      }
-      
-      if (statusEl) statusEl.textContent = 'Waiting for server to restart...';
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      
-      if (statusEl) statusEl.textContent = 'Waiting for server to bind port...';
-      
-      await waitForHttpServer();
-      
-      if (statusEl) statusEl.textContent = 'Waiting for WebSocket connection';
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      
-      if (statusEl) statusEl.textContent = 'Connecting to WebSocket...';
-      
-      await waitForWebSocket();
-      
-      if (statusEl) statusEl.textContent = 'Server restarted! Reloading...';
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      window.location.reload();
-    } catch (err) {
-      console.error('Error restarting server:', err);
-      if (statusEl) statusEl.textContent = 'Error: ' + err.message;
-      if (overlay) {
-        setTimeout(() => {
-          overlay.style.display = 'none';
-          document.body.style.overflow = '';
-        }, 3000);
-      }
-    }
-  }
-  
-  
-  async function waitForHttpServer(maxAttempts = 30, delay = 1000) {
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const response = await fetch('/__api__/files?path=/&list=true', {
-          method: 'GET',
-          signal: AbortSignal.timeout(2000)
-        });
-        if (response.ok) {
-          return true;
-        }
-      } catch (err) {
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-    throw new Error('HTTP server did not restart in time');
-  }
-  
-  async function waitForWebSocket(maxAttempts = 60, delay = 500) {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      let resolved = false;
-      
-      const checkConnection = () => {
-        attempts++;
-        
-        if (attempts > maxAttempts) {
-          if (!resolved) {
-            resolved = true;
-            reject(new Error('WebSocket did not reconnect in time'));
-          }
-          return;
-        }
-        
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = protocol + '//' + window.location.host;
-        const testWs = new WebSocket(wsUrl);
-        
-        testWs.onopen = () => {
-          if (!resolved) {
-            resolved = true;
-            testWs.close();
-            resolve(true);
-          }
-        };
-        
-        testWs.onerror = () => {
-          testWs.close();
-          if (!resolved) {
-            setTimeout(checkConnection, delay);
-          }
-        };
-        
-        testWs.onclose = (event) => {
-          if (!resolved && testWs.readyState === WebSocket.CLOSED && event.code !== 1000) {
-            setTimeout(checkConnection, delay);
-          }
-        };
-      };
-      
-      checkConnection();
-    });
-  }
-  
-  function restoreTempEditorState() {
-    try {
-      const tempState = localStorage.getItem('tempEditorState');
-      if (tempState) {
-        const state = JSON.parse(tempState);
-        localStorage.removeItem('tempEditorState');
-        
-        if (state.filePath === filePath && editor && editor.getModel()) {
-          editor.getModel().setValue(state.content);
-          
-          if (state.cursorPosition) {
-            editor.setPosition(state.cursorPosition);
-            editor.revealPositionInCenter(state.cursorPosition);
-          }
-          
-          if (state.scrollPosition !== undefined) {
-            editor.setScrollTop(state.scrollPosition);
-          }
-          
-          if (state.viewState) {
-            editor.restoreViewState(state.viewState);
-          }
-          
-          isDirty = false;
-          updateStatus();
-        }
-      }
-    } catch (err) {
-      console.error('Error restoring temp editor state:', err);
-    }
   }
   
   setTimeout(() => {
-    restoreTempEditorState();
+    PreviewServer.restoreTempEditorState(filePathRef.current, editor, updateStatus);
   }, 1000);
 });
