@@ -6,8 +6,8 @@
 
 body {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: var(--bg-primary, #1e1e1e);
+  color: var(--text-primary, #d4d4d4);
   overflow: hidden;
   height: 100vh;
   display: flex;
@@ -15,8 +15,8 @@ body {
 }
 
 .popout-header {
-  background: #252526;
-  border-bottom: 1px solid #3e3e42;
+  background: var(--bg-secondary, #252526);
+  border-bottom: 1px solid var(--border-primary, #3e3e42);
   padding: 8px 15px;
   display: flex;
   justify-content: space-between;
@@ -26,13 +26,13 @@ body {
 
 .popout-title {
   font-size: 14px;
-  color: #cccccc;
+  color: var(--text-secondary, #cccccc);
 }
 
 .popout-close {
   background: transparent;
   border: none;
-  color: #cccccc;
+  color: var(--text-secondary, #cccccc);
   cursor: pointer;
   padding: 4px 8px;
   font-size: 14px;
@@ -40,8 +40,8 @@ body {
 }
 
 .popout-close:hover {
-  color: #ffffff;
-  background: #2a2d2e;
+  color: var(--text-inverse, #ffffff);
+  background: var(--bg-hover, #2a2d2e);
 }
 
 #editor {

@@ -1,12 +1,46 @@
 const urlParams = new URLSearchParams(window.location.search);
 const filePath = urlParams.get('file');
 const originalUrl = urlParams.get('original');
+const theme = urlParams.get('theme') || 'dark';
+const customCSS = urlParams.get('customCSS') ? atob(urlParams.get('customCSS')) : '';
 
 let editor = null;
 let originalContent = '';
 let isDirty = false;
 
 const channel = new BroadcastChannel('preview-sync');
+
+// Load theme
+async function loadTheme(themeName, customCSS) {
+  const themeStyle = document.getElementById('theme-style');
+  if (!themeStyle) return;
+  
+  try {
+    if (themeName === 'custom' && customCSS) {
+      themeStyle.textContent = customCSS;
+    } else {
+      const response = await fetch(`/__api__/theme?name=${encodeURIComponent(themeName)}`);
+      if (response.ok) {
+        const themeCss = await response.text();
+        themeStyle.textContent = themeCss;
+      }
+    }
+  } catch (error) {
+    console.error('Error loading theme:', error);
+  }
+}
+
+// Load theme on page load
+loadTheme(theme, customCSS);
+
+// Listen for theme changes
+channel.addEventListener('message', (event) => {
+  if (event.data.type === 'file-changed' && event.data.theme) {
+    loadTheme(event.data.theme, event.data.customCSS);
+  } else if (event.data.type === 'theme-changed') {
+    loadTheme(event.data.theme, event.data.customCSS);
+  }
+});
 
 function getLanguage(filePath) {
   const ext = filePath.split('.').pop().toLowerCase();
@@ -60,8 +94,54 @@ require(['vs/editor/editor.main'], function() {
         wordWrap: 'on'
       });
       
-      channel.addEventListener('message', (event) => {
-        if (event.data.type === 'editor-content' && event.data.filePath === filePath) {
+             channel.addEventListener('message', (event) => {
+               if (event.data.type === 'theme-changed') {
+                 // Update theme when it changes in the main window
+                 try {
+                   const saved = localStorage.getItem('previewSettings');
+                   const settings = saved ? JSON.parse(saved) : {};
+                   settings.pageTheme = event.data.theme || 'dark';
+                   if (event.data.customCSS) {
+                     settings.customThemeCSS = event.data.customCSS;
+                   }
+                   localStorage.setItem('previewSettings', JSON.stringify(settings));
+                   
+                   const newThemeInfo = getTheme();
+                   // Update Monaco editor theme
+                   if (newThemeInfo.theme === 'custom' && newThemeInfo.customCSS) {
+                     monaco.editor.defineTheme('customTheme', {
+                       base: 'vs-dark',
+                       inherit: true,
+                       rules: [],
+                       colors: {}
+                     });
+                     monaco.editor.setTheme('customTheme');
+                   } else if (newThemeInfo.theme === 'dark') {
+                     monaco.editor.setTheme('vs-dark');
+                   } else if (newThemeInfo.theme === 'light') {
+                     monaco.editor.setTheme('vs-light');
+                   } else if (monaco.editor.BuiltinTheme && monaco.editor.BuiltinTheme.hasOwnProperty(newThemeInfo.theme)) {
+                     monaco.editor.setTheme(newThemeInfo.theme);
+                   }
+                   
+                   // Update overall popout theme via injected CSS
+                   const themeStyle = document.getElementById('theme-style');
+                   if (themeStyle) {
+                     if (newThemeInfo.theme === 'custom' && newThemeInfo.customCSS) {
+                       themeStyle.textContent = newThemeInfo.customCSS;
+                     } else {
+                       fetch(`/__api__/theme?name=${encodeURIComponent(newThemeInfo.theme)}`)
+                         .then(res => res.text())
+                         .then(css => {
+                           if (themeStyle) themeStyle.textContent = css;
+                         })
+                         .catch(err => console.error('Error loading theme:', err));
+                     }
+                   }
+                 } catch (e) {
+                   console.error('Error updating theme in editor popout:', e);
+                 }
+               } else if (event.data.type === 'editor-content' && event.data.filePath === filePath) {
           const currentValue = editor.getValue();
           if (currentValue !== event.data.content) {
             const position = editor.getPosition();

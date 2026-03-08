@@ -51,27 +51,42 @@ window.PreviewSettings = (function() {
           return;
         }
         
+        let themeCss = '';
         if (themeName === 'custom') {
           const customCSS = previewSettings.customThemeCSS || '';
           if (customCSS.trim() === '') {
             const response = await fetch(`/__api__/theme?name=dark`);
             if (response.ok) {
-              const themeCss = await response.text();
+              themeCss = await response.text();
               themeStyle.textContent = themeCss;
             } else {
               console.error('Failed to load fallback theme:', response.status);
             }
           } else {
+            themeCss = customCSS;
             themeStyle.textContent = customCSS;
           }
         } else {
           const response = await fetch(`/__api__/theme?name=${encodeURIComponent(themeName)}`);
           if (response.ok) {
-            const themeCss = await response.text();
+            themeCss = await response.text();
             themeStyle.textContent = themeCss;
           } else {
             console.error('Failed to load theme:', response.status);
           }
+        }
+        
+        // Broadcast theme change to all popout windows
+        try {
+          const channel = new BroadcastChannel('preview-sync');
+          channel.postMessage({
+            type: 'theme-changed',
+            theme: themeName,
+            customCSS: themeName === 'custom' ? previewSettings.customThemeCSS || '' : ''
+          });
+          setTimeout(() => channel.close(), 50);
+        } catch (err) {
+          console.error('Error broadcasting theme change:', err);
         }
       } catch (error) {
         console.error('Error loading theme:', error);
@@ -132,21 +147,21 @@ window.PreviewSettings = (function() {
         
         const pageTheme = document.getElementById('pageTheme');
         if (pageTheme) {
-          pageTheme.addEventListener('change', this.handleThemePreview);
+          pageTheme.addEventListener('change', PreviewSettings.handleThemePreview);
         }
       }
     },
 
-    closeSettings() {
+    closeSettings(skipThemeRevert = false) {
       const settingsPanel = document.getElementById('settingsPanel');
       if (settingsPanel) {
         const pageTheme = document.getElementById('pageTheme');
         if (pageTheme) {
-          pageTheme.removeEventListener('change', this.handleThemePreview);
+          pageTheme.removeEventListener('change', PreviewSettings.handleThemePreview);
         }
         
-        if (originalTheme !== null && originalTheme !== previewSettings.pageTheme) {
-          this.loadTheme(originalTheme);
+        if (!skipThemeRevert && originalTheme !== null && originalTheme !== previewSettings.pageTheme) {
+          PreviewSettings.loadTheme(originalTheme);
           previewSettings.pageTheme = originalTheme;
         }
         
@@ -163,7 +178,7 @@ window.PreviewSettings = (function() {
         if (customThemeGroup) {
           customThemeGroup.style.display = pageTheme.value === 'custom' ? 'block' : 'none';
         }
-        this.loadTheme(pageTheme.value);
+        PreviewSettings.loadTheme(pageTheme.value);
       }
     },
 
@@ -180,6 +195,7 @@ window.PreviewSettings = (function() {
         defaultExplorerVisible: true,
         defaultTerminalVisible: false
       };
+      this.savePreviewSettings();
     }
   };
 })();

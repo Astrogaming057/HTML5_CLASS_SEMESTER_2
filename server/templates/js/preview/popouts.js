@@ -98,17 +98,22 @@ window.PreviewPopouts = (function() {
       terminalPopout = popout;
     },
 
-    openEditorPopout(getFilePath) {
+    openEditorPopout(getFilePath, getPreviewSettings) {
       const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
-      console.log('openEditorPopout called, filePath:', filePath);
+      const settings = typeof getPreviewSettings === 'function' ? getPreviewSettings() : getPreviewSettings;
+      const theme = settings ? settings.pageTheme : 'dark';
+      const customCSS = settings && settings.customThemeCSS ? settings.customThemeCSS : '';
+      
       if (editorPopout && !editorPopout.closed) {
         editorPopout.focus();
-        this.updateEditorPopout(filePath);
+        this.updateEditorPopout(filePath, getPreviewSettings);
         return;
       }
       
-      const url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}`;
-      console.log('Opening editor popout:', url);
+      let url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}&theme=${encodeURIComponent(theme)}`;
+      if (theme === 'custom' && customCSS) {
+        url += `&customCSS=${encodeURIComponent(btoa(customCSS))}`;
+      }
       editorPopout = window.open(url, 'editor-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
       
       if (!editorPopout) {
@@ -117,23 +122,36 @@ window.PreviewPopouts = (function() {
       }
     },
     
-    updateEditorPopout(filePath) {
+    updateEditorPopout(filePath, getPreviewSettings) {
       if (editorPopout && !editorPopout.closed) {
-        const url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}`;
+        const settings = typeof getPreviewSettings === 'function' ? getPreviewSettings() : getPreviewSettings;
+        const theme = settings ? settings.pageTheme : 'dark';
+        const customCSS = settings && settings.customThemeCSS ? settings.customThemeCSS : '';
+        
+        let url = `/__popout__/editor?file=${encodeURIComponent(filePath)}&original=${encodeURIComponent(window.location.href)}&theme=${encodeURIComponent(theme)}`;
+        if (theme === 'custom' && customCSS) {
+          url += `&customCSS=${encodeURIComponent(btoa(customCSS))}`;
+        }
         editorPopout.location.href = url;
       }
     },
 
-    openPreviewPopout(getFilePath, previewPanel, updatePreviewVisibility) {
+    openPreviewPopout(getFilePath, previewPanel, updatePreviewVisibility, getPreviewSettings) {
       const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
+      const settings = typeof getPreviewSettings === 'function' ? getPreviewSettings() : getPreviewSettings;
+      const theme = settings ? settings.pageTheme : 'dark';
+      const customCSS = settings && settings.customThemeCSS ? settings.customThemeCSS : '';
       
       if (previewPopout && !previewPopout.closed) {
         previewPopout.focus();
-        this.updatePreviewPopout(filePath);
+        this.updatePreviewPopout(filePath, getPreviewSettings);
         return;
       }
       
-      const url = `/__popout__/preview?file=${encodeURIComponent(filePath)}`;
+      let url = `/__popout__/preview?file=${encodeURIComponent(filePath)}&theme=${encodeURIComponent(theme)}`;
+      if (theme === 'custom' && customCSS) {
+        url += `&customCSS=${encodeURIComponent(btoa(customCSS))}`;
+      }
       previewPopout = window.open(url, 'preview-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
       
       if (!previewPopout) {
@@ -157,7 +175,7 @@ window.PreviewPopouts = (function() {
       }
     },
     
-    updatePreviewPopout(filePath) {
+    updatePreviewPopout(filePath, getPreviewSettings) {
       if (previewPopout && !previewPopout.closed) {
         // Debounce updates to prevent spam - only update if file actually changed
         if (filePath === lastPreviewPopoutFilePath) {
@@ -173,35 +191,49 @@ window.PreviewPopouts = (function() {
         updatePreviewPopoutTimeout = setTimeout(() => {
           lastPreviewPopoutFilePath = filePath;
           
+          const settings = typeof getPreviewSettings === 'function' ? getPreviewSettings() : getPreviewSettings;
+          const theme = settings ? settings.pageTheme : 'dark';
+          const customCSS = settings && settings.customThemeCSS ? settings.customThemeCSS : '';
+          
           // Use BroadcastChannel to update the popout instead of navigating
           // This avoids triggering beforeunload which sends popout-closed message
           try {
             const channel = new BroadcastChannel('preview-sync');
             channel.postMessage({
               type: 'file-changed',
-              filePath: filePath
+              filePath: filePath,
+              theme: theme,
+              customCSS: customCSS
             });
             // Close channel after a short delay
             setTimeout(() => channel.close(), 50);
           } catch (err) {
             console.error('[PreviewPopouts] Error sending file-changed message:', err);
             // Fallback to URL change if BroadcastChannel fails
-            const url = `/__popout__/preview?file=${encodeURIComponent(filePath)}`;
+            let url = `/__popout__/preview?file=${encodeURIComponent(filePath)}&theme=${encodeURIComponent(theme)}`;
+            if (theme === 'custom' && customCSS) {
+              url += `&customCSS=${encodeURIComponent(btoa(customCSS))}`;
+            }
             previewPopout.location.href = url;
           }
         }, 100); // 100ms debounce
       }
     },
 
-    openTerminalPopout(terminalPanel, updateTerminalVisibility) {
-      console.log('openTerminalPopout called');
+    openTerminalPopout(terminalPanel, updateTerminalVisibility, getPreviewSettings) {
       if (terminalPopout && !terminalPopout.closed) {
         terminalPopout.focus();
         return;
       }
       
-      const url = `/__popout__/terminal`;
-      console.log('Opening terminal popout:', url);
+      const settings = typeof getPreviewSettings === 'function' ? getPreviewSettings() : getPreviewSettings;
+      const theme = settings ? settings.pageTheme : 'dark';
+      const customCSS = settings && settings.customThemeCSS ? settings.customThemeCSS : '';
+      
+      let url = `/__popout__/terminal?theme=${encodeURIComponent(theme)}`;
+      if (theme === 'custom' && customCSS) {
+        url += `&customCSS=${encodeURIComponent(btoa(customCSS))}`;
+      }
       terminalPopout = window.open(url, 'terminal-popout', 'width=800,height=600,resizable=yes,scrollbars=yes');
       
       if (!terminalPopout) {

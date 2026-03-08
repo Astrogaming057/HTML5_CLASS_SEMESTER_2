@@ -19,16 +19,43 @@ window.PreviewUI = (function() {
       const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
       const explorerReopenBar = document.getElementById('explorerReopenBar');
       const resizerExplorer = document.getElementById('resizerExplorer');
-      
-      console.log('updateExplorerVisibility, collapsed:', isCollapsed);
+      const previewPanel = document.getElementById('previewPanel');
+      const editorPanel = document.getElementById('editorPanel');
       
       if (explorerReopenBar) {
         explorerReopenBar.style.display = isCollapsed ? 'flex' : 'none';
-        console.log('Explorer reopen bar display:', explorerReopenBar.style.display);
       }
       
       if (resizerExplorer) {
         resizerExplorer.style.display = isCollapsed ? 'none' : 'block';
+      }
+      
+      // Adjust preview panel when explorer is collapsed to prevent overflow
+      if (previewPanel && editorPanel) {
+        if (isCollapsed) {
+          // When explorer is collapsed, ensure preview doesn't overflow
+          // Force a layout recalculation
+          requestAnimationFrame(() => {
+            const container = document.querySelector('.preview-container');
+            if (container) {
+              const containerWidth = container.offsetWidth;
+              const editorWidth = editorPanel.offsetWidth;
+              const previewWidth = previewPanel.offsetWidth;
+              
+              // If preview is extending beyond viewport, adjust it
+              if (previewWidth + editorWidth > containerWidth) {
+                const maxPreviewWidth = containerWidth - editorWidth - 20; // 20px for margins/padding
+                if (previewWidth > maxPreviewWidth && maxPreviewWidth > MIN_PREVIEW_WIDTH) {
+                  previewPanel.style.maxWidth = maxPreviewWidth + 'px';
+                  previewPanel.style.width = maxPreviewWidth + 'px';
+                }
+              }
+            }
+          });
+        } else {
+          // Reset max-width when explorer is open
+          previewPanel.style.maxWidth = '';
+        }
       }
     },
 
@@ -90,6 +117,12 @@ window.PreviewUI = (function() {
         editorPanel.style.minWidth = MIN_EDITOR_WIDTH + 'px';
         editorPanel.style.width = '';
       } else {
+        // Ensure preview frame is visible when opening
+        const previewFrame = document.getElementById('previewFrame');
+        if (previewFrame) {
+          previewFrame.style.display = 'block';
+        }
+        
         if (editorPanel.dataset.previousWidth) {
           editorPanel.style.width = editorPanel.dataset.previousWidth;
           editorPanel.style.flex = 'none';

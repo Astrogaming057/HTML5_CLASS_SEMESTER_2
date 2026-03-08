@@ -280,6 +280,10 @@ window.PreviewState = (function() {
         previewPanel.style.minWidth = '';
         previewPanel.style.maxWidth = '';
         togglePreview.textContent = '◀';
+        const previewFrame = document.getElementById('previewFrame');
+        if (previewFrame) {
+          previewFrame.style.display = 'block';
+        }
       } else {
         PreviewPopouts.enforcePreviewCollapsed(previewPanel);
         togglePreview.textContent = '▶';
@@ -310,6 +314,9 @@ window.PreviewState = (function() {
       if (terminalPanel) {
         updateTerminalVisibility();
       }
+      
+      // Save the reset state
+      saveState();
       
       status.textContent = 'Settings reset';
       status.className = 'status saved';

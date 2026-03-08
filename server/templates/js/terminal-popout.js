@@ -1,7 +1,66 @@
 const channel = new BroadcastChannel('preview-sync');
 
+const urlParams = new URLSearchParams(window.location.search);
+const theme = urlParams.get('theme') || 'dark';
+const customCSS = urlParams.get('customCSS') ? atob(urlParams.get('customCSS')) : '';
+
 let activeTab = 'client';
 let ws = null;
+
+// Load theme from localStorage if available, otherwise use URL params
+function getTheme() {
+  try {
+    const saved = localStorage.getItem('previewSettings');
+    if (saved) {
+      const settings = JSON.parse(saved);
+      return {
+        theme: settings.pageTheme || theme,
+        customCSS: settings.customThemeCSS || customCSS
+      };
+    }
+  } catch (e) {
+    console.error('Error loading theme from localStorage:', e);
+  }
+  return { theme, customCSS };
+}
+
+// Load theme
+async function loadTheme(themeName, customCSS) {
+  const themeStyle = document.getElementById('theme-style');
+  if (!themeStyle) {
+    console.error('theme-style element not found');
+    return;
+  }
+  
+  try {
+    if (themeName === 'custom' && customCSS) {
+      themeStyle.textContent = customCSS;
+    } else {
+      const response = await fetch(`/__api__/theme?name=${encodeURIComponent(themeName)}`);
+      if (response.ok) {
+        const themeCss = await response.text();
+        themeStyle.textContent = themeCss;
+      } else {
+        console.error('Failed to load theme:', response.status, response.statusText);
+      }
+    }
+  } catch (error) {
+    console.error('Error loading theme:', error);
+  }
+}
+
+// Load theme on initial page load
+async function loadThemeOnInit() {
+  const themeInfo = getTheme();
+  await loadTheme(themeInfo.theme, themeInfo.customCSS);
+}
+
+// Wait for DOM to be ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadThemeOnInit);
+} else {
+  loadThemeOnInit();
+}
 
 document.querySelectorAll('.terminal-tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -43,7 +102,27 @@ function addTerminalLine(outputEl, text, type = 'log') {
 }
 
 channel.addEventListener('message', (event) => {
-  if (event.data.type === 'terminal-output') {
+  if (event.data.type === 'theme-changed') {
+    // Update theme when it changes in the main window
+    const themeInfo = {
+      theme: event.data.theme || 'dark',
+      customCSS: event.data.customCSS || ''
+    };
+    
+    try {
+      const saved = localStorage.getItem('previewSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.pageTheme = themeInfo.theme;
+      if (themeInfo.customCSS) {
+        settings.customThemeCSS = themeInfo.customCSS;
+      }
+      localStorage.setItem('previewSettings', JSON.stringify(settings));
+      
+      loadTheme(themeInfo.theme, themeInfo.customCSS);
+    } catch (e) {
+      console.error('Error updating theme:', e);
+    }
+  } else if (event.data.type === 'terminal-output') {
     const { tab, output, append, type } = event.data;
     let tabName = tab;
     if (tab === 'powershell') {

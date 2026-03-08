@@ -186,16 +186,16 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function openEditorPopout() {
-    PreviewPopouts.openEditorPopout(() => filePathRef.current);
+    PreviewPopouts.openEditorPopout(() => filePathRef.current, () => previewSettings);
   }
   
   function openPreviewPopout() {
-    PreviewPopouts.openPreviewPopout(() => filePathRef.current, previewPanel);
+    PreviewPopouts.openPreviewPopout(() => filePathRef.current, previewPanel, updatePreviewVisibility, () => previewSettings);
   }
   
   function openTerminalPopout() {
     const terminalPanelEl = document.getElementById('terminalPanel');
-    PreviewPopouts.openTerminalPopout(terminalPanelEl, updateTerminalVisibility);
+    PreviewPopouts.openTerminalPopout(terminalPanelEl, updateTerminalVisibility, () => previewSettings);
   }
   
   function setupWebSocket() {
@@ -301,10 +301,10 @@ require(['vs/editor/editor.main'], function() {
       });
       
       if (isPreviewPoppedOut) {
-        PreviewPopouts.updatePreviewPopout(updatedPath);
+        PreviewPopouts.updatePreviewPopout(updatedPath, () => previewSettings);
       }
       if (PreviewPopouts.getEditorPopout() && !PreviewPopouts.getEditorPopout().closed) {
-        PreviewPopouts.updateEditorPopout(updatedPath);
+        PreviewPopouts.updateEditorPopout(updatedPath, () => previewSettings);
       }
     }
   }

@@ -61,7 +61,7 @@ window.PreviewSettingsUI = (function() {
           
           PreviewSettings.loadTheme(PreviewSettings.getSettings().pageTheme).then(() => {
             PreviewSettings.applyPreviewSettings(editor);
-            PreviewSettings.closeSettings();
+            PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved';
             status.className = 'status saved';
@@ -72,7 +72,7 @@ window.PreviewSettingsUI = (function() {
           }).catch((error) => {
             console.error('Error applying theme:', error);
             PreviewSettings.applyPreviewSettings(editor);
-            PreviewSettings.closeSettings();
+            PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved (theme load failed)';
             status.className = 'status error';
@@ -143,6 +143,15 @@ window.PreviewSettingsUI = (function() {
           PreviewSettings.loadTheme('dark').then(() => {
             PreviewSettings.applyPreviewSettings(editor);
             
+            status.textContent = 'Settings reset to defaults (preview)';
+            status.className = 'status saved';
+            setTimeout(() => {
+              status.textContent = 'Ready';
+              status.className = 'status';
+            }, 2000);
+          }).catch((error) => {
+            console.error('Error loading theme:', error);
+            PreviewSettings.applyPreviewSettings(editor);
             status.textContent = 'Settings reset to defaults (preview)';
             status.className = 'status saved';
             setTimeout(() => {

@@ -80,9 +80,17 @@ window.PreviewSyncChannel = (function() {
           // Note: updatePreviewPopout is called directly from switchToFile,
           // so we don't need to call it here to avoid duplicate updates
           // Only update editor popout if needed
-          if (PreviewPopouts.getEditorPopout() && !PreviewPopouts.getEditorPopout().closed) {
-            PreviewPopouts.updateEditorPopout(data.filePath);
-          }
+              if (PreviewPopouts.getEditorPopout() && !PreviewPopouts.getEditorPopout().closed) {
+                // Note: We don't have access to previewSettings here, so the popout will need to get it from localStorage
+                PreviewPopouts.updateEditorPopout(data.filePath, () => {
+                  try {
+                    const saved = localStorage.getItem('previewSettings');
+                    return saved ? JSON.parse(saved) : { pageTheme: 'dark', customThemeCSS: '' };
+                  } catch (e) {
+                    return { pageTheme: 'dark', customThemeCSS: '' };
+                  }
+                });
+              }
         }
       });
     }
