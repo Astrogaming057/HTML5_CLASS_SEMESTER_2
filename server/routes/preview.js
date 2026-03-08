@@ -111,6 +111,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'gitPanel.js'),
         'utf-8'
       );
+      const helpMenuJs = await fs.readFile(
+        path.join(previewModulesDir, 'helpMenu.js'),
+        'utf-8'
+      );
       const initializationJs = await fs.readFile(
         path.join(previewModulesDir, 'initialization.js'),
         'utf-8'
@@ -163,6 +167,8 @@ async function loadPreviewTemplates() {
         globalSearchJs,
         '// Git Panel',
         gitPanelJs,
+        '// Help Menu',
+        helpMenuJs,
         '// Initialization',
         initializationJs,
         '// Main',

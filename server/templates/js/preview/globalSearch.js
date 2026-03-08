@@ -48,68 +48,6 @@ window.PreviewGlobalSearch = (function() {
     return dialog;
   }
 
-  async function getAllFiles(basePath = '/', files = []) {
-    try {
-      const response = await fetch(`/__api__/files?path=${encodeURIComponent(basePath)}&list=true`);
-      const data = await response.json();
-      
-      if (data.success && data.files) {
-        for (const file of data.files) {
-          if (file.isDirectory) {
-            if (file.name.toLowerCase() !== 'ide_editor_cache') {
-              await getAllFiles(file.path, files);
-            }
-          } else {
-            files.push(file.path);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching files:', error);
-    }
-    return files;
-  }
-
-  async function searchInFile(filePath, query, caseSensitive, wholeWord) {
-    try {
-      const response = await fetch(`/__api__/files?path=${encodeURIComponent(filePath)}`);
-      const data = await response.json();
-      
-      if (!data.success || !data.content) return [];
-
-      const content = data.content;
-      const lines = content.split('\n');
-      const matches = [];
-      const flags = caseSensitive ? 'g' : 'gi';
-      let regexQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
-      if (wholeWord) {
-        regexQuery = `\\b${regexQuery}\\b`;
-      }
-
-      const regex = new RegExp(regexQuery, flags);
-
-      lines.forEach((line, lineNum) => {
-        let match;
-        while ((match = regex.exec(line)) !== null) {
-          matches.push({
-            line: lineNum + 1,
-            text: line.trim(),
-            matchIndex: match.index,
-            matchLength: match[0].length
-          });
-          // Prevent infinite loop for zero-length matches
-          if (match[0].length === 0) break;
-        }
-      });
-
-      return matches.length > 0 ? { filePath, matches } : null;
-    } catch (error) {
-      console.error(`Error searching in ${filePath}:`, error);
-      return null;
-    }
-  }
-
   async function performSearch(query, caseSensitive, wholeWord) {
     if (!query.trim()) {
       resultsContainer.innerHTML = '<div class="global-search-placeholder">Enter a search term to find matches across all files</div>';
@@ -120,28 +58,25 @@ window.PreviewGlobalSearch = (function() {
     resultsContainer.innerHTML = '<div class="global-search-loading">Searching...</div>';
 
     try {
-      const allFiles = await getAllFiles();
-      const results = [];
-      let filesSearched = 0;
-      const maxFiles = 100; // Limit for performance
-
-      // Search in batches to avoid blocking
-      for (let i = 0; i < Math.min(allFiles.length, maxFiles); i++) {
-        const filePath = allFiles[i];
-        const result = await searchInFile(filePath, query, caseSensitive, wholeWord);
-        if (result) {
-          results.push(result);
-        }
-        filesSearched++;
-
-        // Update progress every 10 files
-        if (filesSearched % 10 === 0) {
-          resultsContainer.innerHTML = `<div class="global-search-loading">Searching... (${filesSearched}/${Math.min(allFiles.length, maxFiles)} files)</div>`;
-        }
-      }
-
+      const response = await fetch('/__api__/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: query.trim(),
+          caseSensitive: caseSensitive,
+          wholeWord: wholeWord
+        })
+      });
+      
+      const data = await response.json();
+      
       isSearching = false;
-      renderResults(results, query);
+      
+      if (data.success && data.results) {
+        renderResults(data.results, query);
+      } else {
+        resultsContainer.innerHTML = `<div class="global-search-error">Error: ${data.error || 'Search failed'}</div>`;
+      }
     } catch (error) {
       isSearching = false;
       resultsContainer.innerHTML = `<div class="global-search-error">Error: ${error.message}</div>`;

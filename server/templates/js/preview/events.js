@@ -1,6 +1,6 @@
 window.PreviewEvents = (function() {
   return {
-    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch) {
+    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu) {
       document.addEventListener('keydown', (e) => {
         // Don't trigger shortcuts when typing in inputs/editors
         const target = e.target;
@@ -20,6 +20,12 @@ window.PreviewEvents = (function() {
           e.preventDefault();
           if (openFileSearch && typeof openFileSearch === 'function') {
             openFileSearch();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === '?') {
+          // Ctrl+? for help menu
+          e.preventDefault();
+          if (openHelpMenu && typeof openHelpMenu === 'function') {
+            openHelpMenu();
           }
         }
       });

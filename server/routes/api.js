@@ -503,6 +503,275 @@ function setupAPI(baseDir) {
     }
   });
 
+  router.get('/files/list-all', async (req, res) => {
+    try {
+      const allFiles = [];
+      
+      async function walkDirectory(dirPath) {
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+          
+          for (const entry of entries) {
+            // Skip ide_editor_cache directory
+            if (entry.name.toLowerCase() === 'ide_editor_cache' && entry.isDirectory()) {
+              continue;
+            }
+            
+            const fullPath = path.join(dirPath, entry.name);
+            const resolvedPath = path.resolve(fullPath);
+            
+            // Safety check
+            if (!isPathSafe(resolvedPath, baseDir)) {
+              continue;
+            }
+            
+            if (entry.isDirectory()) {
+              await walkDirectory(fullPath);
+            } else {
+              const relativePath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+              allFiles.push({
+                name: entry.name,
+                path: relativePath.startsWith('/') ? relativePath : '/' + relativePath
+              });
+            }
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            logger.debug('Error walking directory', { dirPath, error: error.message });
+          }
+        }
+      }
+      
+      await walkDirectory(baseDir);
+      
+      // Sort by name for better UX
+      allFiles.sort((a, b) => a.name.localeCompare(b.name));
+      
+      logger.debug('Files: Listed all files', { count: allFiles.length });
+      res.json({ success: true, files: allFiles });
+    } catch (error) {
+      logger.error('API: Error listing all files', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.post('/search', async (req, res) => {
+    try {
+      const { query, caseSensitive = false, wholeWord = false } = req.body;
+      
+      if (!query || typeof query !== 'string' || query.trim().length === 0) {
+        return res.json({ success: true, results: [] });
+      }
+      
+      const searchQuery = query.trim();
+      const results = [];
+      let filesSearched = 0;
+      
+      // Build regex for search
+      let regexPattern = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (wholeWord) {
+        regexPattern = `\\b${regexPattern}\\b`;
+      }
+      const regex = new RegExp(regexPattern, caseSensitive ? 'g' : 'gi');
+      
+      async function searchInFile(filePath) {
+        try {
+          const fullPath = path.join(baseDir, filePath);
+          const resolvedPath = path.resolve(fullPath);
+          
+          if (!isPathSafe(resolvedPath, baseDir)) {
+            return null;
+          }
+          
+          const stats = await fs.stat(resolvedPath);
+          if (stats.isDirectory()) {
+            return null;
+          }
+          
+          const content = await fs.readFile(resolvedPath, 'utf-8');
+          const lines = content.split('\n');
+          const matches = [];
+          
+          lines.forEach((line, lineNum) => {
+            let match;
+            const lineRegex = new RegExp(regexPattern, caseSensitive ? 'g' : 'gi');
+            while ((match = lineRegex.exec(line)) !== null) {
+              matches.push({
+                line: lineNum + 1,
+                text: line.trim(),
+                matchIndex: match.index,
+                matchLength: match[0].length
+              });
+              // Prevent infinite loop for zero-length matches
+              if (match[0].length === 0) break;
+            }
+          });
+          
+          if (matches.length > 0) {
+            return {
+              filePath,
+              name: path.basename(filePath),
+              matches: matches.slice(0, 10) // Limit matches per file for display
+            };
+          }
+          
+          return null;
+        } catch (error) {
+          // Skip files that can't be read (binary files, permissions, etc.)
+          if (error.code !== 'ENOENT' && error.code !== 'EACCES') {
+            logger.debug('Error searching in file', { filePath, error: error.message });
+          }
+          return null;
+        }
+      }
+      
+      async function walkAndSearch(dirPath) {
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+          
+          for (const entry of entries) {
+            // Skip ide_editor_cache directory
+            if (entry.name.toLowerCase() === 'ide_editor_cache' && entry.isDirectory()) {
+              continue;
+            }
+            
+            const fullPath = path.join(dirPath, entry.name);
+            const resolvedPath = path.resolve(fullPath);
+            
+            if (!isPathSafe(resolvedPath, baseDir)) {
+              continue;
+            }
+            
+            if (entry.isDirectory()) {
+              await walkAndSearch(fullPath);
+            } else {
+              filesSearched++;
+              const relativePath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+              const filePath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
+              const result = await searchInFile(filePath);
+              if (result) {
+                results.push(result);
+              }
+            }
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            logger.debug('Error walking directory for search', { dirPath, error: error.message });
+          }
+        }
+      }
+      
+      await walkAndSearch(baseDir);
+      
+      logger.debug('Search: Completed', { query: searchQuery, filesSearched, resultsCount: results.length });
+      res.json({ success: true, results, filesSearched });
+    } catch (error) {
+      logger.error('API: Error performing search', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/git/modified', async (req, res) => {
+    try {
+      const editorDir = path.join(baseDir, 'ide_editor_cache');
+      const modifiedFiles = [];
+      
+      // Check if cache directory exists
+      try {
+        const stats = await fs.stat(editorDir);
+        if (!stats.isDirectory()) {
+          return res.json({ success: true, files: [] });
+        }
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.json({ success: true, files: [] });
+        }
+        throw error;
+      }
+      
+      // Walk the cache directory
+      async function walkCacheDir(dirPath) {
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+          
+          for (const entry of entries) {
+            const cacheFilePath = path.join(dirPath, entry.name);
+            
+            if (entry.isDirectory()) {
+              await walkCacheDir(cacheFilePath);
+            } else {
+              // Get relative path from ide_editor_cache
+              const relativePath = path.relative(editorDir, cacheFilePath).replace(/\\/g, '/');
+              const savedFilePath = path.join(baseDir, relativePath);
+              const resolvedSavedPath = path.resolve(savedFilePath);
+              const resolvedCachePath = path.resolve(cacheFilePath);
+              
+              // Safety check
+              if (!isPathSafe(resolvedSavedPath, baseDir) || !isPathSafe(resolvedCachePath, baseDir)) {
+                continue;
+              }
+              
+              // Check if saved file exists
+              let savedFileExists = false;
+              try {
+                const savedStats = await fs.stat(savedFilePath);
+                savedFileExists = !savedStats.isDirectory();
+              } catch (error) {
+                if (error.code === 'ENOENT') {
+                  // File doesn't exist in saved location - it's a new file
+                  modifiedFiles.push({
+                    path: relativePath,
+                    name: entry.name,
+                    isNew: true
+                  });
+                }
+                continue;
+              }
+              
+              if (!savedFileExists) {
+                continue;
+              }
+              
+              // Read both files and compare
+              try {
+                const [cacheContent, savedContent] = await Promise.all([
+                  fs.readFile(cacheFilePath, 'utf-8'),
+                  fs.readFile(savedFilePath, 'utf-8')
+                ]);
+                
+                // If contents differ, file is modified
+                if (cacheContent !== savedContent) {
+                  modifiedFiles.push({
+                    path: relativePath,
+                    name: entry.name,
+                    isNew: false
+                  });
+                }
+              } catch (error) {
+                // Skip files that can't be read (binary files, etc.)
+                if (error.code !== 'ENOENT') {
+                  logger.debug('Error comparing files', { cachePath: cacheFilePath, savedPath: savedFilePath, error: error.message });
+                }
+              }
+            }
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            logger.debug('Error walking cache directory', { dirPath, error: error.message });
+          }
+        }
+      }
+      
+      await walkCacheDir(editorDir);
+      
+      logger.debug('Git: Found modified files', { count: modifiedFiles.length });
+      res.json({ success: true, files: modifiedFiles });
+    } catch (error) {
+      logger.error('API: Error getting modified files', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
   return router;
 }
 

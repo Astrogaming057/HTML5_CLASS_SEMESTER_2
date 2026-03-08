@@ -63,6 +63,8 @@ window.PreviewSettingsUI = (function() {
           
           PreviewSettings.loadTheme(PreviewSettings.getSettings().pageTheme).then(() => {
             PreviewSettings.applyPreviewSettings(editor);
+            // Apply theme to preview frame after settings are saved
+            PreviewSettings.applyThemeToPreviewFrame();
             PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved';
@@ -130,6 +132,17 @@ window.PreviewSettingsUI = (function() {
           if (customThemeCSS) {
             customThemeCSS.value = '';
           }
+        });
+      }
+
+      // Add real-time toggle for applyThemeToPreviewFrame
+      const applyThemeToPreviewFrameCheck = document.getElementById('applyThemeToPreviewFrame');
+      if (applyThemeToPreviewFrameCheck) {
+        applyThemeToPreviewFrameCheck.addEventListener('change', () => {
+          const settings = PreviewSettings.getSettings();
+          settings.applyThemeToPreviewFrame = applyThemeToPreviewFrameCheck.checked;
+          PreviewSettings.setSettings(settings);
+          PreviewSettings.applyThemeToPreviewFrame();
         });
       }
       

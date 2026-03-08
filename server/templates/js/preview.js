@@ -563,7 +563,11 @@ require(['vs/editor/editor.main'], function() {
     }, editor);
   }
   
-  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch);
+  function openHelpMenu() {
+    PreviewHelpMenu.open();
+  }
+  
+  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu);
   
   function toggleFileExplorer() {
     PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
@@ -699,6 +703,13 @@ require(['vs/editor/editor.main'], function() {
   }
   
   loadFile(filePath);
+  
+  const helpBtn = document.getElementById('helpBtn');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', () => {
+      PreviewHelpMenu.open();
+    });
+  }
   
   PreviewEvents.setupButtonHandlers(
     saveBtn, refreshBtn, closeBtn, backToFilesBtn, updatePreview, filePath, customConfirm,

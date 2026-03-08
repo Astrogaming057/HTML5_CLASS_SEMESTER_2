@@ -6,31 +6,22 @@ window.PreviewFileSearch = (function() {
   let input = null;
   let resultsList = null;
 
-  async function getAllFiles(basePath = '/', files = []) {
+  async function getAllFiles() {
     try {
-      const response = await fetch(`/__api__/files?path=${encodeURIComponent(basePath)}&list=true`);
+      const response = await fetch('/__api__/files/list-all');
       const data = await response.json();
       
       if (data.success && data.files) {
-        for (const file of data.files) {
-          if (file.isDirectory) {
-            // Skip ide_editor_cache
-            if (file.name.toLowerCase() !== 'ide_editor_cache') {
-              await getAllFiles(file.path, files);
-            }
-          } else {
-            files.push({
-              name: file.name,
-              path: file.path,
-              displayPath: file.path
-            });
-          }
-        }
+        return data.files.map(file => ({
+          name: file.name,
+          path: file.path,
+          displayPath: file.path
+        }));
       }
     } catch (error) {
       console.error('Error fetching files:', error);
     }
-    return files;
+    return [];
   }
 
   function createDialog() {
@@ -150,16 +141,11 @@ window.PreviewFileSearch = (function() {
       // Store switchToFile function globally for access
       window.__previewSwitchToFile = switchToFile;
 
-      // Load files if not already loaded
-      if (fileList.length === 0) {
-        resultsList.innerHTML = '<div class="file-search-loading">Loading files...</div>';
-        fileList = await getAllFiles();
-        filterFiles('');
-        renderResults();
-      } else {
-        filterFiles('');
-        renderResults();
-      }
+      // Always fetch fresh file list from server
+      resultsList.innerHTML = '<div class="file-search-loading">Loading files...</div>';
+      fileList = await getAllFiles();
+      filterFiles('');
+      renderResults();
 
       // Focus input
       setTimeout(() => {

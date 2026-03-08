@@ -139,10 +139,10 @@ window.PreviewSettings = (function() {
         if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
         if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
         if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
-        
-        // Apply theme to preview frame if enabled
-        this.applyThemeToPreviewFrame();
       }
+      
+      // Always apply theme to preview frame (not just when settings panel is open)
+      this.applyThemeToPreviewFrame();
     },
 
     openSettings() {

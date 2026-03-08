@@ -4,71 +4,15 @@ window.PreviewGitPanel = (function() {
 
   async function getModifiedFiles() {
     try {
-      // Get all files and check which ones have cached versions
-      const response = await fetch('/__api__/files?path=/&list=true');
+      // Use server endpoint for efficient detection
+      const response = await fetch('/__api__/git/modified');
       const data = await response.json();
       
-      if (!data.success || !data.files) return [];
-
-      const modifiedFiles = [];
+      if (data.success && data.files) {
+        return data.files;
+      }
       
-      async function checkFile(filePath) {
-        try {
-          const cacheResponse = await fetch(`/__api__/files/editor?path=${encodeURIComponent(filePath)}`);
-          const cacheData = await cacheResponse.json();
-          
-          if (cacheData.success && cacheData.exists) {
-            const fileResponse = await fetch(`/__api__/files?path=${encodeURIComponent(filePath)}`);
-            const fileData = await fileResponse.json();
-            
-            if (fileData.success && cacheData.content !== fileData.content) {
-              return { path: filePath, name: filePath.split('/').pop() };
-            }
-          }
-        } catch (error) {
-          console.error(`Error checking ${filePath}:`, error);
-        }
-        return null;
-      }
-
-      async function checkDirectory(dirPath) {
-        try {
-          const dirResponse = await fetch(`/__api__/files?path=${encodeURIComponent(dirPath)}&list=true`);
-          const dirData = await dirResponse.json();
-          
-          if (dirData.success && dirData.files) {
-            for (const file of dirData.files) {
-              if (file.isDirectory) {
-                if (file.name.toLowerCase() !== 'ide_editor_cache') {
-                  await checkDirectory(file.path);
-                }
-              } else {
-                const result = await checkFile(file.path);
-                if (result) {
-                  modifiedFiles.push(result);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error checking directory ${dirPath}:`, error);
-        }
-      }
-
-      for (const file of data.files) {
-        if (file.isDirectory) {
-          if (file.name.toLowerCase() !== 'ide_editor_cache') {
-            await checkDirectory(file.path);
-          }
-        } else {
-          const result = await checkFile(file.path);
-          if (result) {
-            modifiedFiles.push(result);
-          }
-        }
-      }
-
-      return modifiedFiles;
+      return [];
     } catch (error) {
       console.error('Error getting modified files:', error);
       return [];
