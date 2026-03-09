@@ -1,0 +1,54 @@
+:root {
+  --bg-primary: #1a0d2e;
+  --bg-secondary: rgba(45, 25, 70, 0.7);
+  --bg-tertiary: rgba(70, 40, 100, 0.6);
+  --bg-hover: rgba(100, 60, 150, 0.5);
+  --bg-active: rgba(156, 39, 176, 0.3);
+  --bg-button-primary: rgba(156, 39, 176, 0.8);
+  --bg-button-primary-hover: rgba(156, 39, 176, 1);
+  --bg-button-secondary: rgba(100, 60, 150, 0.4);
+  --bg-button-secondary-hover: rgba(100, 60, 150, 0.6);
+  --bg-input: rgba(25, 15, 45, 0.8);
+  --bg-scrollbar: rgba(25, 15, 45, 0.5);
+  --bg-scrollbar-thumb: rgba(150, 100, 200, 0.4);
+  --bg-scrollbar-thumb-hover: rgba(150, 100, 200, 0.6);
+  
+  --text-primary: #f3e5f5;
+  --text-secondary: #e1bee7;
+  --text-tertiary: #ce93d8;
+  --text-inverse: #ffffff;
+  --text-button: #e1bee7;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: rgba(150, 100, 200, 0.3);
+  --border-secondary: rgba(100, 60, 150, 0.4);
+  --border-active: rgba(156, 39, 176, 0.8);
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #f44336;
+  --status-info: #9c27b0;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: rgba(150, 100, 200, 0.3);
+  --resizer-hover: rgba(156, 39, 176, 0.8);
+}
+
+body {
+  backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, #1a0d2e 0%, #2d1946 50%, #1a0d2e 100%);
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  backdrop-filter: blur(20px) saturate(180%);
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor - {{FILENAME}}</title>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  {{CSS_CONTENT}}
+</head>
+<body>
+  <div class="editor-header">
+    <div class="editor-title">
+      <span class="file-icon">📄</span>
+      <span id="fileName">{{FILENAME}}</span>
+    </div>
+    <div class="editor-actions">
+      <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
+      <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+  </div>
+  <div class="editor-container">
+    <div id="editor"></div>
+  </div>
+  
+  <div id="mergeDialog" class="merge-dialog" style="display: none;">
+    <div class="merge-dialog-content">
+      <div class="merge-dialog-header">
+        <h3>🔀 Merge Conflicts</h3>
+        <button class="merge-close-btn" onclick="closeMergeDialog()">✕</button>
+      </div>
+      <div class="merge-dialog-body">
+        <p class="merge-description">This file was changed externally. Choose how to resolve the conflict:</p>
+        <div class="merge-options">
+          <button class="merge-btn merge-btn-keep" onclick="handleMergeChoice('keep')">
+            Keep My Changes
+          </button>
+          <button class="merge-btn merge-btn-accept" onclick="handleMergeChoice('accept')">
+            Accept External Changes
+          </button>
+          <button class="merge-btn merge-btn-merge" onclick="handleMergeChoice('merge')">
+            Merge Manually
+          </button>
+        </div>
+        <div id="mergeView" class="merge-view" style="display: none;">
+          <div class="merge-panels">
+            <div class="merge-panel">
+              <div class="merge-panel-header">Your Changes (Current)</div>
+              <div id="mergeCurrent" class="merge-editor"></div>
+            </div>
+            <div class="merge-panel">
+              <div class="merge-panel-header">External Changes (Incoming)</div>
+              <div id="mergeExternal" class="merge-editor"></div>
+            </div>
+          </div>
+          <div class="merge-result-panel">
+            <div class="merge-panel-header">Merged Result</div>
+            <div id="mergeResult" class="merge-editor"></div>
+          </div>
+          <div class="merge-actions">
+            <button class="btn btn-primary" onclick="applyMerge()">Apply Merge</button>
+            <button class="btn btn-secondary" onclick="cancelMerge()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {{JS_CONTENT}}
+</body>
+</html>

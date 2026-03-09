@@ -1,0 +1,263 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  overflow: hidden;
+}
+
+.editor-header {
+  background: #252526;
+  border-bottom: 1px solid #3e3e42;
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 50px;
+}
+
+.editor-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.file-icon {
+  font-size: 18px;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+
+.btn-primary {
+  background: #0e639c;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1177bb;
+}
+
+.btn-secondary {
+  background: #3e3e42;
+  color: #cccccc;
+}
+
+.btn-secondary:hover {
+  background: #505050;
+}
+
+.status {
+  font-size: 12px;
+  color: #858585;
+  margin-left: 10px;
+}
+
+.status.saving {
+  color: #ffa500;
+}
+
+.status.saved {
+  color: #4ec9b0;
+}
+
+.status.error {
+  color: #f48771;
+}
+
+.editor-container {
+  height: calc(100vh - 50px);
+  position: relative;
+  width: 100%;
+}
+
+#editor {
+  width: 100%;
+  height: 100%;
+}
+
+/* Merge Dialog Styles */
+.merge-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.merge-dialog-content {
+  background: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.merge-dialog-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #3e3e42;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.merge-dialog-header h3 {
+  margin: 0;
+  color: #cccccc;
+  font-size: 16px;
+}
+
+.merge-close-btn {
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.merge-close-btn:hover {
+  color: #ffffff;
+  background: #3e3e42;
+  border-radius: 3px;
+}
+
+.merge-dialog-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.merge-description {
+  color: #cccccc;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.merge-options {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.merge-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.merge-btn-keep {
+  background: #0e639c;
+  color: white;
+}
+
+.merge-btn-keep:hover {
+  background: #1177bb;
+}
+
+.merge-btn-accept {
+  background: #4ec9b0;
+  color: white;
+}
+
+.merge-btn-accept:hover {
+  background: #5dd4c0;
+}
+
+.merge-btn-merge {
+  background: #ffa500;
+  color: white;
+}
+
+.merge-btn-merge:hover {
+  background: #ffb733;
+}
+
+.merge-view {
+  margin-top: 20px;
+}
+
+.merge-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+  height: 400px;
+}
+
+.merge-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.merge-panel-header {
+  background: #2d2d30;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #cccccc;
+  border-bottom: 1px solid #3e3e42;
+  font-weight: 600;
+}
+
+.merge-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.merge-result-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  overflow: hidden;
+  height: 300px;
+  margin-bottom: 15px;
+}
+
+.merge-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

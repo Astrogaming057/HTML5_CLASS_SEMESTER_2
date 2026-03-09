@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #0f1f1a;
+  --bg-secondary: #1a2f28;
+  --bg-tertiary: #253f36;
+  --bg-hover: #304f44;
+  --bg-active: #4dd0e1;
+  --bg-button-primary: #4dd0e1;
+  --bg-button-primary-hover: #26c6da;
+  --bg-button-secondary: #253f36;
+  --bg-button-secondary-hover: #304f44;
+  --bg-input: #0f1f1a;
+  --bg-scrollbar: #0f1f1a;
+  --bg-scrollbar-thumb: #80deea;
+  --bg-scrollbar-thumb-hover: #4dd0e1;
+  
+  --text-primary: #e0f7fa;
+  --text-secondary: #b2ebf2;
+  --text-tertiary: #80deea;
+  --text-inverse: #ffffff;
+  --text-button: #b2ebf2;
+  --text-button-primary: #0f1f1a;
+  
+  --border-primary: #80deea;
+  --border-secondary: #4dd0e1;
+  --border-active: #26c6da;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #4dd0e1;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #80deea;
+  --resizer-hover: #26c6da;
+}
+
+body {
+  background: linear-gradient(135deg, #0f1f1a 0%, #1a2f28 25%, #253f36 50%, #1a2f28 75%, #0f1f1a 100%);
+  background-size: 300% 300%;
+  animation: mintFresh 22s ease infinite;
+}
+
+@keyframes mintFresh {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(77, 208, 225, 0.2);
+}

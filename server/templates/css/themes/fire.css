@@ -1,0 +1,64 @@
+:root {
+  --bg-primary: #1a0a0a;
+  --bg-secondary: #2d1414;
+  --bg-tertiary: #3d1f1f;
+  --bg-hover: #4d2a2a;
+  --bg-active: #ff5722;
+  --bg-button-primary: #ff5722;
+  --bg-button-primary-hover: #e64a19;
+  --bg-button-secondary: #3d1f1f;
+  --bg-button-secondary-hover: #4d2a2a;
+  --bg-input: #1a0a0a;
+  --bg-scrollbar: #1a0a0a;
+  --bg-scrollbar-thumb: #ff7043;
+  --bg-scrollbar-thumb-hover: #ff5722;
+  
+  --text-primary: #ffe0e0;
+  --text-secondary: #ffb3b3;
+  --text-tertiary: #ff9999;
+  --text-inverse: #ffffff;
+  --text-button: #ffb3b3;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #ff7043;
+  --border-secondary: #ff5722;
+  --border-active: #ff3d00;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #66bb6a;
+  --status-error: #ff1744;
+  --status-info: #ff7043;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #ff7043;
+  --resizer-hover: #ff3d00;
+}
+
+body {
+  background: linear-gradient(180deg, #1a0a0a 0%, #2d1414 20%, #3d1f1f 40%, #2d1414 60%, #1a0a0a 80%, #0f0505 100%);
+  background-size: 100% 400%;
+  animation: fireFlicker 3s ease infinite;
+}
+
+@keyframes fireFlicker {
+  0%, 100% { background-position: 0% 0%; }
+  25% { background-position: 0% 25%; }
+  50% { background-position: 0% 50%; }
+  75% { background-position: 0% 75%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(255, 87, 34, 0.3), inset 0 0 20px rgba(255, 87, 34, 0.1);
+}
+
+.file-tree-item.active,
+.btn-primary {
+  box-shadow: 0 0 25px rgba(255, 87, 34, 0.6);
+}

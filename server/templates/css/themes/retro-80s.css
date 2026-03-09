@@ -1,0 +1,87 @@
+:root {
+  --bg-primary: #1a0d26;
+  --bg-secondary: #2d1a3d;
+  --bg-tertiary: #3d2754;
+  --bg-hover: #4d346b;
+  --bg-active: #ff00ff;
+  --bg-button-primary: #ff00ff;
+  --bg-button-primary-hover: #cc00cc;
+  --bg-button-secondary: #3d2754;
+  --bg-button-secondary-hover: #4d346b;
+  --bg-input: #1a0d26;
+  --bg-scrollbar: #1a0d26;
+  --bg-scrollbar-thumb: #00ffff;
+  --bg-scrollbar-thumb-hover: #ff00ff;
+  
+  --text-primary: #ff00ff;
+  --text-secondary: #00ffff;
+  --text-tertiary: #ffff00;
+  --text-inverse: #ffffff;
+  --text-button: #00ffff;
+  --text-button-primary: #1a0d26;
+  
+  --border-primary: #ff00ff;
+  --border-secondary: #00ffff;
+  --border-active: #ffff00;
+  
+  --status-saving: #ffff00;
+  --status-saved: #00ff00;
+  --status-error: #ff0000;
+  --status-info: #00ffff;
+  --status-warn: #ff8800;
+  
+  --resizer-bg: #ff00ff;
+  --resizer-hover: #ffff00;
+}
+
+body {
+  background: #1a0d26;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 0, 255, 0.05) 2px,
+      rgba(255, 0, 255, 0.05) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 255, 0.05) 2px,
+      rgba(0, 255, 255, 0.05) 4px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  border: 2px solid var(--border-primary) !important;
+  box-shadow: 
+    0 0 20px rgba(255, 0, 255, 0.5),
+    0 0 40px rgba(0, 255, 255, 0.3),
+    inset 0 0 20px rgba(255, 0, 255, 0.2);
+}
+
+.file-tree-item.active,
+.btn-primary {
+  box-shadow: 0 0 30px rgba(255, 0, 255, 0.8);
+  text-shadow: 0 0 15px rgba(255, 0, 255, 1);
+}

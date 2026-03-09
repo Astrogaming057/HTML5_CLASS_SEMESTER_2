@@ -1,0 +1,57 @@
+:root {
+  --bg-primary: #2d1a26;
+  --bg-secondary: #3d2a36;
+  --bg-tertiary: #4d3a46;
+  --bg-hover: #5d4a56;
+  --bg-active: #f8bbd0;
+  --bg-button-primary: #f8bbd0;
+  --bg-button-primary-hover: #f48fb1;
+  --bg-button-secondary: #4d3a46;
+  --bg-button-secondary-hover: #5d4a56;
+  --bg-input: #2d1a26;
+  --bg-scrollbar: #2d1a26;
+  --bg-scrollbar-thumb: #fce4ec;
+  --bg-scrollbar-thumb-hover: #f8bbd0;
+  
+  --text-primary: #fce4ec;
+  --text-secondary: #f8bbd0;
+  --text-tertiary: #f48fb1;
+  --text-inverse: #ffffff;
+  --text-button: #f8bbd0;
+  --text-button-primary: #2d1a26;
+  
+  --border-primary: #fce4ec;
+  --border-secondary: #f8bbd0;
+  --border-active: #f48fb1;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #f44336;
+  --status-info: #f8bbd0;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #fce4ec;
+  --resizer-hover: #f48fb1;
+}
+
+body {
+  background: linear-gradient(135deg, #2d1a26 0%, #3d2a36 25%, #4d3a46 50%, #3d2a36 75%, #2d1a26 100%);
+  background-size: 300% 300%;
+  animation: sakuraBloom 30s ease infinite;
+}
+
+@keyframes sakuraBloom {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(248, 187, 208, 0.3);
+}

@@ -1,0 +1,109 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background: #1e1b1e;
+  color: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.bokeh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bokeh span {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  filter: blur(50px);
+  animation: float 20s linear infinite;
+}
+
+.bokeh span:nth-child(1) {
+  top: 10%;
+  left: 15%;
+  background: rgba(251,146,60,0.25);
+  animation-duration: 14s;
+}
+.bokeh span:nth-child(2) {
+  top: 55%;
+  left: 75%;
+  background: rgba(253,186,116,0.25);
+  animation-duration: 20s;
+}
+.bokeh span:nth-child(3) {
+  top: 80%;
+  left: 35%;
+  background: rgba(254,215,170,0.2);
+  animation-duration: 22s;
+}
+.bokeh span:nth-child(4) {
+  top: 25%;
+  left: 85%;
+  background: rgba(251,146,60,0.25);
+  animation-duration: 18s;
+}
+.bokeh span:nth-child(5) {
+  top: 60%;
+  left: 8%;
+  background: rgba(253,186,116,0.2);
+  animation-duration: 16s;
+}
+
+@keyframes float {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(50px, -50px) scale(1.2); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 420px;
+  padding: 0 20px;
+}
+
+h1 {
+  font-size: 96px;
+  margin: 0;
+  color: #fdba74;
+  text-shadow: 0 0 18px rgba(253,186,116,0.8);
+}
+
+h2 {
+  font-size: 28px;
+  font-weight: normal;
+  margin: 8px 0 24px;
+  color: #fed7aa;
+}
+
+.message {
+  font-size: 16px;
+  color: #cbd5e1;
+  margin-bottom: 26px;
+}
+
+a.button {
+  display: inline-block;
+  padding: 10px 24px;
+  background: #fb923c;
+  color: #ffffff;
+  font-weight: bold;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: 0.25s ease;
+}
+
+a.button:hover {
+  background: #fdba74;
+  box-shadow: 0 0 16px rgba(253,186,116,0.6);
+}

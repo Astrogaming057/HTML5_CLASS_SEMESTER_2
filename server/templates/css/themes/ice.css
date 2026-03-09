@@ -1,0 +1,59 @@
+:root {
+  --bg-primary: #0a1419;
+  --bg-secondary: #1a2832;
+  --bg-tertiary: #2a3c4b;
+  --bg-hover: #3a5064;
+  --bg-active: #00bcd4;
+  --bg-button-primary: #00bcd4;
+  --bg-button-primary-hover: #0097a7;
+  --bg-button-secondary: #2a3c4b;
+  --bg-button-secondary-hover: #3a5064;
+  --bg-input: #0a1419;
+  --bg-scrollbar: #0a1419;
+  --bg-scrollbar-thumb: #4dd0e1;
+  --bg-scrollbar-thumb-hover: #00bcd4;
+  
+  --text-primary: #e0f7fa;
+  --text-secondary: #b2ebf2;
+  --text-tertiary: #80deea;
+  --text-inverse: #ffffff;
+  --text-button: #b2ebf2;
+  --text-button-primary: #0a1419;
+  
+  --border-primary: #4dd0e1;
+  --border-secondary: #00bcd4;
+  --border-active: #00acc1;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #4caf50;
+  --status-error: #ef5350;
+  --status-info: #00bcd4;
+  --status-warn: #ffa726;
+  
+  --resizer-bg: #4dd0e1;
+  --resizer-hover: #00acc1;
+}
+
+body {
+  background: linear-gradient(135deg, #0a1419 0%, #1a2832 25%, #2a3c4b 50%, #1a2832 75%, #0a1419 100%);
+  background-size: 300% 300%;
+  animation: iceFlow 20s ease infinite;
+}
+
+@keyframes iceFlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  backdrop-filter: blur(15px);
+  box-shadow: 0 4px 20px rgba(0, 188, 212, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-primary) !important;
+}

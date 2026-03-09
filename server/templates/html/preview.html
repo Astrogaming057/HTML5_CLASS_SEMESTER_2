@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview - {{FILENAME}}</title>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  {{CSS_CONTENT}}
+</head>
+<body>
+  <div class="preview-header">
+    <div class="preview-title">
+      <span id="fileName">{{FILENAME}}</span>
+    </div>
+    <div class="preview-actions">
+      <button id="backToFilesBtn" class="btn btn-secondary" title="Back to File Discovery">← Files</button>
+      <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
+      <button id="helpBtn" class="btn btn-secondary" title="Help (Ctrl+?)">❓ Help</button>
+      <button id="settingsBtn" class="btn btn-secondary" title="Settings">⚙️</button>
+      <button id="resetSettingsBtn" class="btn btn-secondary" title="Reset All Settings">🔄 Reset</button>
+      <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+  </div>
+  <div class="preview-container">
+    <div class="explorer-reopen-bar" id="explorerReopenBar" style="display: none;">
+      <button id="reopenExplorerBtn" class="panel-reopen-btn" title="Reopen Explorer">→ Explorer</button>
+    </div>
+    <div class="file-explorer-panel" id="fileExplorerPanel">
+      <div class="panel-header">
+        <button id="backBtn" class="back-btn" title="Go Back">←</button>
+        <span>📁 Files</span>
+        <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
+        <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
+      </div>
+      <div class="file-tree" id="fileTree">
+        <div class="file-tree-loading">Loading...</div>
+      </div>
+      <div class="terminal-reopen-bar" id="terminalReopenBar" style="display: none;">
+        <button id="reopenTerminalBtn" class="terminal-reopen-btn" title="Reopen Terminal">↑ Terminal</button>
+      </div>
+      <div class="terminal-panel" id="terminalPanel">
+      <div class="resizer resizer-terminal" id="resizerTerminal"></div>
+        <div class="terminal-header">
+          <div class="terminal-tabs">
+            <button class="terminal-tab active" data-tab="client">Client</button>
+            <button class="terminal-tab" data-tab="server">Server</button>
+            <button class="terminal-tab" data-tab="commands">Commands</button>
+            <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+            <button class="terminal-tab" data-tab="log">Log</button>
+          </div>
+          <button id="popoutTerminal" class="popout-btn" title="Pop out Terminal">⤢</button>
+          <button id="moveTerminalToBottom" class="terminal-toggle-btn" title="Move Terminal to Bottom" style="display: none;">⬇</button>
+          <button id="moveTerminalToExplorer" class="terminal-toggle-btn" title="Move Terminal to Explorer" style="display: none;">⬆</button>
+          <button id="toggleTerminal" class="terminal-toggle-btn" title="Toggle Terminal">−</button>
+        </div>
+        <div class="terminal-content">
+          <div class="terminal-tab-content active" id="terminalClient">
+            <div class="terminal-output" id="terminalClientOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">></span>
+              <input type="text" class="terminal-input" id="terminalClientInput" placeholder="Type JavaScript commands...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalServer">
+            <div class="terminal-output" id="terminalServerOutput"></div>
+          </div>
+          <div class="terminal-tab-content" id="terminalCommands">
+            <div class="terminal-output" id="terminalCommandsOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">$></span>
+              <input type="text" class="terminal-input" id="terminalCommandsInput" placeholder="Type server commands (help, ping, status, restart, reconnect)...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalPowerShell">
+            <div class="terminal-output" id="terminalPowerShellOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">PS></span>
+              <input type="text" class="terminal-input" id="terminalPowerShellInput" placeholder="Type PowerShell commands...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalLog">
+            <div class="terminal-output" id="terminalLogOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">></span>
+              <input type="text" class="terminal-input" id="terminalLogInput" placeholder="Execute code in preview context...">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="resizer resizer-explorer" id="resizerExplorer"></div>
+    <div class="editor-panel" id="editorPanel">
+      <div class="panel-header">
+        <span>Editor</span>
+        <button id="popoutEditor" class="popout-btn" title="Pop out Editor">⤢</button>
+      </div>
+      <div class="editor-tabs-container" id="editorTabsContainer"></div>
+      <div id="editor"></div>
+    </div>
+    <div class="resizer resizer-editor" id="resizerEditor"></div>
+    <div class="preview-panel" id="previewPanel">
+      <div class="panel-header">
+        <span id="previewTitle">Preview</span>
+        <div>
+        <button id="backToPreviewBtn" class="back-btn" title="Back to HTML Preview" style="display: none;">← Back</button>
+        <button id="pinPreviewBtn" class="toggle-btn" title="Pin Preview to Current Page">📌</button>
+        <button id="refreshBtn" class="toggle-btn" title="Refresh Preview">🔄</button>
+        <button id="popoutPreview" class="popout-btn" title="Pop out Preview">⤢</button>
+        <button id="togglePreview" class="toggle-btn" title="Toggle Preview">◀</button>
+      </div>
+      </div>
+      <div id="previewContainer">
+        <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+        <div id="imagePreview" style="display: none;">
+          <img id="previewImage" alt="Preview" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+        </div>
+      </div>
+    </div>
+    <div class="preview-reopen-bar" id="previewReopenBar" style="display: none;">
+      <button id="reopenPreviewBtn" class="panel-reopen-btn" title="Reopen Preview">← Preview</button>
+    </div>
+  </div>
+  
+  <div id="contextMenu" class="context-menu" style="display: none;">
+    <div class="context-menu-item" id="contextNewFile">📄 New File</div>
+    <div class="context-menu-item" id="contextNewFolder">📁 New Folder</div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item" id="contextRename">✏️ Rename</div>
+    <div class="context-menu-item" id="contextDelete">🗑️ Delete</div>
+  </div>
+  
+  <div id="customPromptDialog" class="custom-prompt-dialog" style="display: none;">
+    <div class="custom-prompt-content">
+      <div class="custom-prompt-header">
+        <span id="customPromptTitle">Enter name</span>
+        <button class="custom-prompt-close" id="customPromptClose">✕</button>
+      </div>
+      <div class="custom-prompt-body">
+        <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="Enter name...">
+      </div>
+      <div class="custom-prompt-footer">
+        <button class="btn btn-primary" id="customPromptOk">OK</button>
+        <button class="btn btn-secondary" id="customPromptCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="customConfirmDialog" class="custom-prompt-dialog" style="display: none;">
+    <div class="custom-prompt-content">
+      <div class="custom-prompt-header">
+        <span>Confirm</span>
+        <button class="custom-prompt-close" id="customConfirmClose">✕</button>
+      </div>
+      <div class="custom-prompt-body">
+        <p id="customConfirmMessage" style="margin: 0; color: #cccccc;"></p>
+      </div>
+      <div class="custom-prompt-footer">
+        <button class="btn btn-primary" id="customConfirmOk">OK</button>
+        <button class="btn btn-secondary" id="customConfirmDiscard">Discard</button>
+        <button class="btn btn-secondary" id="customConfirmCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="cacheComparisonDialog" class="cache-comparison-dialog" style="display: none;">
+    <div class="cache-comparison-content">
+      <div class="cache-comparison-header">
+        <h3>Unsaved Changes Found in Cache</h3>
+        <button class="custom-prompt-close" id="cacheComparisonClose">✕</button>
+      </div>
+      <div class="cache-comparison-body">
+        <div class="cache-comparison-labels">
+          <div class="cache-label">Cached Version</div>
+          <div class="cache-label">Live Version</div>
+        </div>
+        <div class="cache-comparison-editors">
+          <div class="cache-editor-container">
+            <div class="cache-editor-header">Cached</div>
+            <div id="cacheEditor" class="cache-editor"></div>
+          </div>
+          <div class="cache-editor-container">
+            <div class="cache-editor-header">Live</div>
+            <div id="liveEditor" class="cache-editor"></div>
+          </div>
+        </div>
+        <div class="cache-comparison-previews">
+          <div class="cache-preview-container">
+            <div class="cache-preview-header">Cached Preview</div>
+            <iframe id="cachePreview" class="cache-preview-frame"></iframe>
+          </div>
+          <div class="cache-preview-container">
+            <div class="cache-preview-header">Live Preview</div>
+            <iframe id="livePreview" class="cache-preview-frame"></iframe>
+          </div>
+        </div>
+      </div>
+      <div class="cache-comparison-actions">
+        <button class="btn btn-primary" id="cacheComparisonUseCache">Use Cached Version</button>
+        <button class="btn btn-secondary" id="cacheComparisonUseLive">Use Live Version</button>
+        <button class="btn btn-secondary" id="cacheComparisonCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="serverUpdateNotification" class="server-update-notification" style="display: none;">
+    <div class="server-update-content">
+      <div class="server-update-icon">🔄</div>
+      <div class="server-update-text">
+        <div class="server-update-title">Updates Available</div>
+        <div class="server-update-message">Server files have been modified. Restart required.</div>
+      </div>
+      <div class="server-update-actions">
+        <button class="btn btn-primary" id="serverUpdateNow">Update Now</button>
+        <button class="btn btn-secondary" id="serverUpdateSkip">Skip</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="restartOverlay" class="restart-overlay" style="display: none;">
+    <div class="restart-content">
+      <div class="restart-spinner"></div>
+      <div class="restart-message">Restarting server...</div>
+      <div class="restart-status" id="restartStatus"></div>
+    </div>
+  </div>
+  
+  <div id="settingsPanel" class="settings-panel" style="display: none;">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close-btn" id="settingsCloseBtn">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="setting-group">
+          <label class="setting-label">Auto-refresh Preview</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="autoRefreshPreview" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Automatically refresh preview when file changes</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Editor Font Size</label>
+          <select id="editorFontSize" class="setting-select">
+            <option value="12">12px</option>
+            <option value="13">13px</option>
+            <option value="14" selected>14px</option>
+            <option value="15">15px</option>
+            <option value="16">16px</option>
+            <option value="18">18px</option>
+            <option value="20">20px</option>
+          </select>
+          <p class="setting-description">Font size for the code editor</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Page Theme</label>
+          <select id="pageTheme" class="setting-select">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="liquid-glass-blue">Liquid Glass Blue</option>
+            <option value="liquid-glass-purple">Liquid Glass Purple</option>
+            <option value="liquid-glass-green">Liquid Glass Green</option>
+            <option value="liquid-glass-amber">Liquid Glass Amber</option>
+            <option value="fog-gray">Fog Gray</option>
+            <option value="fog-blue">Fog Blue</option>
+            <option value="neon-cyan">Neon Cyan</option>
+            <option value="sunset">Sunset</option>
+            <option value="ocean">Ocean</option>
+            <option value="forest">Forest</option>
+            <option value="matrix">Matrix</option>
+            <option value="midnight-purple">Midnight Purple</option>
+            <option value="amber-warm">Amber Warm</option>
+            <option value="arctic">Arctic</option>
+            <option value="rose-gold">Rose Gold</option>
+            <option value="cyberpunk">Cyberpunk</option>
+            <option value="space">Space</option>
+            <option value="fire">Fire</option>
+            <option value="ice">Ice</option>
+            <option value="lavender">Lavender</option>
+            <option value="emerald">Emerald</option>
+            <option value="sakura">Sakura</option>
+            <option value="volcanic">Volcanic</option>
+            <option value="aurora">Aurora</option>
+            <option value="retro-80s">Retro 80s</option>
+            <option value="mint">Mint</option>
+            <option value="crimson">Crimson</option>
+            <option value="deep-sea">Deep Sea</option>
+            <option value="golden-hour">Golden Hour</option>
+            <option value="storm">Storm</option>
+            <option value="candy">Candy</option>
+            <option value="bubbles">Bubbles</option>
+            <option value="custom">Custom</option>
+          </select>
+          <p class="setting-description">Color theme for the entire page</p>
+        </div>
+        
+        <div id="customThemeGroup" class="setting-group" style="display: none;">
+          <label class="setting-label">Custom Theme CSS</label>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button type="button" id="loadDarkExampleBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Load Dark Example</button>
+            <button type="button" id="loadLightExampleBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Load Light Example</button>
+            <button type="button" id="clearCustomThemeBtn" class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;">Clear</button>
+          </div>
+          <textarea id="customThemeCSS" class="setting-select" rows="15" placeholder="Enter your custom CSS here...
+
+Example:
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2a2d2e;
+  --text-primary: #d4d4d4;
+  --text-secondary: #cccccc;
+  --text-tertiary: #858585;
+  --border-primary: #3e3e42;
+  --border-active: #0e639c;
+  --bg-button-primary: #0e639c;
+  --bg-button-primary-hover: #1177bb;
+}
+
+You can copy any theme file and modify it, or create your own!"></textarea>
+          <p class="setting-description">1. Select "Custom" from the theme dropdown above. 2. Enter your CSS here (use :root for CSS variables). 3. Click "Save Settings" to apply. Use the buttons above to load examples.</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Apply Theme to Preview Frame</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="applyThemeToPreviewFrame">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Apply the selected theme to the preview frame container</span>
+          </label>
+          <p class="setting-description">When enabled, the preview frame border and background will use the selected theme colors</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Editor Theme</label>
+          <select id="editorTheme" class="setting-select">
+            <option value="vs-dark" selected>Dark</option>
+            <option value="vs">Light</option>
+            <option value="hc-black">High Contrast Dark</option>
+          </select>
+          <p class="setting-description">Color theme for the code editor</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Word Wrap</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="editorWordWrap">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable word wrap in editor</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Show Line Numbers</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="editorLineNumbers" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Display line numbers in editor</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Tab Size</label>
+          <select id="editorTabSize" class="setting-select">
+            <option value="2">2 spaces</option>
+            <option value="4" selected>4 spaces</option>
+            <option value="8">8 spaces</option>
+          </select>
+          <p class="setting-description">Number of spaces for tab indentation</p>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Default Explorer Visibility</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="defaultExplorerVisible" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show file explorer by default</span>
+          </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Default Terminal Visibility</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="defaultTerminalVisible">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show terminal by default</span>
+          </label>
+        </div>
+        
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+          <button class="btn btn-secondary" id="resetSettingsBtn2">Reset to Defaults</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {{JS_CONTENT}}
+</body>
+</html>

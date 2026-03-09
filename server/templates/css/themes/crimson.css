@@ -1,0 +1,50 @@
+:root {
+  --bg-primary: #1a0a0a;
+  --bg-secondary: #2d1414;
+  --bg-tertiary: #3d1f1f;
+  --bg-hover: #4d2a2a;
+  --bg-active: #c62828;
+  --bg-button-primary: #c62828;
+  --bg-button-primary-hover: #b71c1c;
+  --bg-button-secondary: #3d1f1f;
+  --bg-button-secondary-hover: #4d2a2a;
+  --bg-input: #1a0a0a;
+  --bg-scrollbar: #1a0a0a;
+  --bg-scrollbar-thumb: #ef5350;
+  --bg-scrollbar-thumb-hover: #c62828;
+  
+  --text-primary: #ffebee;
+  --text-secondary: #ffcdd2;
+  --text-tertiary: #ef9a9a;
+  --text-inverse: #ffffff;
+  --text-button: #ffcdd2;
+  --text-button-primary: #ffffff;
+  
+  --border-primary: #ef5350;
+  --border-secondary: #c62828;
+  --border-active: #b71c1c;
+  
+  --status-saving: #ffb74d;
+  --status-saved: #66bb6a;
+  --status-error: #c62828;
+  --status-info: #ef5350;
+  --status-warn: #ff9800;
+  
+  --resizer-bg: #ef5350;
+  --resizer-hover: #b71c1c;
+}
+
+body {
+  background: radial-gradient(ellipse at center, #2d1414 0%, #1a0a0a 50%, #0f0505 100%);
+}
+
+.preview-header,
+.file-explorer-panel,
+.terminal-header,
+.panel-header,
+.context-menu,
+.custom-prompt-content,
+.settings-content,
+.server-update-notification {
+  box-shadow: 0 4px 20px rgba(198, 40, 40, 0.3);
+}

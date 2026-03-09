@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview - Popout</title>
+  {{CSS_CONTENT}}
+  <style id="theme-style"></style>
+</head>
+<body>
+  <div class="popout-header">
+    <div class="popout-title">Preview - Popout</div>
+    <div>
+      <button class="refresh-btn" id="refreshBtn" title="Refresh Preview">🔄</button>
+      <button class="popout-close" id="closePopout">✕ Close</button>
+    </div>
+  </div>
+  <div id="previewContainer">
+    <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+    <div id="imagePreview" style="display: none;">
+      <img id="previewImage" alt="Preview">
+    </div>
+  </div>
+  {{JS_CONTENT}}
+</body>
+</html>

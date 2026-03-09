@@ -1,0 +1,35 @@
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2a2d2e;
+  --bg-hover: #2d2d30;
+  --bg-active: #094771;
+  --bg-button-primary: #0e639c;
+  --bg-button-primary-hover: #1177bb;
+  --bg-button-secondary: #3e3e42;
+  --bg-button-secondary-hover: #505050;
+  --bg-input: #1e1e1e;
+  --bg-scrollbar: #1e1e1e;
+  --bg-scrollbar-thumb: #424242;
+  --bg-scrollbar-thumb-hover: #4e4e4e;
+  
+  --text-primary: #d4d4d4;
+  --text-secondary: #cccccc;
+  --text-tertiary: #858585;
+  --text-inverse: #ffffff;
+  --text-button: #cccccc;
+  --text-button-primary: white;
+  
+  --border-primary: #3e3e42;
+  --border-secondary: #2a2d2e;
+  --border-active: #0e639c;
+  
+  --status-saving: #ffa500;
+  --status-saved: #4ec9b0;
+  --status-error: #f48771;
+  --status-info: #4ec9b0;
+  --status-warn: #dcdcaa;
+  
+  --resizer-bg: #3e3e42;
+  --resizer-hover: #0e639c;
+}
