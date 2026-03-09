@@ -30,6 +30,16 @@ async function copyDirectory(src, dest) {
 const router = express.Router();
 
 function setupAPI(baseDir) {
+  router.get('/mode', (req, res) => {
+    const mode = process.env.SERVER_MODE || global.__SERVER_MODE || 'browser';
+    res.json({ 
+      success: true, 
+      mode: mode,
+      isAppMode: mode === 'app',
+      isBrowserMode: mode === 'browser'
+    });
+  });
+
   router.get('/files', async (req, res) => {
     try {
       const filePath = req.query.path || '/';

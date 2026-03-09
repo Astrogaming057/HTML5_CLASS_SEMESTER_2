@@ -122,21 +122,55 @@ window.PreviewTerminal = (function() {
       }
       
       if (tab === 'client') {
-        outputEl.textContent += `> ${command}\n`;
-        try {
-          const result = eval(command);
-          outputEl.textContent += `${result}\n`;
-        } catch (err) {
-          outputEl.textContent += `Error: ${err.message}\n`;
+        // Handle special client commands
+        if (command.trim() === 'mode' || command.trim() === 'app-mode' || command.trim() === 'browser-mode') {
+          const clientMode = window.__CLIENT_MODE || (window.electronAPI && window.electronAPI.isElectron ? 'app' : 'browser');
+          
+          // Fetch server mode
+          fetch('/__api__/mode')
+            .then(res => res.json())
+            .then(data => {
+              const clientModeText = clientMode === 'app' ? 'App (Electron)' : 'Browser';
+              const serverModeText = data.mode === 'app' ? 'App (Electron)' : 'Browser';
+              const output = `Client Mode: ${clientModeText}\n` +
+                           `Server Mode: ${serverModeText}\n` +
+                           `  Client running in: ${clientMode === 'app' ? 'Electron application window' : 'Web browser'}\n` +
+                           `  Server running in: ${data.mode === 'app' ? 'App mode (no auto-launch)' : 'Browser mode (auto-launch enabled)'}\n` +
+                           `  Restart method: ${data.mode === 'app' ? 'start-app.bat' : 'start.bat'}`;
+              
+              outputEl.textContent += `> ${command}\n${output}\n`;
+              outputEl.scrollTop = outputEl.scrollHeight;
+              
+              syncChannel.postMessage({
+                type: 'terminal-output',
+                tab: tab,
+                output: `> ${command}\n${output}\n`,
+                append: false
+              });
+            })
+            .catch(err => {
+              const output = `Client Mode: ${clientMode === 'app' ? 'App (Electron)' : 'Browser'}\nError fetching server mode: ${err.message}`;
+              outputEl.textContent += `> ${command}\n${output}\n`;
+              outputEl.scrollTop = outputEl.scrollHeight;
+            });
+        } else {
+          // Default client command handling
+          outputEl.textContent += `> ${command}\n`;
+          try {
+            const result = eval(command);
+            outputEl.textContent += `${result}\n`;
+          } catch (err) {
+            outputEl.textContent += `Error: ${err.message}\n`;
+          }
+          outputEl.scrollTop = outputEl.scrollHeight;
+          
+          syncChannel.postMessage({
+            type: 'terminal-output',
+            tab: tab,
+            output: outputEl.textContent,
+            append: false
+          });
         }
-        outputEl.scrollTop = outputEl.scrollHeight;
-        
-        syncChannel.postMessage({
-          type: 'terminal-output',
-          tab: tab,
-          output: outputEl.textContent,
-          append: false
-        });
       } else if (tab === 'powershell') {
         fetch('/__api__/terminal', {
           method: 'POST',

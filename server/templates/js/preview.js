@@ -3,6 +3,14 @@ let filePath = urlParams.get('file');
 const forceLoad = urlParams.get('force') === 'true' || urlParams.get('noRestore') === 'true';
 let currentDir = '';
 
+// Detect if running in Electron (app mode) or browser
+let clientMode = 'browser';
+if (window.electronAPI && window.electronAPI.isElectron) {
+  clientMode = 'app';
+}
+// Store mode globally
+window.__CLIENT_MODE = clientMode;
+
 let editor = null;
 const originalContent = { current: '' };
 const isDirty = { current: false };
@@ -32,6 +40,7 @@ require(['vs/editor/editor.main'], function() {
   const resetSettingsBtn2 = document.getElementById('resetSettingsBtn2');
   const status = document.getElementById('status');
   const fileName = document.getElementById('fileName');
+  const modeIndicator = document.getElementById('modeIndicator');
   previewFrame = document.getElementById('previewFrame');
   fileTree = document.getElementById('fileTree');
   const imagePreview = document.getElementById('imagePreview');
@@ -56,6 +65,31 @@ require(['vs/editor/editor.main'], function() {
   const isRestoringStateRef = { current: true };
   const terminalAtBottomRef = { current: false };
   const saveToEditorTimeout = { current: null };
+  
+  // Update mode indicator
+  function updateModeIndicator() {
+    if (!modeIndicator) return;
+    
+    const clientMode = window.__CLIENT_MODE || (window.electronAPI && window.electronAPI.isElectron ? 'app' : 'browser');
+    
+    // Fetch server mode for tooltip
+    fetch('/__api__/mode')
+      .then(res => res.json())
+      .then(data => {
+        const clientModeText = clientMode === 'app' ? 'App (Electron)' : 'Browser';
+        const serverModeText = data.mode === 'app' ? 'App' : 'Browser';
+        modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
+        modeIndicator.className = `mode-indicator ${clientMode}`;
+        modeIndicator.title = `Client: ${clientModeText} | Server: ${serverModeText}`;
+      })
+      .catch(err => {
+        modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
+        modeIndicator.className = `mode-indicator ${clientMode}`;
+        modeIndicator.title = `Client: ${clientMode === 'app' ? 'App (Electron)' : 'Browser'}`;
+      });
+  }
+  
+  updateModeIndicator();
   
   const initResult = PreviewInitialization.initializeState(filePath, forceLoad, currentDirRef);
   if (initResult.error) {

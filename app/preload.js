@@ -8,5 +8,6 @@ const { contextBridge } = require('electron');
 // to use functionality from the Electron main process
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
-  isElectron: true
+  isElectron: true,
+  mode: 'app'
 });

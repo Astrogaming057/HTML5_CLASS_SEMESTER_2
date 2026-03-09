@@ -215,7 +215,7 @@ window.PreviewWebSocket = (function() {
           clearTimeout(refreshTimeout);
         }
         refreshTimeout = setTimeout(() => {
-          loadFileTree(currentDir);
+        loadFileTree(currentDir);
           refreshTimeout = null;
         }, 100);
       }

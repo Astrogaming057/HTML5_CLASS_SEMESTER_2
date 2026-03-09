@@ -15,12 +15,25 @@ const logger = require('./utils/logger');
 const { cleanupCache } = require('./utils/cacheCleanup');
 const ServerCommands = require('./utils/serverCommands');
 
+// Detect mode: check for APP_MODE environment variable or if running from Electron
+// Defaults to 'browser' mode if not specified
+const isAppMode = process.env.APP_MODE === 'true' || process.env.SERVER_MODE === 'app' || 
+                  process.argv.includes('--app-mode') || 
+                  (process.env.npm_package_name && process.env.npm_package_name.includes('electron')) ||
+                  process.execPath.includes('electron');
+
+const serverMode = isAppMode ? 'app' : 'browser';
+
+// Set mode flag
+process.env.SERVER_MODE = serverMode;
+global.__SERVER_MODE = serverMode;
+
 const app = express();
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 const server = http.createServer(app);
 
-logger.info('Initializing server...', { port: config.PORT, baseDir: config.BASE_DIR });
+logger.info(`Initializing server (${serverMode} mode)...`, { port: config.PORT, baseDir: config.BASE_DIR, mode: serverMode });
 
 const wsManager = new WebSocketManager();
 const serverCommands = new ServerCommands(wsManager, server, config.BASE_DIR);
@@ -90,13 +103,19 @@ app.use(setupFileServer(config.BASE_DIR));
 logger.info('File server routes configured');
 
 server.listen(config.PORT, () => {
-  logger.info('Server started successfully', {
+  logger.info(`Server started successfully (${serverMode} mode)`, {
     url: `http://localhost:${config.PORT}`,
-    baseDir: config.BASE_DIR
+    baseDir: config.BASE_DIR,
+    mode: serverMode
   });
 
-  const autoLauncher = new AutoLauncher(config.PORT, wsManager);
-  autoLauncher.setup();
+  // Only setup auto-launcher in browser mode
+  if (serverMode === 'browser') {
+    const autoLauncher = new AutoLauncher(config.PORT, wsManager);
+    autoLauncher.setup();
+  } else {
+    logger.info('Auto-launcher disabled (app mode)');
+  }
   
   // Start cache cleanup interval (every 30 seconds)
   logger.info('Starting cache cleanup scheduler (every 30 seconds)');
@@ -121,6 +140,11 @@ server.listen(config.PORT, () => {
   // Store cleanup interval for shutdown
   global.__cleanupInterval = cleanupInterval;
   global.__initialCleanupTimeout = initialCleanupTimeout;
+  
+  // Notify Electron that server is ready (if running in app mode)
+  if (serverMode === 'app' && process.send) {
+    process.send({ type: 'server-ready', port: config.PORT });
+  }
 });
 
 const shutdown = () => {
@@ -166,3 +190,12 @@ process.on('SIGTERM', () => {
   logger.info('Received SIGTERM');
   shutdown();
 });
+
+// Handle messages from Electron main process (app mode only)
+if (serverMode === 'app') {
+  process.on('message', (msg) => {
+    if (msg === 'shutdown') {
+      shutdown();
+    }
+  });
+}

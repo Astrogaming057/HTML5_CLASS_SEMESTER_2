@@ -86,14 +86,14 @@ window.PreviewFileExplorer = (function() {
       isRendering = true;
       
       try {
-        if (!files || files.length === 0) {
-          fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
-          return;
-        }
-        
-        const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
-        
-        files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
+      if (!files || files.length === 0) {
+        fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+        return;
+      }
+      
+      const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
+      
+      files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
         
         // Deduplicate files by path to prevent duplicate entries
         const fileMap = new Map();
@@ -104,14 +104,14 @@ window.PreviewFileExplorer = (function() {
           }
         });
         files = Array.from(fileMap.values());
-        
-        files.sort((a, b) => {
-          if (a.isDirectory && !b.isDirectory) return -1;
-          if (!a.isDirectory && b.isDirectory) return 1;
-          return a.name.localeCompare(b.name);
-        });
-        
-        fileTree.innerHTML = '';
+      
+      files.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      
+      fileTree.innerHTML = '';
       
       // Check for modified files (in cache but different from saved)
       const modifiedFiles = new Set();
@@ -685,7 +685,7 @@ window.PreviewFileExplorer = (function() {
               updateUIForRename(newPath);
             } else {
               // Fallback to switchToFile if updateUIForRename not provided
-              switchToFile(newPath);
+            switchToFile(newPath);
             }
           }
           

@@ -3,6 +3,23 @@ const path = require('path');
 const { spawn, exec } = require('child_process');
 const http = require('http');
 
+// Disable hardware acceleration for remote desktop compatibility
+app.disableHardwareAcceleration();
+
+// Optimize for remote desktop environments - more aggressive settings
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+app.commandLine.appendSwitch('disable-accelerated-video-decode');
+app.commandLine.appendSwitch('disable-accelerated-video-encode');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+
 let mainWindow = null;
 let serverProcess = null;
 const PORT = 3000;
@@ -42,12 +59,13 @@ function killExistingProcesses(callback) {
         });
       }
       
-      // Kill server processes (node index-app.js or node server/index-app.js) - excluding current
+      // Kill server processes (node index.js with app mode) - excluding current
       exec(`wmic process where "name='node.exe'" get processid,commandline`, (err, stdout) => {
         if (stdout) {
           const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.includes('CommandLine'));
           lines.forEach(line => {
-            if (line.toLowerCase().includes('index-app.js') || line.toLowerCase().includes('server\\index-app.js')) {
+            if ((line.toLowerCase().includes('index.js') || line.toLowerCase().includes('server\\index.js')) && 
+                (line.toLowerCase().includes('--app-mode') || line.toLowerCase().includes('app_mode=true'))) {
               const parts = line.trim().split(/\s+/);
               const pid = parts[parts.length - 1];
               if (pid && !isNaN(pid) && pid !== currentPid.toString() && pid !== currentPpid.toString()) {
@@ -106,8 +124,8 @@ function killExistingProcesses(callback) {
         });
       }
       
-      // Kill server processes (node index-app.js) - excluding current
-      exec(`pgrep -f "node.*index-app.js"`, (err, stdout) => {
+      // Kill server processes (node index.js with app mode) - excluding current
+      exec(`pgrep -f "node.*index.js.*--app-mode"`, (err, stdout) => {
         if (stdout) {
           const pids = stdout.trim().split('\n');
           pids.forEach(pid => {
@@ -154,10 +172,42 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Disable hardware acceleration in renderer for remote desktop
+      enableBlinkFeatures: '',
+      disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmallCanvases,AcceleratedVideoDecode,AcceleratedVideoEncode',
+      // Additional remote desktop optimizations
+      offscreen: false,
+      backgroundThrottling: false
     },
     icon: path.join(__dirname, '..', 'server', 'templates', 'html', 'favicon.ico').replace(/\\/g, '/'),
-    title: 'HTML Class IDE'
+    title: 'HTML Class IDE',
+    backgroundColor: '#1e1e1e',
+    show: false, // Don't show until ready to prevent flicker
+    autoHideMenuBar: true // Hide the menu bar (File, Edit, View, etc.)
+  });
+  
+  // Show window when ready to prevent remote desktop issues
+  // Add a small delay to ensure everything is initialized
+  mainWindow.once('ready-to-show', () => {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+      }
+    }, 100);
+  });
+  
+  // Completely remove the menu bar
+  mainWindow.setMenuBarVisibility(false);
+  
+  // Prevent window from being minimized/maximized during remote desktop
+  mainWindow.on('will-move', (event) => {
+    // Allow window movement but prevent issues
+  });
+  
+  // Handle remote desktop specific issues
+  mainWindow.on('blur', () => {
+    // Window lost focus - this is normal in remote desktop
   });
 
   // Start the server
@@ -181,18 +231,24 @@ function createWindow() {
 }
 
 function startServer() {
-  const serverPath = path.join(__dirname, '..', 'server', 'index-app.js');
+  const serverPath = path.join(__dirname, '..', 'server', 'index.js');
   
   const spawnOptions = {
     cwd: path.join(__dirname, '..'),
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_ENV: process.env.NODE_ENV || 'production' },
+    env: { 
+      ...process.env, 
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      APP_MODE: 'true',
+      SERVER_MODE: 'app'
+    },
     windowsHide: true, // Hide console window on Windows
     detached: false
   };
   
   // Use spawn with windowsHide - this should hide the console window on Windows
-  serverProcess = spawn('node', [serverPath], spawnOptions);
+  // Pass --app-mode flag to indicate app mode
+  serverProcess = spawn('node', [serverPath, '--app-mode'], spawnOptions);
 
   serverProcess.stdout.on('data', (data) => {
     const output = data.toString();

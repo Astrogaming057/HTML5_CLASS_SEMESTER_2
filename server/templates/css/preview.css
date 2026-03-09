@@ -29,6 +29,28 @@ body {
   color: var(--text-secondary);
 }
 
+.mode-indicator {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-left: 8px;
+  cursor: help;
+  transition: opacity 0.2s;
+}
+
+.mode-indicator.app {
+  background: var(--status-saving, #4a9eff);
+  color: white;
+}
+
+.mode-indicator.browser {
+  background: var(--text-tertiary, #888);
+  color: white;
+}
+
 .file-icon {
   font-size: 18px;
 }
@@ -1149,11 +1171,11 @@ body.resizing .resizer {
 }
 
 #previewFrame {
+  height: 100%;
   flex: 1;
   width: 100%;
   border: none;
   background: var(--bg-primary);
-  height: -webkit-fill-available;
 }
 
 #previewFrame.theme-applied {

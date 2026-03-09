@@ -155,7 +155,7 @@ window.PreviewEvents = (function() {
               window.location.href = url.href;
             } catch (e) {
               // Fallback to relative path if URL construction fails
-              window.location.href = targetPath;
+            window.location.href = targetPath;
             }
           } else {
             // No file open, go to root
