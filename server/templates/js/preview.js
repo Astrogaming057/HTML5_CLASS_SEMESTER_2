@@ -163,12 +163,96 @@ require(['vs/editor/editor.main'], function() {
     await PreviewFileExplorer.createNewFolder(customPrompt, () => currentDirRef.currentDir, loadFileTree);
   }
   
+  function updateEditorPath(newPath, oldPath) {
+    // Update editor path without reloading content
+    filePathRef.current = newPath;
+    fileName.textContent = newPath.split('/').pop();
+    
+    // Update the editor cache path if there's unsaved content
+    const editor = window.__previewEditor;
+    if (editor && isDirty.current) {
+      const currentContent = editor.getValue();
+      // Save current content to new path in cache
+      fetch('/__api__/files/editor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newPath, content: currentContent })
+      }).catch(err => console.error('Error updating editor cache:', err));
+      
+      // Delete old cache if it exists
+      if (oldPath && oldPath !== newPath) {
+        fetch('/__api__/files/editor', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: oldPath })
+        }).catch(err => console.error('Error deleting old cache:', err));
+      }
+    }
+  }
+  
+  function updatePreviewPath(newPath) {
+    // Update preview if it's showing the renamed file
+    const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
+    if (isPreviewPoppedOut) {
+      PreviewPopouts.updatePreviewPopout(newPath, () => previewSettings);
+    }
+    
+    // Update preview frame if showing current file
+    if (previewFrame) {
+      let previewUrl = '/__preview-content__?file=' + encodeURIComponent(newPath) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+      if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+        previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+      }
+      previewUrl += '&t=' + Date.now();
+      previewFrame.src = previewUrl;
+    }
+  }
+  
+  function updateUIForRename(newPath) {
+    // Update URL without reloading
+    const newUrl = '/__preview__?file=' + encodeURIComponent(newPath);
+    window.history.replaceState({ file: newPath }, '', newUrl);
+    
+    // Update active file tree item (don't reload file tree here - let WebSocket handle it)
+    const newDir = newPath.split('/').slice(0, -1).join('/') || '';
+    if (newDir === currentDirRef.currentDir) {
+      // Only update the active item if we're in the same directory
+      // The file tree will be refreshed by WebSocket events
+      updateActiveFileTreeItem(newPath);
+    }
+    
+    // Update tab manager active tab
+    PreviewTabManager.updateActiveTab(newPath);
+    
+    // Update sync channel
+    syncChannel.postMessage({
+      type: 'file-changed',
+      filePath: newPath
+    });
+    
+    // Save state
+    saveState();
+  }
+  
   async function renameFile(path, oldName, isDirectory) {
-    await PreviewFileExplorer.renameFile(path, oldName, isDirectory, customPrompt, () => currentDirRef.currentDir, loadFileTree, () => filePathRef.current, switchToFile);
+    await PreviewFileExplorer.renameFile(
+      path, oldName, isDirectory, customPrompt, 
+      () => currentDirRef.currentDir, loadFileTree, 
+      () => filePathRef.current, switchToFile,
+      (oldPath, newPath) => PreviewTabManager.renameTab(oldPath, newPath),
+      updateEditorPath,
+      updatePreviewPath,
+      updateUIForRename
+    );
   }
   
   async function deleteFile(path, isDirectory) {
-    await PreviewFileExplorer.deleteFile(path, isDirectory, customConfirm, () => currentDirRef.currentDir, loadFileTree, () => filePathRef.current);
+    await PreviewFileExplorer.deleteFile(path, isDirectory, customConfirm, () => currentDirRef.currentDir, loadFileTree, () => filePathRef.current, (filePath) => {
+      // Close the tab if the file is open
+      if (PreviewTabManager.getOpenTabs().includes(filePath)) {
+        PreviewTabManager.closeTab(filePath);
+      }
+    });
   }
   
   function setupFileExplorer() {
@@ -711,6 +795,10 @@ require(['vs/editor/editor.main'], function() {
           } else {
             updateActiveFileTreeItem(filePath);
           }
+        } else {
+          // Clear file path and name when no file is open
+          filePathRef.current = '';
+          fileName.textContent = '';
         }
         editor.setValue(content);
         if (originalContent !== undefined) {

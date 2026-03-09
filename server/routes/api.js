@@ -111,9 +111,7 @@ function setupAPI(baseDir) {
       if (shouldCreateDir) {
         await fs.mkdir(resolvedPath, { recursive: true });
         logger.info('API: Folder created', { path: finalPath });
-        if (wsManager) {
-          wsManager.notifyFileChange(finalPath, 'addDir');
-        }
+        // File watcher will automatically detect and notify via WebSocket
       } else {
         if (req.body.isBinary && content) {
           const buffer = Buffer.from(content, 'base64');
@@ -123,9 +121,7 @@ function setupAPI(baseDir) {
           await fs.writeFile(resolvedPath, content || '', 'utf-8');
           logger.info('API: File created', { path: finalPath });
         }
-        if (wsManager) {
-          wsManager.notifyFileChange(finalPath, 'add');
-        }
+        // File watcher will automatically detect and notify via WebSocket
       }
 
       res.json({ success: true });

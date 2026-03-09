@@ -1,4 +1,6 @@
 window.PreviewWebSocket = (function() {
+  let refreshTimeout = null;
+  
   return {
     setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -208,7 +210,14 @@ window.PreviewWebSocket = (function() {
       const isParentChange = currentDirNormalized.startsWith(eventPath + '/');
       
       if (isInCurrentDir || isParentChange) {
-        loadFileTree(currentDir);
+        // Debounce rapid file system events to prevent multiple refreshes
+        if (refreshTimeout) {
+          clearTimeout(refreshTimeout);
+        }
+        refreshTimeout = setTimeout(() => {
+          loadFileTree(currentDir);
+          refreshTimeout = null;
+        }, 100);
       }
     }
   };

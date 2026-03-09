@@ -144,11 +144,22 @@ window.PreviewEvents = (function() {
       
       if (backToFilesBtn) {
         backToFilesBtn.addEventListener('click', () => {
-          const filePath = window.__previewFilePath;
-          if (filePath) {
+          const filePathGetter = window.__previewFilePath;
+          const filePath = typeof filePathGetter === 'function' ? filePathGetter() : filePathGetter;
+          if (filePath && typeof filePath === 'string') {
             const dirPath = filePath.split('/').slice(0, -1).join('/') || '';
+            // Construct proper URL using current origin to ensure correct protocol and host
             const targetPath = dirPath ? '/' + dirPath + '/' : '/';
-            window.location.href = targetPath;
+            try {
+              const url = new URL(targetPath, window.location.origin);
+              window.location.href = url.href;
+            } catch (e) {
+              // Fallback to relative path if URL construction fails
+              window.location.href = targetPath;
+            }
+          } else {
+            // No file open, go to root
+            window.location.href = '/';
           }
         });
       }

@@ -78,8 +78,23 @@ window.PreviewState = (function() {
         let restoredFilePath = filePath;
         let restoredCurrentDir = currentDir;
         
-        if (!forceLoad && state.filePath && state.filePath !== filePath) {
-          console.log('Switching to saved file:', state.filePath);
+        // Always use file from URL if specified, never restore saved file path
+        // This ensures the URL parameter always takes precedence
+        if (filePath) {
+          console.log('Using file from URL:', filePath);
+          // Always load the file from URL, regardless of forceLoad flag
+          // This ensures URL parameter takes precedence over saved state
+          restoredFilePath = filePath;
+          fileName.textContent = filePath.split('/').pop();
+          const newDir = filePath.split('/').slice(0, -1).join('/') || '';
+          if (newDir !== currentDir) {
+            restoredCurrentDir = newDir;
+            loadFileTree(restoredCurrentDir);
+          }
+          loadFile(filePath);
+        } else if (!forceLoad && state.filePath) {
+          // Only use saved file path if no file is specified in URL
+          console.log('No file in URL, using saved file:', state.filePath);
           restoredFilePath = state.filePath;
           fileName.textContent = state.filePath.split('/').pop();
           const newDir = state.filePath.split('/').slice(0, -1).join('/') || '';
@@ -90,8 +105,6 @@ window.PreviewState = (function() {
           loadFile(state.filePath);
           const newUrl = '/__preview__?file=' + encodeURIComponent(state.filePath);
           window.history.replaceState({ file: state.filePath }, '', newUrl);
-        } else if (forceLoad) {
-          console.log('Force load: using file from URL, not restoring saved file');
         }
         
         if (state.explorerCollapsed !== undefined) {

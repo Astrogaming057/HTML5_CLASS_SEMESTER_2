@@ -254,6 +254,10 @@ window.PreviewTabManager = (function() {
       }
     } else if (openTabs.length === 0) {
       activeTabPath = null;
+      // Clear editor when no tabs are open
+      if (setEditorContentCallback) {
+        setEditorContentCallback('', '', null);
+      }
     }
     
     renderTabs();
@@ -297,6 +301,29 @@ window.PreviewTabManager = (function() {
 
   function getTabInfo(filePath) {
     return tabData[filePath] || null;
+  }
+
+  function renameTab(oldPath, newPath) {
+    if (!openTabs.includes(oldPath)) return false;
+    
+    const tabInfo = tabData[oldPath];
+    if (!tabInfo) return false;
+    
+    // Update the tab in the array
+    const index = openTabs.indexOf(oldPath);
+    openTabs[index] = newPath;
+    
+    // Move tab data to new path
+    tabData[newPath] = tabInfo;
+    delete tabData[oldPath];
+    
+    // Update active tab path if it was the renamed tab
+    if (activeTabPath === oldPath) {
+      activeTabPath = newPath;
+    }
+    
+    renderTabs();
+    return true;
   }
 
   function initialize(container, switchToFile, getFilePath, isDirty, customConfirm, updateActiveFileTreeItem, loadFileTree, getCurrentDir, getEditorContent, setEditorContent) {
@@ -350,6 +377,7 @@ window.PreviewTabManager = (function() {
     setTabContent,
     getActiveTab,
     getOpenTabs,
-    getTabInfo
+    getTabInfo,
+    renameTab
   };
 })();

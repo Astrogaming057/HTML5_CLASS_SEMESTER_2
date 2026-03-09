@@ -1,11 +1,21 @@
 window.PreviewFileExplorer = (function() {
-  return {
+  let isRendering = false;
+  let renderTimeout = null;
+  let renderFileTreeFn = null;
+  
+  const module = {
     setupFileExplorer(getCurrentDir, loadFileTree) {
       const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
       loadFileTree(currentDir || '/');
     },
 
     loadFileTree(dir, fileTree, currentDirRef, updateBackButton, saveState, renderFileTree, fetchDirectoryListing) {
+      // Clear any pending render
+      if (renderTimeout) {
+        clearTimeout(renderTimeout);
+        renderTimeout = null;
+      }
+      
       fileTree.innerHTML = '<div class="file-tree-loading">Loading...</div>';
       
       const dirStr = typeof dir === 'function' ? dir() : (typeof dir === 'string' ? dir : String(dir || '/'));
@@ -59,22 +69,49 @@ window.PreviewFileExplorer = (function() {
     },
 
     async renderFileTree(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone) {
-      if (!files || files.length === 0) {
-        fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+      // Prevent concurrent renders
+      if (isRendering) {
+        // If already rendering, queue this render
+        if (renderTimeout) {
+          clearTimeout(renderTimeout);
+        }
+        renderTimeout = setTimeout(() => {
+          if (renderFileTreeFn) {
+            renderFileTreeFn(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone);
+          }
+        }, 50);
         return;
       }
       
-      const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
+      isRendering = true;
       
-      files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
-      
-      files.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1;
-        if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.localeCompare(b.name);
-      });
-      
-      fileTree.innerHTML = '';
+      try {
+        if (!files || files.length === 0) {
+          fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+          return;
+        }
+        
+        const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
+        
+        files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
+        
+        // Deduplicate files by path to prevent duplicate entries
+        const fileMap = new Map();
+        files.forEach(file => {
+          const normalizedPath = file.path.replace(/\/+/g, '/');
+          if (!fileMap.has(normalizedPath)) {
+            fileMap.set(normalizedPath, file);
+          }
+        });
+        files = Array.from(fileMap.values());
+        
+        files.sort((a, b) => {
+          if (a.isDirectory && !b.isDirectory) return -1;
+          if (!a.isDirectory && b.isDirectory) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        
+        fileTree.innerHTML = '';
       
       // Check for modified files (in cache but different from saved)
       const modifiedFiles = new Set();
@@ -259,6 +296,12 @@ window.PreviewFileExplorer = (function() {
         
         fileTree.appendChild(item);
       });
+      
+      isRendering = false;
+      } catch (error) {
+        console.error('Error rendering file tree:', error);
+        isRendering = false;
+      }
     },
 
     showParentFolderDropZone(currentDir, fileTree, moveFileToFolder) {
@@ -457,7 +500,7 @@ window.PreviewFileExplorer = (function() {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
-            loadFileTree(getCurrentDir());
+            // File watcher will automatically refresh via WebSocket, no need to manually refresh
             status.textContent = `Uploaded ${fileName}`;
             status.className = 'status saved';
             setTimeout(() => {
@@ -567,8 +610,8 @@ window.PreviewFileExplorer = (function() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          loadFileTree(getCurrentDir());
-          switchToFile(newPath);
+          // File watcher will automatically refresh via WebSocket, no need to manually refresh
+          // Don't automatically open the file - let user open it manually if needed
         } else {
           alert('Error: ' + data.error);
         }
@@ -593,7 +636,7 @@ window.PreviewFileExplorer = (function() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          loadFileTree(getCurrentDir());
+          // File watcher will automatically refresh via WebSocket, no need to manually refresh
         } else {
           alert('Error: ' + data.error);
         }
@@ -603,7 +646,7 @@ window.PreviewFileExplorer = (function() {
       });
     },
 
-    async renameFile(path, oldName, isDirectory, customPrompt, getCurrentDir, loadFileTree, filePath, switchToFile) {
+    async renameFile(path, oldName, isDirectory, customPrompt, getCurrentDir, loadFileTree, filePath, switchToFile, renameTabCallback, updateEditorPath, updatePreviewPath, updateUIForRename) {
       const newName = await customPrompt('Enter new name:', oldName);
       if (!newName || newName === oldName) return;
       
@@ -618,10 +661,37 @@ window.PreviewFileExplorer = (function() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          loadFileTree(getCurrentDir());
-          if (path === filePath) {
-            switchToFile(newPath);
+          // Get current file path (handle both function and value)
+          const currentFilePath = typeof filePath === 'function' ? filePath() : filePath;
+          
+          // If the renamed file is currently open, update editor, preview, and tab
+          if (path === currentFilePath) {
+            // Rename the tab if it exists
+            if (renameTabCallback && typeof renameTabCallback === 'function') {
+              renameTabCallback(path, newPath);
+            }
+            
+            // Update editor path and preview without reloading
+            if (updateEditorPath && typeof updateEditorPath === 'function') {
+              updateEditorPath(newPath, path);
+            }
+            
+            if (updatePreviewPath && typeof updatePreviewPath === 'function') {
+              updatePreviewPath(newPath);
+            }
+            
+            // Update UI (URL, file name display, etc.) without reloading file
+            if (updateUIForRename && typeof updateUIForRename === 'function') {
+              updateUIForRename(newPath);
+            } else {
+              // Fallback to switchToFile if updateUIForRename not provided
+              switchToFile(newPath);
+            }
           }
+          
+          // File watcher will automatically refresh via WebSocket events (unlink + add)
+          // No need to manually call loadFileTree here - it will be handled by WebSocket
+          // with proper debouncing to prevent duplicate refreshes
         } else {
           alert('Error: ' + data.error);
         }
@@ -631,7 +701,7 @@ window.PreviewFileExplorer = (function() {
       });
     },
 
-    async deleteFile(path, isDirectory, customConfirm, getCurrentDir, loadFileTree, filePath) {
+    async deleteFile(path, isDirectory, customConfirm, getCurrentDir, loadFileTree, filePath, closeTabCallback) {
       const confirmed = await customConfirm(`Are you sure you want to delete ${isDirectory ? 'folder' : 'file'} "${path.split('/').pop()}"?`);
       if (!confirmed) {
         return;
@@ -646,8 +716,9 @@ window.PreviewFileExplorer = (function() {
       .then(data => {
         if (data.success) {
           loadFileTree(getCurrentDir());
-          if (path === filePath) {
-            alert('File was deleted. Please close this tab.');
+          // Close the tab if the deleted file is open
+          if (closeTabCallback && typeof closeTabCallback === 'function') {
+            closeTabCallback(path);
           }
         } else {
           alert('Error: ' + data.error);
@@ -658,4 +729,9 @@ window.PreviewFileExplorer = (function() {
       });
     }
   };
+  
+  // Store reference to renderFileTree for recursive calls
+  renderFileTreeFn = module.renderFileTree;
+  
+  return module;
 })();
