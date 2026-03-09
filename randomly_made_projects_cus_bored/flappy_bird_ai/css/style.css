@@ -1,0 +1,262 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(to bottom, #4ec0ca 0%, #87ceeb 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.game-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#gameCanvas {
+    background: linear-gradient(to bottom, #4ec0ca 0%, #87ceeb 50%, #87ceeb 70%, #87ceeb 100%);
+    border: 3px solid #2c3e50;
+    display: block;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.screen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 40px 60px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    min-width: 300px;
+}
+
+.screen.hidden {
+    display: none;
+}
+
+.screen h1 {
+    font-size: 48px;
+    color: #333;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.screen p {
+    font-size: 18px;
+    color: #666;
+    margin: 10px 0;
+}
+
+#scoreDisplay {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 48px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+}
+
+#scoreDisplay.hidden {
+    display: none;
+}
+
+#finalScore, #bestScore {
+    font-weight: bold;
+    color: #4ec0ca;
+    font-size: 24px;
+}
+
+#aiStatus {
+    position: absolute;
+    top: 100px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    font-size: 13px;
+    z-index: 5;
+    min-width: 220px;
+    border: 2px solid #4ec0ca;
+}
+
+#aiStatus.hidden {
+    display: none;
+}
+
+#aiStatus div {
+    margin: 6px 0;
+    font-family: 'Courier New', monospace;
+    line-height: 1.4;
+}
+
+#aiStatus span {
+    color: #4ec0ca;
+    font-weight: bold;
+}
+
+.settings-menu {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 15;
+}
+
+.settings-button {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    border: 2px solid #4ec0ca;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s;
+}
+
+.settings-button:hover {
+    background: rgba(76, 175, 80, 0.8);
+    transform: scale(1.05);
+}
+
+.settings-panel {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    background: rgba(0, 0, 0, 0.95);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #4ec0ca;
+    min-width: 300px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.settings-panel.hidden {
+    display: none;
+}
+
+.settings-panel h3 {
+    margin-bottom: 15px;
+    color: #4ec0ca;
+    text-align: center;
+}
+
+.setting-item {
+    margin: 15px 0;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 5px;
+    color: #87ceeb;
+    font-weight: bold;
+}
+
+.setting-item input {
+    width: 100%;
+    padding: 8px;
+    border: 2px solid #4ec0ca;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+}
+
+.setting-item input:focus {
+    outline: none;
+    border-color: #87ceeb;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.setting-hint {
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.apply-button, .close-button {
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.apply-button {
+    background: #4CAF50;
+    color: white;
+}
+
+.apply-button:hover {
+    background: #45a049;
+    transform: scale(1.02);
+}
+
+.close-button {
+    background: #666;
+    color: white;
+}
+
+.close-button:hover {
+    background: #777;
+    transform: scale(1.02);
+}
+
+.export-button, .reset-button {
+    padding: 10px 15px;
+    margin: 5px 0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.export-button {
+    background: #2196F3;
+    color: white;
+}
+
+.export-button:hover {
+    background: #1976D2;
+    transform: scale(1.05);
+}
+
+.reset-button {
+    background: #f44336;
+    color: white;
+}
+
+.reset-button:hover {
+    background: #d32f2f;
+    transform: scale(1.05);
+}
+
+.setting-item h4 {
+    color: #4ec0ca;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
