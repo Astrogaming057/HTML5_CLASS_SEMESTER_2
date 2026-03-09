@@ -567,7 +567,59 @@ require(['vs/editor/editor.main'], function() {
     PreviewHelpMenu.open();
   }
   
-  PreviewEvents.setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu);
+  function toggleTerminalPanel() {
+    if (terminalPanel) {
+      terminalPanel.classList.toggle('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    }
+  }
+  
+  function closeCurrentTab() {
+    PreviewTabManager.closeCurrentTab();
+  }
+  
+  function switchToNextTab() {
+    PreviewTabManager.switchToNextTab();
+  }
+  
+  function switchToPrevTab() {
+    PreviewTabManager.switchToPrevTab();
+  }
+  
+  function createNewFile() {
+    PreviewFileExplorer.createNewFile(customPrompt, () => currentDirRef.currentDir, loadFileTree, (path) => {
+      PreviewEditorManager.switchToFile(path, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState, false);
+    });
+  }
+  
+  function createNewFolder() {
+    PreviewFileExplorer.createNewFolder(customPrompt, () => currentDirRef.currentDir, loadFileTree);
+  }
+  
+  function openGitPanel() {
+    PreviewGitPanel.toggle();
+  }
+  
+  function openSettings() {
+    PreviewSettings.openSettings();
+  }
+  
+  PreviewEvents.setupKeyboardShortcuts(
+    toggleFileExplorer, 
+    togglePreviewPanel, 
+    openFileSearch, 
+    openGlobalSearch, 
+    openHelpMenu,
+    toggleTerminalPanel,
+    closeCurrentTab,
+    switchToNextTab,
+    switchToPrevTab,
+    createNewFile,
+    createNewFolder,
+    openGitPanel,
+    openSettings
+  );
   
   function toggleFileExplorer() {
     PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
@@ -682,6 +734,12 @@ require(['vs/editor/editor.main'], function() {
   
   const isApplyingExternalChange = { current: false };
   window.__previewIsApplyingExternalChange = isApplyingExternalChange;
+  
+  function openSymbolNavigator() {
+    PreviewSymbolNavigator.open(editor);
+  }
+
+  PreviewEditorSetup.setupEditorNavigation(editor, openSymbolNavigator);
   
   PreviewEditorSetup.setupEditorListeners(
     editor, () => filePathRef.current, syncChannel, originalContent, isDirty,

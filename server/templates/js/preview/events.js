@@ -1,29 +1,116 @@
 window.PreviewEvents = (function() {
   return {
-    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu) {
+    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu, toggleTerminal, closeCurrentTab, switchToNextTab, switchToPrevTab, createNewFile, createNewFolder, openGitPanel, openSettings) {
       document.addEventListener('keydown', (e) => {
-        // Don't trigger shortcuts when typing in inputs/editors
+        // Don't trigger shortcuts when typing in inputs/editors (except for some special cases)
         const target = e.target;
-        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+        const isContentEditable = target.isContentEditable;
+        const isMonacoEditor = target.closest('.monaco-editor') !== null;
+        
+        // Allow shortcuts in Monaco editor for editor-specific commands
+        const allowInEditor = isMonacoEditor && (
+          (e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'Tab' || e.key === 'n' || e.key === 'k')
+        );
+        
+        if (isInput && !allowInEditor) {
+          return; // Don't trigger shortcuts when typing in regular inputs
+        }
         
         if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
           e.preventDefault();
+          e.stopPropagation();
           toggleFileExplorer();
         } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
           // Ctrl+Shift+F for global search
           e.preventDefault();
+          e.stopPropagation();
           if (openGlobalSearch && typeof openGlobalSearch === 'function') {
             openGlobalSearch();
           }
         } else if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !isInput) {
           // Ctrl+P for file search (only if not in input)
           e.preventDefault();
+          e.stopPropagation();
           if (openFileSearch && typeof openFileSearch === 'function') {
             openFileSearch();
           }
         } else if ((e.ctrlKey || e.metaKey) && e.key === '?') {
           // Ctrl+? for help menu
           e.preventDefault();
+          e.stopPropagation();
+          if (openHelpMenu && typeof openHelpMenu === 'function') {
+            openHelpMenu();
+          }
+        } else if (e.key === '`' && (e.ctrlKey || e.metaKey)) {
+          // Ctrl+` for toggle terminal
+          e.preventDefault();
+          e.stopPropagation();
+          if (toggleTerminal && typeof toggleTerminal === 'function') {
+            toggleTerminal();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'V') {
+          // Ctrl+Shift+V for toggle preview panel
+          e.preventDefault();
+          e.stopPropagation();
+          togglePreviewPanel();
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+          // Ctrl+Shift+E for focus file explorer
+          e.preventDefault();
+          e.stopPropagation();
+          toggleFileExplorer();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'w' && !isContentEditable) {
+          // Ctrl+W for close current tab
+          e.preventDefault();
+          e.stopPropagation();
+          if (closeCurrentTab && typeof closeCurrentTab === 'function') {
+            closeCurrentTab();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && !isInput && !isContentEditable) {
+          // Ctrl+Tab for next tab, Ctrl+Shift+Tab for previous tab
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.shiftKey) {
+            if (switchToPrevTab && typeof switchToPrevTab === 'function') {
+              switchToPrevTab();
+            }
+          } else {
+            if (switchToNextTab && typeof switchToNextTab === 'function') {
+              switchToNextTab();
+            }
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !isInput && !isContentEditable) {
+          // Ctrl+N for new file
+          e.preventDefault();
+          e.stopPropagation();
+          if (createNewFile && typeof createNewFile === 'function') {
+            createNewFile();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
+          // Ctrl+Shift+N for new folder
+          e.preventDefault();
+          e.stopPropagation();
+          if (createNewFolder && typeof createNewFolder === 'function') {
+            createNewFolder();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'G') {
+          // Ctrl+Shift+G for Git panel
+          e.preventDefault();
+          e.stopPropagation();
+          if (openGitPanel && typeof openGitPanel === 'function') {
+            openGitPanel();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+          // Ctrl+, for settings
+          e.preventDefault();
+          e.stopPropagation();
+          if (openSettings && typeof openSettings === 'function') {
+            openSettings();
+          }
+        } else if (e.key === 'F1') {
+          // F1 for help menu
+          e.preventDefault();
+          e.stopPropagation();
           if (openHelpMenu && typeof openHelpMenu === 'function') {
             openHelpMenu();
           }

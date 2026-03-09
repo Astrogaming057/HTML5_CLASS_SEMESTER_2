@@ -316,12 +316,35 @@ window.PreviewTabManager = (function() {
     }
   }
 
+  function switchToNextTab() {
+    if (openTabs.length <= 1) return;
+    const currentIndex = openTabs.indexOf(activeTabPath);
+    const nextIndex = (currentIndex + 1) % openTabs.length;
+    switchToTab(openTabs[nextIndex]);
+  }
+
+  function switchToPrevTab() {
+    if (openTabs.length <= 1) return;
+    const currentIndex = openTabs.indexOf(activeTabPath);
+    const prevIndex = (currentIndex - 1 + openTabs.length) % openTabs.length;
+    switchToTab(openTabs[prevIndex]);
+  }
+
+  function closeCurrentTab() {
+    if (activeTabPath) {
+      closeTab(activeTabPath);
+    }
+  }
+
   return {
     initialize,
     openTab,
     openTabWithoutConfirm,
     closeTab,
     switchToTab,
+    switchToNextTab,
+    switchToPrevTab,
+    closeCurrentTab,
     updateActiveTab,
     updateTabDirtyState,
     setTabContent,

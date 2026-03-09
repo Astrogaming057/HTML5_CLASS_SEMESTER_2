@@ -115,6 +115,14 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'helpMenu.js'),
         'utf-8'
       );
+      const symbolNavigatorJs = await fs.readFile(
+        path.join(previewModulesDir, 'symbolNavigator.js'),
+        'utf-8'
+      );
+      const editorNavigationJs = await fs.readFile(
+        path.join(previewModulesDir, 'editorNavigation.js'),
+        'utf-8'
+      );
       const initializationJs = await fs.readFile(
         path.join(previewModulesDir, 'initialization.js'),
         'utf-8'
@@ -153,6 +161,8 @@ async function loadPreviewTemplates() {
         resizersJs,
         '// Sync Channel',
         syncChannelJs,
+        '// Editor Navigation',
+        editorNavigationJs,
         '// Editor Setup',
         editorSetupJs,
         '// Terminal UI',
@@ -169,6 +179,8 @@ async function loadPreviewTemplates() {
         gitPanelJs,
         '// Help Menu',
         helpMenuJs,
+        '// Symbol Navigator',
+        symbolNavigatorJs,
         '// Initialization',
         initializationJs,
         '// Main',

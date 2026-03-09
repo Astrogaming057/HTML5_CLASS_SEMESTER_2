@@ -33,12 +33,118 @@ window.PreviewHelpMenu = (function() {
                 <span class="help-shortcut-desc">Toggle file explorer</span>
               </div>
               <div class="help-shortcut-item">
-                <span class="help-shortcut-key">Ctrl + ?</span>
+                <span class="help-shortcut-key">Ctrl + Shift + ?</span>
                 <span class="help-shortcut-desc">Show this help menu</span>
               </div>
               <div class="help-shortcut-item">
                 <span class="help-shortcut-key">Esc</span>
                 <span class="help-shortcut-desc">Close dialogs and menus</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + \`</span>
+                <span class="help-shortcut-desc">Toggle terminal panel</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + V</span>
+                <span class="help-shortcut-desc">Toggle preview panel</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + E</span>
+                <span class="help-shortcut-desc">Focus file explorer</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + W</span>
+                <span class="help-shortcut-desc">Close current tab</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Tab</span>
+                <span class="help-shortcut-desc">Switch to next tab</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + Tab</span>
+                <span class="help-shortcut-desc">Switch to previous tab</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + N</span>
+                <span class="help-shortcut-desc">Create new file</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + N</span>
+                <span class="help-shortcut-desc">Create new folder</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + G</span>
+                <span class="help-shortcut-desc">Toggle Git panel</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + ,</span>
+                <span class="help-shortcut-desc">Open settings</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">F1</span>
+                <span class="help-shortcut-desc">Show help menu</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="help-section">
+            <h3 class="help-section-title">Editor Shortcuts (Monaco)</h3>
+            <div class="help-shortcuts">
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + F</span>
+                <span class="help-shortcut-desc">Find in file</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + H</span>
+                <span class="help-shortcut-desc">Find and replace</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + G</span>
+                <span class="help-shortcut-desc">Go to line</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + /</span>
+                <span class="help-shortcut-desc">Toggle line comment</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Z</span>
+                <span class="help-shortcut-desc">Undo</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Y</span>
+                <span class="help-shortcut-desc">Redo</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Alt + ↑/↓</span>
+                <span class="help-shortcut-desc">Move line up/down</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Shift + Alt + ↑/↓</span>
+                <span class="help-shortcut-desc">Copy line up/down</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + D</span>
+                <span class="help-shortcut-desc">Add selection to next find match</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + L</span>
+                <span class="help-shortcut-desc">Select current line</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Click</span>
+                <span class="help-shortcut-desc">Jump to Definition</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">F12</span>
+                <span class="help-shortcut-desc">Go to Definition</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Shift + F12</span>
+                <span class="help-shortcut-desc">Find All References</span>
+              </div>
+              <div class="help-shortcut-item">
+                <span class="help-shortcut-key">Ctrl + Shift + O</span>
+                <span class="help-shortcut-desc">Go to Symbol in File</span>
               </div>
             </div>
           </div>
@@ -69,6 +175,18 @@ window.PreviewHelpMenu = (function() {
               <div class="help-feature-item">
                 <strong>File Explorer</strong>
                 <p>Right-click files for context menu. Drag and drop to move files. Modified files show an "M" indicator.</p>
+              </div>
+              <div class="help-feature-item">
+                <strong>Jump to Definition</strong>
+                <p>Ctrl+Click on any function, class, or variable to jump to where it's defined. Or press F12.</p>
+              </div>
+              <div class="help-feature-item">
+                <strong>Find All References</strong>
+                <p>Right-click on a symbol and select "Find All References" (or press Shift+F12) to see everywhere it's used.</p>
+              </div>
+              <div class="help-feature-item">
+                <strong>Symbol Navigator</strong>
+                <p>Press Ctrl+Shift+O to quickly search for functions, classes, and variables in the current file.</p>
               </div>
             </div>
           </div>

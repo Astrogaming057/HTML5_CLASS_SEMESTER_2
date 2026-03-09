@@ -144,6 +144,61 @@ window.PreviewEditorSetup = (function() {
           saveFile();
         }
       });
+
+      // Jump to Definition on Ctrl+Click
+      editor.onMouseDown((e) => {
+        if (e.event.ctrlKey || e.event.metaKey) {
+          e.event.preventDefault();
+          e.event.stopPropagation();
+          
+          const position = e.target.position;
+          if (position) {
+            // Set position first, then jump to definition
+            try {
+              editor.setPosition(position);
+              // Use our custom implementation
+              if (window.PreviewEditorNavigation) {
+                const getFilePath = typeof window.__previewFilePath === 'function' ? window.__previewFilePath : () => '';
+                const switchToFile = window.__previewSwitchToFile || (() => {});
+                // Use setTimeout to ensure position is set before jumping
+                setTimeout(() => {
+                  window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile);
+                }, 10);
+              }
+            } catch (error) {
+              console.error('Error in Ctrl+Click handler:', error);
+            }
+          }
+        }
+      });
+    },
+
+    setupEditorNavigation(editor, openSymbolNavigator) {
+      // Register keyboard shortcut for Symbol Navigator (Ctrl+Shift+O)
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyO, () => {
+        if (window.PreviewEditorNavigation) {
+          window.PreviewEditorNavigation.openSymbolNavigator(editor);
+        } else if (openSymbolNavigator && typeof openSymbolNavigator === 'function') {
+          openSymbolNavigator(editor);
+        }
+      });
+
+      // Also register F12 for Go to Definition
+      editor.addCommand(monaco.KeyCode.F12, () => {
+        if (window.PreviewEditorNavigation) {
+          const getFilePath = typeof window.__previewFilePath === 'function' ? window.__previewFilePath : () => '';
+          const switchToFile = window.__previewSwitchToFile || (() => {});
+          window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile);
+        }
+      });
+
+      // Register Shift+F12 for Find All References
+      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
+        if (window.PreviewEditorNavigation) {
+          const getFilePath = typeof window.__previewFilePath === 'function' ? window.__previewFilePath : () => '';
+          window.PreviewEditorNavigation.findReferences(editor, getFilePath);
+        }
+      });
     }
   };
 })();
