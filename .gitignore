@@ -1,10 +1,5 @@
 /ide_editor_cache
 ai_instructions.md
 
-# Electron executable (too large for GitHub - 168MB)
-node_modules/electron/dist/electron.exe
-node_modules/@electron/*/dist/electron.exe
-**/electron.exe
-
-# Keep everything else in node_modules
-!node_modules/
+# Dependencies - can be regenerated with npm install
+node_modules/
