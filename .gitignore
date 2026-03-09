@@ -1,3 +1,37 @@
-/ide_editor_cache
-ai_instructions.md
-node_modules/electron/dist/electron.exe
+
+
+# Electron
+app/node_modules/
+node_modules/electron/
+**/electron.exe
+**/electron
+**/Electron.app
+
+# IDE Editor Cache
+**/ide_editor_cache/
+**/.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+*.exe
+*.dmg
+*.pkg
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
