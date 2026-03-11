@@ -13,14 +13,19 @@ window.PreviewServer = (function() {
       
       const updateNowBtn = document.getElementById('serverUpdateNow');
       const skipBtn = document.getElementById('serverUpdateSkip');
-      
       if (updateNowBtn) {
         updateNowBtn.onclick = () => {
           notification.style.display = 'none';
-          restartServer();
+          if (PreviewUtils.isElectronApp()) {
+            const restartModal = document.getElementById('restartConfirmModal');
+            if (restartModal) {
+              restartModal.style.display = 'flex';
+            }
+          } else {
+            restartServer();
+          }
         };
       }
-      
       if (skipBtn) {
         skipBtn.onclick = () => {
           notification.style.display = 'none';

@@ -1,0 +1,94 @@
+/*
+Name: Izaiah Niemuth
+Assignment: 3.1
+Date: February 24, 2026
+*/
+
+body {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1em;
+    color: black;
+    margin: 0;
+    padding: 0;
+    background-color: #e8e8e8;
+}
+
+p {
+    line-height: 1.6;
+    margin: 1% 0;
+}
+
+section{
+    margin-bottom: 2%;
+}
+
+li {
+    list-style-type: none;
+    padding: 1% 0;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#wrapper {
+    width: 100%;
+    max-width: 1000px;
+    margin: auto;
+    background-color: #ffffff;
+    padding: 2%;
+}
+
+.main {
+    flex: 1;
+}
+
+.feature {
+    margin-bottom: 2.5%;
+}
+
+h1,h2, h3, h4, h5, h6 {
+    font-style: italic;
+}
+
+h1 {
+    font-size: 1.5em;
+    letter-spacing: 0.4em;
+}
+
+h2 {
+    font-size: 1.2em;
+    letter-spacing: 0.4em;
+}
+
+a:link,
+a:active{
+    color: #2d5016;
+    text-decoration: none;
+}
+
+a:hover,
+a:visited {
+    color: #5a9c2e;
+    text-decoration: underline;
+}
+
+a {
+    line-height: 1.6;
+}
+
+img {
+    border: 1px solid black;
+    padding: 15px;
+    max-width: 100%;
+    height: auto;
+}
+
+header img {
+    display: block;
+    max-height: 180px;
+    width: 100%;
+    object-fit: cover;
+}

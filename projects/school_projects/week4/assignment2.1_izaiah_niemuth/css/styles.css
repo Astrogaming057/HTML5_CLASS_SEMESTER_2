@@ -1,0 +1,84 @@
+/* 
+Favorite Colors Stylesheet
+Name: Izaiah Niemuth
+Assignment: 2.1
+Date: February 2, 2026
+*/
+
+/* Page layout */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.6;
+    background: linear-gradient(135deg, #7fcdff 0%, #a8ff78 100%);
+    background-attachment: fixed;
+    
+}
+
+/* Wrapper */
+#wrapper {
+    width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: beige;
+}
+
+/* Navigation */
+nav {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+nav a {
+    text-decoration: none;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Shared section box style */
+.box {
+    color: white;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 10px;
+}
+
+/* Color sections */
+.green {
+    background-color: green;
+}
+
+.blue {
+    background-color: blue;
+}
+
+.brown {
+    background-color: brown;
+}
+
+.red {
+    background-color: red;
+}
+
+.purple {
+    background-color: purple;
+}
+
+/* Images */
+img {
+    display: block;
+    margin-top: 10px;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 16px;
+    color: #52606d;
+}
+

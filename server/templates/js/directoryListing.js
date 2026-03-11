@@ -5,10 +5,11 @@ let settings = {
   previewMode: 'editor',
   autoRefresh: true,
   showHidden: false,
-  sizeFormat: 'human'
+  sizeFormat: 'human',
+  useHardwareAcceleration: true
 };
 
-function loadSettings() {
+async function loadSettings() {
   const saved = localStorage.getItem('fileExplorerSettings');
   if (saved) {
     try {
@@ -17,6 +18,17 @@ function loadSettings() {
       console.error('Error loading settings:', e);
     }
   }
+  
+  // Load hardware acceleration setting from Electron if available
+  if (window.electronAPI && window.electronAPI.isElectron) {
+    try {
+      const hwAccel = await window.electronAPI.getHardwareAcceleration();
+      settings.useHardwareAcceleration = hwAccel;
+    } catch (e) {
+      console.error('Error loading hardware acceleration setting:', e);
+    }
+  }
+  
   applySettings();
 }
 
@@ -39,6 +51,9 @@ function applySettings() {
   }
   if (document.getElementById('sizeFormat')) {
     document.getElementById('sizeFormat').value = settings.sizeFormat;
+  }
+  if (document.getElementById('useHardwareAcceleration')) {
+    document.getElementById('useHardwareAcceleration').checked = settings.useHardwareAcceleration;
   }
 }
 
@@ -503,7 +518,94 @@ function onLoad() {
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {
       document.getElementById('settingsPanel').style.display = 'flex';
+      // Show/hide hardware acceleration setting based on Electron availability
+      const hwAccelGroup = document.getElementById('hardwareAccelGroup');
+      if (hwAccelGroup) {
+        if (window.electronAPI && window.electronAPI.isElectron) {
+          hwAccelGroup.style.display = 'block';
+        } else {
+          hwAccelGroup.style.display = 'none';
+        }
+      }
       applySettings();
+      
+      // Setup restart button handlers
+      const restartNowBtn = document.getElementById('restartNowBtn');
+      const restartLaterBtn = document.getElementById('restartLaterBtn');
+      const restartConfirmBtn = document.getElementById('restartConfirmBtn');
+      const restartCancelBtn = document.getElementById('restartCancelBtn');
+      
+      // Helper function to handle restart
+      const handleRestartNow = async () => {
+        closeSettings();
+        try {
+          await window.electronAPI.restartApp();
+        } catch (e) {
+          console.error('Error restarting app:', e);
+          alert('Error restarting app. Please restart manually.');
+        }
+      };
+      
+      if (restartNowBtn) {
+        restartNowBtn.onclick = handleRestartNow;
+      }
+      
+      if (restartLaterBtn) {
+        restartLaterBtn.onclick = () => {
+          const restartPrompt = document.getElementById('restartPrompt');
+          if (restartPrompt) {
+            restartPrompt.style.display = 'none';
+          }
+        };
+      }
+      
+      if (restartConfirmBtn) {
+        restartConfirmBtn.onclick = () => {
+          const restartModal = document.getElementById('restartConfirmModal');
+          if (restartModal) {
+            restartModal.style.display = 'none';
+          }
+          handleRestartNow();
+        };
+      }
+      
+      if (restartCancelBtn) {
+        restartCancelBtn.onclick = () => {
+          const restartModal = document.getElementById('restartConfirmModal');
+          if (restartModal) {
+            restartModal.style.display = 'none';
+          }
+          const restartPrompt = document.getElementById('restartPrompt');
+          if (restartPrompt) {
+            restartPrompt.style.display = 'none';
+          }
+        };
+      }
+      
+      // Monitor hardware acceleration checkbox changes
+      const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
+      if (useHardwareAcceleration && window.electronAPI && window.electronAPI.isElectron) {
+        useHardwareAcceleration.onchange = async () => {
+          try {
+            const oldHwAccel = await window.electronAPI.getHardwareAcceleration();
+            const newHwAccel = useHardwareAcceleration.checked;
+            if (oldHwAccel !== newHwAccel) {
+              await window.electronAPI.setHardwareAcceleration(newHwAccel);
+              const restartPrompt = document.getElementById('restartPrompt');
+              if (restartPrompt) {
+                restartPrompt.style.display = 'block';
+              }
+            } else {
+              const restartPrompt = document.getElementById('restartPrompt');
+              if (restartPrompt) {
+                restartPrompt.style.display = 'none';
+              }
+            }
+          } catch (e) {
+            console.error('Error handling hardware acceleration change:', e);
+          }
+        };
+      }
     });
   }
   
@@ -526,27 +628,96 @@ window.closeSettings = function() {
   document.getElementById('settingsPanel').style.display = 'none';
 };
 
-window.saveSettings = function() {
+window.saveSettings = async function() {
+  const oldHwAccel = settings.useHardwareAcceleration;
+  
   settings.clickBehavior = document.getElementById('clickBehavior').value;
   settings.previewMode = document.getElementById('previewMode').value;
   settings.autoRefresh = document.getElementById('autoRefresh').checked;
   settings.showHidden = document.getElementById('showHidden').checked;
   settings.sizeFormat = document.getElementById('sizeFormat').value;
+  settings.useHardwareAcceleration = document.getElementById('useHardwareAcceleration').checked;
   
-  saveSettingsToStorage();
+  // Check if hardware acceleration setting changed
+  const hwAccelChanged = oldHwAccel !== settings.useHardwareAcceleration;
+  
+  // Save regular settings to localStorage
+  const regularSettings = {
+    clickBehavior: settings.clickBehavior,
+    previewMode: settings.previewMode,
+    autoRefresh: settings.autoRefresh,
+    showHidden: settings.showHidden,
+    sizeFormat: settings.sizeFormat
+  };
+  localStorage.setItem('fileExplorerSettings', JSON.stringify(regularSettings));
+  
+  // Save hardware acceleration setting via Electron API if available
+  if (window.electronAPI && window.electronAPI.isElectron && hwAccelChanged) {
+    try {
+      await window.electronAPI.setHardwareAcceleration(settings.useHardwareAcceleration);
+      // Show restart prompt in settings panel
+      const restartPrompt = document.getElementById('restartPrompt');
+      if (restartPrompt) {
+        restartPrompt.style.display = 'block';
+      }
+      // Show restart confirmation modal
+      const restartModal = document.getElementById('restartConfirmModal');
+      if (restartModal) {
+        restartModal.style.display = 'flex';
+      }
+      // Don't close settings or reload yet - wait for user to choose restart option
+      return;
+    } catch (e) {
+      console.error('Error saving hardware acceleration setting:', e);
+      // Revert the setting
+      settings.useHardwareAcceleration = oldHwAccel;
+      document.getElementById('useHardwareAcceleration').checked = oldHwAccel;
+    }
+  }
+  
   closeSettings();
   
-  location.reload();
+  // Only reload if hardware acceleration didn't change (or we're not in Electron)
+  if (!hwAccelChanged || !window.electronAPI || !window.electronAPI.isElectron) {
+    location.reload();
+  }
 };
 
-window.resetSettings = function() {
+window.resetSettings = async function() {
+  const oldHwAccel = settings.useHardwareAcceleration;
+  
   settings = {
     clickBehavior: 'open',
     previewMode: 'editor',
     autoRefresh: true,
     showHidden: false,
-    sizeFormat: 'human'
+    sizeFormat: 'human',
+    useHardwareAcceleration: true
   };
+  
+  // Reset hardware acceleration setting via Electron API if available
+  if (window.electronAPI && window.electronAPI.isElectron) {
+    try {
+      await window.electronAPI.setHardwareAcceleration(true);
+      if (oldHwAccel !== true) {
+        // Show restart prompt and modal
+        const restartPrompt = document.getElementById('restartPrompt');
+        if (restartPrompt) {
+          restartPrompt.style.display = 'block';
+        }
+        const restartModal = document.getElementById('restartConfirmModal');
+        if (restartModal) {
+          restartModal.style.display = 'flex';
+        }
+        applySettings();
+        saveSettingsToStorage();
+        return; // Don't continue, wait for user to choose restart option
+      }
+    } catch (e) {
+      console.error('Error resetting hardware acceleration setting:', e);
+    }
+  }
+  
   applySettings();
   saveSettingsToStorage();
 };

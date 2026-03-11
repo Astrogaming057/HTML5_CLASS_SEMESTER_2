@@ -6,6 +6,7 @@ let htmlTemplate = null;
 let cssContent = null;
 let jsContent = null;
 
+
 async function loadTemplates() {
   if (!htmlTemplate) {
     const templatesDir = path.join(__dirname, 'html');

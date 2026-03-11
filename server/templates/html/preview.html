@@ -226,6 +226,21 @@
     </div>
   </div>
   
+  <div id="restartConfirmModal" class="restart-confirm-modal" style="display: none;">
+    <div class="restart-confirm-content">
+      <div class="restart-confirm-header">
+        <h3>⚠️ Restart Required</h3>
+      </div>
+      <div class="restart-confirm-body">
+        <p>This requires a restart when applied. Would you like to restart now?</p>
+      </div>
+      <div class="restart-confirm-actions">
+        <button class="btn btn-primary" id="restartConfirmBtn">Restart Now</button>
+        <button class="btn btn-secondary" id="restartCancelBtn">Restart Later</button>
+      </div>
+    </div>
+  </div>
+  
   <div id="settingsPanel" class="settings-panel" style="display: none;">
     <div class="settings-content">
       <div class="settings-header">
@@ -390,6 +405,23 @@ You can copy any theme file and modify it, or create your own!"></textarea>
             <span class="toggle-slider"></span>
             <span class="toggle-label">Show terminal by default</span>
           </label>
+        </div>
+        
+        <div class="setting-group" id="hardwareAccelGroup" style="display: none;">
+          <label class="setting-label">Use Hardware Acceleration</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="useHardwareAcceleration">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable hardware acceleration for better performance</span>
+          </label>
+          <p class="setting-description">This requires a restart when applied</p>
+          <div id="restartPrompt" class="restart-prompt" style="display: none;">
+            <p class="restart-message">⚠️ A restart is required for this change to take effect.</p>
+            <div class="restart-actions">
+              <button class="btn btn-primary btn-restart" id="restartNowBtn">Restart Now</button>
+              <button class="btn btn-secondary btn-restart-later" id="restartLaterBtn">Restart Later</button>
+            </div>
+          </div>
         </div>
         
         <div class="settings-actions">

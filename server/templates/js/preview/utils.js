@@ -1,4 +1,12 @@
 window.PreviewUtils = {
+  /**
+   * Check if running in Electron app or browser
+   * @returns {boolean} true if running in Electron app, false if in browser
+   */
+  isElectronApp() {
+    return !!(window.electronAPI && window.electronAPI.isElectron);
+  },
+
   getLanguage(filePath) {
     const ext = filePath.split('.').pop().toLowerCase();
     if (ext === 'html' || ext === 'htm') {

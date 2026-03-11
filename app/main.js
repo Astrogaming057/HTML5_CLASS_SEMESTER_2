@@ -1,24 +1,53 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn, exec } = require('child_process');
 const http = require('http');
+const fs = require('fs');
 
-// Disable hardware acceleration for remote desktop compatibility
-app.disableHardwareAcceleration();
+// Load hardware acceleration setting
+function loadHardwareAccelerationSetting() {
+  const configPath = path.join(app.getPath('userData'), 'app-config.json');
+  try {
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      return config.useHardwareAcceleration === true;
+    }
+  } catch (error) {
+    console.error('Error loading hardware acceleration setting:', error);
+  }
+  return true; // Default to enabled
+}
 
-// Optimize for remote desktop environments - more aggressive settings
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
-app.commandLine.appendSwitch('disable-accelerated-video-decode');
-app.commandLine.appendSwitch('disable-accelerated-video-encode');
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
-app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+// Save hardware acceleration setting
+function saveHardwareAccelerationSetting(enabled) {
+  const configPath = path.join(app.getPath('userData'), 'app-config.json');
+  try {
+    const config = { useHardwareAcceleration: enabled };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  } catch (error) {
+    console.error('Error saving hardware acceleration setting:', error);
+  }
+}
+
+// Apply hardware acceleration setting
+const useHardwareAcceleration = loadHardwareAccelerationSetting();
+if (!useHardwareAcceleration) {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+  app.commandLine.appendSwitch('disable-accelerated-video-decode');
+  app.commandLine.appendSwitch('disable-accelerated-video-encode');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+  app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+}
+
+
 
 let mainWindow = null;
 let serverProcess = null;
@@ -28,11 +57,11 @@ const APP_NAME = 'HTML Class IDE';
 // Kill existing processes
 function killExistingProcesses(callback) {
   console.log('Checking for existing processes...');
-  
+
   const currentPid = process.pid;
   const currentPpid = process.ppid;
   console.log(`Current process PID: ${currentPid}, PPID: ${currentPpid}`);
-  
+
   if (process.platform === 'win32') {
     // Windows: Find and kill process using the port (excluding current process)
     exec(`netstat -ano | findstr :${PORT}`, (error, stdout) => {
@@ -48,7 +77,7 @@ function killExistingProcesses(callback) {
             }
           }
         });
-        
+
         pids.forEach(pid => {
           console.log(`Killing process ${pid} using port ${PORT}...`);
           exec(`taskkill /F /PID ${pid}`, (err) => {
@@ -58,14 +87,14 @@ function killExistingProcesses(callback) {
           });
         });
       }
-      
+
       // Kill server processes (node index.js with app mode) - excluding current
       exec(`wmic process where "name='node.exe'" get processid,commandline`, (err, stdout) => {
         if (stdout) {
           const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.includes('CommandLine'));
           lines.forEach(line => {
-            if ((line.toLowerCase().includes('index.js') || line.toLowerCase().includes('server\\index.js')) && 
-                (line.toLowerCase().includes('--app-mode') || line.toLowerCase().includes('app_mode=true'))) {
+            if ((line.toLowerCase().includes('index.js') || line.toLowerCase().includes('server\\index.js')) &&
+              (line.toLowerCase().includes('--app-mode') || line.toLowerCase().includes('app_mode=true'))) {
               const parts = line.trim().split(/\s+/);
               const pid = parts[parts.length - 1];
               if (pid && !isNaN(pid) && pid !== currentPid.toString() && pid !== currentPpid.toString()) {
@@ -79,7 +108,7 @@ function killExistingProcesses(callback) {
             }
           });
         }
-        
+
         // Kill any existing Electron processes for this app - excluding current
         exec(`tasklist | findstr electron.exe`, (err2, stdout2) => {
           if (stdout2) {
@@ -99,7 +128,7 @@ function killExistingProcesses(callback) {
               }
             });
           }
-          
+
           // Wait a bit for processes to terminate
           setTimeout(() => {
             if (callback) callback();
@@ -123,7 +152,7 @@ function killExistingProcesses(callback) {
           }
         });
       }
-      
+
       // Kill server processes (node index.js with app mode) - excluding current
       exec(`pgrep -f "node.*index.js.*--app-mode"`, (err, stdout) => {
         if (stdout) {
@@ -139,7 +168,7 @@ function killExistingProcesses(callback) {
             }
           });
         }
-        
+
         // Kill any existing Electron processes - excluding current
         exec(`pgrep -f "electron.*app/main.js"`, (err2, stdout2) => {
           if (stdout2) {
@@ -155,7 +184,7 @@ function killExistingProcesses(callback) {
               }
             });
           }
-          
+
           setTimeout(() => {
             if (callback) callback();
           }, 1500);
@@ -166,6 +195,8 @@ function killExistingProcesses(callback) {
 }
 
 function createWindow() {
+  const useHwAccel = loadHardwareAccelerationSetting();
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -173,9 +204,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // Disable hardware acceleration in renderer for remote desktop
-      enableBlinkFeatures: '',
-      disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmallCanvases,AcceleratedVideoDecode,AcceleratedVideoEncode',
+      // Disable hardware acceleration in renderer if setting is disabled
+      enableBlinkFeatures: useHwAccel ? undefined : '',
+      disableBlinkFeatures: useHwAccel ? undefined : 'Accelerated2dCanvas,AcceleratedSmallCanvases,AcceleratedVideoDecode,AcceleratedVideoEncode',
       // Additional remote desktop optimizations
       offscreen: false,
       backgroundThrottling: false
@@ -186,7 +217,7 @@ function createWindow() {
     show: false, // Don't show until ready to prevent flicker
     autoHideMenuBar: true // Hide the menu bar (File, Edit, View, etc.)
   });
-  
+
   // Show window when ready to prevent remote desktop issues
   // Add a small delay to ensure everything is initialized
   mainWindow.once('ready-to-show', () => {
@@ -196,15 +227,15 @@ function createWindow() {
       }
     }, 100);
   });
-  
+
   // Completely remove the menu bar
   mainWindow.setMenuBarVisibility(false);
-  
+
   // Prevent window from being minimized/maximized during remote desktop
   mainWindow.on('will-move', (event) => {
     // Allow window movement but prevent issues
   });
-  
+
   // Handle remote desktop specific issues
   mainWindow.on('blur', () => {
     // Window lost focus - this is normal in remote desktop
@@ -232,12 +263,12 @@ function createWindow() {
 
 function startServer() {
   const serverPath = path.join(__dirname, '..', 'server', 'index.js');
-  
+
   const spawnOptions = {
     cwd: path.join(__dirname, '..'),
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { 
-      ...process.env, 
+    env: {
+      ...process.env,
       NODE_ENV: process.env.NODE_ENV || 'production',
       APP_MODE: 'true',
       SERVER_MODE: 'app'
@@ -245,7 +276,7 @@ function startServer() {
     windowsHide: true, // Hide console window on Windows
     detached: false
   };
-  
+
   // Use spawn with windowsHide - this should hide the console window on Windows
   // Pass --app-mode flag to indicate app mode
   serverProcess = spawn('node', [serverPath, '--app-mode'], spawnOptions);
@@ -253,7 +284,7 @@ function startServer() {
   serverProcess.stdout.on('data', (data) => {
     const output = data.toString();
     console.log(`[Server] ${output}`);
-    
+
     // Check if server is ready
     if (output.includes('Server started successfully')) {
       if (mainWindow && !mainWindow.webContents.getURL().includes('localhost')) {
@@ -290,6 +321,59 @@ function stopServer() {
   }
 }
 
+// Restart the app using start-app.vbs
+function restartApp() {
+  const isWindows = process.platform === 'win32';
+  const appDir = path.join(__dirname, '..');
+
+  if (isWindows) {
+    const startAppVbs = path.join(appDir, 'start-app.vbs');
+    if (fs.existsSync(startAppVbs)) {
+      // Spawn start-app.vbs in detached mode
+      spawn('wscript.exe', [startAppVbs], {
+        cwd: appDir,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+
+      // Give it time to start, then quit
+      setTimeout(() => {
+        app.quit();
+      }, 1000);
+    } else {
+      console.error('start-app.vbs not found');
+    }
+  } else {
+    const appMain = path.join(__dirname, 'main.js');
+    const newProcess = spawn('npx', ['electron', appMain], {
+      cwd: appDir,
+      detached: true,
+      stdio: 'ignore'
+    });
+    newProcess.unref();
+
+    setTimeout(() => {
+      app.quit();
+    }, 1000);
+  }
+}
+
+// IPC handlers
+ipcMain.handle('get-hardware-acceleration', () => {
+  return loadHardwareAccelerationSetting();
+});
+
+ipcMain.handle('set-hardware-acceleration', async (event, enabled) => {
+  saveHardwareAccelerationSetting(enabled);
+  return { success: true };
+});
+
+ipcMain.handle('restart-app', async () => {
+  restartApp();
+  return { success: true };
+});
+
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -309,7 +393,7 @@ if (!gotTheLock) {
         }
       });
     });
-    
+
     // Handle second instance - focus the existing window
     app.on('second-instance', () => {
       if (mainWindow) {

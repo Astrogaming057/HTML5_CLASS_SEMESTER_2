@@ -14,6 +14,7 @@ window.PreviewSettings = (function() {
   };
 
   let originalTheme = null;
+  let originalHardwareAcceleration = null;
 
   return {
     getSettings() {
@@ -122,6 +123,7 @@ window.PreviewSettings = (function() {
         const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
+        const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
         
         if (autoRefreshPreview) autoRefreshPreview.checked = previewSettings.autoRefreshPreview;
         if (pageTheme) {
@@ -145,11 +147,34 @@ window.PreviewSettings = (function() {
       this.applyThemeToPreviewFrame();
     },
 
-    openSettings() {
+    async openSettings() {
       const settingsPanel = document.getElementById('settingsPanel');
       if (settingsPanel) {
         originalTheme = previewSettings.pageTheme;
         this.applyPreviewSettings();
+        
+        // Show/hide hardware acceleration setting based on Electron availability
+        const hwAccelGroup = document.getElementById('hardwareAccelGroup');
+        if (hwAccelGroup) {
+          if (window.electronAPI && window.electronAPI.isElectron) {
+            hwAccelGroup.style.display = 'block';
+            // Load hardware acceleration setting from Electron
+            try {
+              const hwAccel = await window.electronAPI.getHardwareAcceleration();
+              originalHardwareAcceleration = hwAccel; // Store original value
+              const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
+              if (useHardwareAcceleration) {
+                useHardwareAcceleration.checked = hwAccel;
+              }
+            } catch (e) {
+              console.error('Error loading hardware acceleration setting:', e);
+              originalHardwareAcceleration = false;
+            }
+          } else {
+            hwAccelGroup.style.display = 'none';
+          }
+        }
+        
         settingsPanel.style.display = 'flex';
         
         const pageTheme = document.getElementById('pageTheme');
@@ -227,6 +252,10 @@ window.PreviewSettings = (function() {
         defaultTerminalVisible: false
       };
       this.savePreviewSettings();
+    },
+    
+    getOriginalHardwareAcceleration() {
+      return originalHardwareAcceleration;
     }
   };
 })();

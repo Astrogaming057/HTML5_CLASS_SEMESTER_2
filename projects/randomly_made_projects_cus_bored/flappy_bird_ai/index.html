@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird - AI Player</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="startScreen" class="screen">
+            <h1>Flappy Bird AI</h1>
+            <p>AI will start playing automatically</p>
+            <p>Watch the AI try to play!</p>
+        </div>
+        <div id="gameOverScreen" class="screen hidden">
+            <h1>Game Over</h1>
+            <p>AI Score: <span id="finalScore">0</span></p>
+            <p>Best AI Score: <span id="bestScore">0</span></p>
+            <p>AI will restart in 2 seconds...</p>
+        </div>
+        <div id="scoreDisplay" class="score-display hidden">0</div>
+        <div id="aiStatus" class="ai-status hidden">
+            <div>AI Status: <span id="aiAction">Learning...</span></div>
+            <div>Generation: <span id="generation">1</span></div>
+            <div>Games Played: <span id="gamesPlayed">0</span></div>
+            <div>Active Instances: <span id="activeInstances">1</span></div>
+            <div>Learning Rate: <span id="learningRate">0.1</span></div>
+            <div>Next Pipe: <span id="pipeDistance">-</span>px</div>
+            <div>Gap Center: <span id="gapCenter">-</span>px</div>
+        </div>
+        <div id="settingsMenu" class="settings-menu">
+            <button id="settingsButton" class="settings-button">⚙️ Settings</button>
+            <div id="settingsPanel" class="settings-panel hidden">
+                <h3>AI Training Settings</h3>
+                <div class="setting-item">
+                    <label for="instanceCount">Number of AI Instances:</label>
+                    <input type="number" id="instanceCount" min="1" max="20" value="1">
+                    <p class="setting-hint">Run multiple AIs simultaneously for faster learning</p>
+                </div>
+                <div class="setting-item">
+                    <label for="speedMultiplier">Speed Multiplier:</label>
+                    <input type="number" id="speedMultiplier" min="1" max="10" value="1" step="0.5">
+                    <p class="setting-hint">How fast the game runs (1 = normal, 10 = 10x speed)</p>
+                </div>
+                <div class="setting-item">
+                    <label for="deterministicPipes">
+                        <input type="checkbox" id="deterministicPipes">
+                        Remember Pipe Locations
+                    </label>
+                    <p class="setting-hint">Use the same pipe positions each game (helps AI learn consistently)</p>
+                </div>
+                <div class="setting-item" id="seedInputContainer" style="display: none;">
+                    <label for="pipeSeed">Pipe Seed:</label>
+                    <input type="number" id="pipeSeed" min="1" max="999999999" value="12345">
+                    <p class="setting-hint">Seed value for pipe generation (same seed = same pipe pattern)</p>
+                </div>
+                <button id="applySettings" class="apply-button">Apply Settings</button>
+                <div class="setting-item" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 15px;">
+                    <h4>Data Management</h4>
+                    <button id="exportData" class="export-button" style="margin-right: 10px;">📥 Export Data</button>
+                    <button id="resetData" class="reset-button">🗑️ Reset Data</button>
+                    <p class="setting-hint">Export saves all AI progress. Reset clears all saved data.</p>
+                </div>
+                <button id="closeSettings" class="close-button">Close</button>
+            </div>
+        </div>
+    </div>
+    <script src="js/neuralNetwork.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
