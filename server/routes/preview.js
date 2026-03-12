@@ -127,6 +127,18 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'initialization.js'),
         'utf-8'
       );
+      const browserManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'browserManager.js'),
+        'utf-8'
+      );
+      const inspectorManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'inspectorManager.js'),
+        'utf-8'
+      );
+      const bookmarkManagerJs = await fs.readFile(
+        path.join(previewModulesDir, 'bookmarkManager.js'),
+        'utf-8'
+      );
       const mainJs = await fs.readFile(
         path.join(jsDir, 'preview.js'),
         'utf-8'
@@ -208,6 +220,12 @@ async function loadPreviewTemplates() {
         helpMenuJs,
         '// Symbol Navigator',
         symbolNavigatorJs,
+        '// Browser Manager',
+        browserManagerJs,
+        '// Inspector Manager',
+        inspectorManagerJs,
+        '// Bookmark Manager',
+        bookmarkManagerJs,
         '// Initialization',
         initializationJs,
         '// Main',

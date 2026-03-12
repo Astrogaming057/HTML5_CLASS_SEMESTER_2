@@ -411,6 +411,22 @@ require(['vs/editor/editor.main'], function() {
   }
 
   async function switchToFileInternal(newPath, skipCache = false) {
+    // Check if this is a browser tab
+    if (PreviewBrowserManager && PreviewBrowserManager.isBrowserTab(newPath)) {
+      PreviewBrowserManager.showBrowserView();
+      fileName.textContent = 'Browser';
+      filePathRef.current = newPath;
+      filePath = newPath;
+      PreviewTabManager.updateActiveTab(newPath);
+      saveState();
+      return;
+    } else {
+      // Hide browser view if switching to a regular file
+      if (PreviewBrowserManager) {
+        PreviewBrowserManager.hideBrowserView();
+      }
+    }
+    
     if (skipCache) {
       const openTabs = PreviewTabManager.getOpenTabs();
       if (openTabs.includes(newPath)) {
@@ -845,6 +861,56 @@ require(['vs/editor/editor.main'], function() {
       }
     }
   );
+  
+  // Initialize Browser Manager
+  const browserContainer = document.getElementById('browserContainer');
+  const browserView = document.getElementById('browserView');
+  const browserTabsContainer = document.getElementById('browserTabsContainer');
+  const browserUrlInput = document.getElementById('browserUrlInput');
+  const browserBackBtn = document.getElementById('browserBackBtn');
+  const browserForwardBtn = document.getElementById('browserForwardBtn');
+  const browserRefreshBtn = document.getElementById('browserRefreshBtn');
+  const newBrowserTabBtn = document.getElementById('newBrowserTabBtn');
+  
+  if (browserContainer && browserView && browserTabsContainer && editorContainer) {
+    PreviewBrowserManager.initialize(
+      browserContainer,
+      browserTabsContainer,
+      browserUrlInput,
+      browserBackBtn,
+      browserForwardBtn,
+      browserRefreshBtn,
+      browserView,
+      editorContainer
+    );
+  }
+  
+  // Initialize Inspector Manager
+  const browserInspector = document.getElementById('browserInspector');
+  if (browserInspector && window.PreviewInspectorManager) {
+    window.PreviewInspectorManager.initialize(browserInspector);
+  }
+  
+  if (newBrowserTabBtn) {
+    newBrowserTabBtn.addEventListener('click', () => {
+      if (typeof PreviewBrowserManager !== 'undefined' && PreviewBrowserManager.openBrowserEditorTab) {
+        PreviewBrowserManager.openBrowserEditorTab();
+      } else {
+        console.error('PreviewBrowserManager is not available');
+      }
+    });
+  }
+  
+  const openBrowserInEditorBtn = document.getElementById('openBrowserInEditorBtn');
+  if (openBrowserInEditorBtn) {
+    openBrowserInEditorBtn.addEventListener('click', () => {
+      if (typeof PreviewBrowserManager !== 'undefined' && PreviewBrowserManager.openBrowserEditorTab) {
+        PreviewBrowserManager.openBrowserEditorTab();
+      } else {
+        console.error('PreviewBrowserManager is not available');
+      }
+    });
+  }
   
   window.__previewEditor = editor;
   window.__previewFilePath = () => filePathRef.current;

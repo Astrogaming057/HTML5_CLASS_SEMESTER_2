@@ -14,6 +14,10 @@ window.PreviewTabManager = (function() {
   let tabData = {};
 
   function getFileIcon(filePath) {
+    // Check if it's a browser tab
+    if (filePath && filePath.startsWith('browser://')) {
+      return '🌐';
+    }
     const ext = filePath.split('.').pop().toLowerCase();
     const iconMap = {
       'html': '🌐',
@@ -37,6 +41,10 @@ window.PreviewTabManager = (function() {
   }
 
   function getFileName(filePath) {
+    // Check if it's a browser tab
+    if (filePath && filePath.startsWith('browser://')) {
+      return 'Browser';
+    }
     return filePath.split('/').pop();
   }
 
@@ -133,6 +141,14 @@ window.PreviewTabManager = (function() {
     activeTabPath = filePath;
     renderTabs();
     
+    // Check if it's a browser tab - don't try to load as file
+    if (filePath && filePath.startsWith('browser://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+    
     const tabInfo = tabData[filePath];
     if (tabInfo && tabInfo.content !== undefined && setEditorContentCallback) {
       setEditorContentCallback(tabInfo.content, tabInfo.originalContent || tabInfo.content, filePath);
@@ -196,6 +212,14 @@ window.PreviewTabManager = (function() {
     openTabs.push(filePath);
     activeTabPath = filePath;
     renderTabs();
+    
+    // Check if it's a browser tab - don't try to load as file
+    if (filePath && filePath.startsWith('browser://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
     
     if (switchToFileCallback) {
       await switchToFileCallback(filePath, false);

@@ -94,10 +94,371 @@
     <div class="editor-panel" id="editorPanel">
       <div class="panel-header">
         <span>Editor</span>
+        <div>
+          <button id="openBrowserInEditorBtn" class="popout-btn" title="Open Browser">🌐</button>
         <button id="popoutEditor" class="popout-btn" title="Pop out Editor">⤢</button>
+        </div>
       </div>
       <div class="editor-tabs-container" id="editorTabsContainer"></div>
       <div id="editor"></div>
+      <div id="browserView" class="browser-view" style="display: none;">
+        <div class="browser-tabs-container" id="browserTabsContainer">
+          <button id="browserNewTabBtn" class="browser-new-tab-btn" title="New Tab">+</button>
+        </div>
+        <div class="browser-navigation" id="browserNavigation">
+          <button id="browserBackBtn" class="browser-nav-btn" title="Back">←</button>
+          <button id="browserForwardBtn" class="browser-nav-btn" title="Forward">→</button>
+          <button id="browserRefreshBtn" class="browser-nav-btn" title="Refresh">🔄</button>
+          <input type="text" id="browserUrlInput" class="browser-url-input" placeholder="Enter URL or search...">
+          <button id="browserGoBtn" class="browser-go-btn" title="Go">Go</button>
+          <button id="browserBookmarkBtn" class="browser-nav-btn" title="Bookmark this page">⭐</button>
+          <div class="browser-toolbar-separator"></div>
+          <button id="browserFocusBtn" class="browser-toolbar-btn" title="Focus">🖱️</button>
+          <button id="browserInspectorToggleBtn" class="browser-toolbar-btn" title="Toggle Inspector">📋</button>
+        </div>
+        <div class="browser-bookmarks-bar" id="browserBookmarksBar">
+          <div class="bookmarks-container" id="bookmarksContainer"></div>
+          <div class="bookmarks-menu" id="bookmarksMenu">
+            <div class="bookmarks-menu-header">
+              <span class="bookmarks-menu-title">Bookmarks</span>
+              <button class="bookmarks-menu-close" title="Close">×</button>
+            </div>
+            <div class="bookmarks-menu-content"></div>
+            <div class="bookmarks-menu-add">
+              <button class="bookmarks-menu-add-btn" id="bookmarksMenuAddBtn">+ Add Bookmark</button>
+            </div>
+          </div>
+          <button id="bookmarksMenuBtn" class="bookmarks-menu-btn" title="Bookmarks menu">☰</button>
+        </div>
+        <div class="bookmark-dialog" id="bookmarkDialog">
+          <div class="bookmark-dialog-content">
+            <div class="bookmark-dialog-header">Add Bookmark</div>
+            <div class="bookmark-dialog-form">
+              <div class="bookmark-dialog-field">
+                <label class="bookmark-dialog-label">Title</label>
+                <input type="text" id="bookmarkDialogTitle" class="bookmark-dialog-input" placeholder="Bookmark title">
+              </div>
+              <div class="bookmark-dialog-field">
+                <label class="bookmark-dialog-label">URL</label>
+                <input type="text" id="bookmarkDialogUrl" class="bookmark-dialog-input" placeholder="https://example.com">
+              </div>
+              <div class="bookmark-dialog-actions">
+                <button class="bookmark-dialog-btn bookmark-dialog-btn-secondary">Cancel</button>
+                <button class="bookmark-dialog-btn bookmark-dialog-btn-primary">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="browser-content-wrapper">
+          <div id="browserContainer" class="browser-container"></div>
+          <div class="browser-inspector" id="browserInspector">
+            <div class="inspector-header">
+              <span>Inspector</span>
+              <button id="toggleInspectorBtn" class="inspector-toggle-btn" title="Toggle Inspector">◀</button>
+            </div>
+            <div class="inspector-content">
+              <div class="inspector-section">
+                <div class="inspector-section-title">Components</div>
+                <div class="inspector-components-tree" id="inspectorComponentsTree"></div>
+              </div>
+              <div class="inspector-section">
+                <div class="inspector-tabs">
+                  <button class="inspector-tab active" data-tab="design">Design</button>
+                  <button class="inspector-tab" data-tab="css">CSS</button>
+                </div>
+                <div class="inspector-tab-content active" id="inspectorDesign">
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">Position</div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <label>X</label>
+                        <input type="number" id="inspectorPosX" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Y</label>
+                        <input type="number" id="inspectorPosY" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Z</label>
+                        <input type="number" id="inspectorPosZ" class="inspector-input" value="0">
+                      </div>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">∠</span>
+                        <input type="number" id="inspectorAngle" class="inspector-input" value="0">
+                        <span class="inspector-unit">°</span>
+                      </div>
+                      <div class="inspector-icon-buttons">
+                        <button class="inspector-icon-btn" title="Transform">↻</button>
+                        <button class="inspector-icon-btn" title="Reset">✕</button>
+                        <button class="inspector-icon-btn" title="Horizontal">↔</button>
+                        <button class="inspector-icon-btn" title="Vertical">↕</button>
+                      </div>
+                      <button class="inspector-toggle-icon" title="Toggle">⊞</button>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">Layout</div>
+                    <div class="inspector-property-subtitle">Flow</div>
+                    <div class="inspector-flow-buttons">
+                      <button class="inspector-flow-btn active" data-flow="row" title="Row">⇄</button>
+                      <button class="inspector-flow-btn" data-flow="column" title="Column">⇅</button>
+                      <button class="inspector-flow-btn" data-flow="block" title="Block">→</button>
+                      <button class="inspector-flow-btn" data-flow="grid" title="Grid">⊞</button>
+                    </div>
+                    <div class="inspector-property-subtitle">Dimensions</div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <label>W</label>
+                        <input type="number" id="inspectorWidth" class="inspector-input" placeholder="auto">
+                        <select class="inspector-unit-select" id="inspectorWidthUnit">
+                          <option value="px">px</option>
+                          <option value="%">%</option>
+                          <option value="em">em</option>
+                          <option value="rem">rem</option>
+                        </select>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>H</label>
+                        <input type="number" id="inspectorHeight" class="inspector-input" placeholder="auto">
+                        <select class="inspector-unit-select" id="inspectorHeightUnit">
+                          <option value="px">px</option>
+                          <option value="%">%</option>
+                          <option value="em">em</option>
+                          <option value="rem">rem</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="inspector-property-subtitle">Padding</div>
+                    <div class="inspector-property-controls">
+                      <button class="inspector-link-btn" id="inspectorPaddingLink" title="Link padding values">⊞</button>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">↔</span>
+                        <input type="number" id="inspectorPaddingH" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">↕</span>
+                        <input type="number" id="inspectorPaddingV" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                    </div>
+                    <div class="inspector-checkbox-group">
+                      <input type="checkbox" id="inspectorClipContent" class="inspector-checkbox">
+                      <label for="inspectorClipContent">Clip content</label>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">Margin</div>
+                    <div class="inspector-property-controls">
+                      <button class="inspector-link-btn" id="inspectorMarginLink" title="Link margin values">⊞</button>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">↔</span>
+                        <input type="number" id="inspectorMarginH" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">↕</span>
+                        <input type="number" id="inspectorMarginV" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                    </div>
+                    <div class="inspector-checkbox-group">
+                      <input type="checkbox" id="inspectorBorderBox" class="inspector-checkbox">
+                      <label for="inspectorBorderBox">Border box</label>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">
+                      Appearance
+                      <div class="inspector-icon-buttons">
+                        <button class="inspector-icon-btn" title="Display">⊞</button>
+                        <button class="inspector-icon-btn" title="Visibility">👁</button>
+                      </div>
+                    </div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">○</span>
+                        <input type="number" id="inspectorOpacity" class="inspector-input" value="100" min="0" max="100">
+                        <span class="inspector-unit">%</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Corner</label>
+                        <input type="number" id="inspectorCornerRadius" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                        <button class="inspector-link-btn" title="Link corners">⊞</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">Text</div>
+                    <div class="inspector-property-controls">
+                      <select id="inspectorFontFamily" class="inspector-select">
+                        <option value="Times">Times</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="sans-serif">sans-serif</option>
+                        <option value="serif">serif</option>
+                        <option value="monospace">monospace</option>
+                      </select>
+                      <select id="inspectorFontWeight" class="inspector-select">
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="300">300</option>
+                        <option value="400" selected>400</option>
+                        <option value="500">500</option>
+                        <option value="600">600</option>
+                        <option value="700">700</option>
+                        <option value="800">800</option>
+                        <option value="900">900</option>
+                        <option value="normal">normal</option>
+                        <option value="bold">bold</option>
+                      </select>
+                      <div class="inspector-input-group">
+                        <input type="number" id="inspectorFontSize" class="inspector-input" value="16">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                    </div>
+                    <div class="inspector-property-subtitle">Color</div>
+                    <div class="inspector-property-controls">
+                      <select id="inspectorColorType" class="inspector-select">
+                        <option value="solid" selected>Solid</option>
+                        <option value="gradient">Gradient</option>
+                      </select>
+                      <div class="inspector-input-group">
+                        <input type="color" id="inspectorColorPicker" class="inspector-color-picker" value="#FFFFFF">
+                        <input type="text" id="inspectorColorHex" class="inspector-input" value="#FFFFFF">
+                        <input type="number" id="inspectorColorOpacity" class="inspector-input" value="100" min="0" max="100">
+                        <span class="inspector-unit">%</span>
+                        <button class="inspector-icon-btn" title="Color picker">🎨</button>
+                      </div>
+                    </div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">A</span>
+                        <input type="text" id="inspectorLineHeight" class="inspector-input" value="normal" placeholder="normal">
+                      </div>
+                      <div class="inspector-input-group">
+                        <span class="inspector-icon">Abç</span>
+                        <input type="text" id="inspectorLetterSpacing" class="inspector-input" value="normal" placeholder="normal">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                    </div>
+                    <div class="inspector-property-subtitle">Alignment</div>
+                    <div class="inspector-alignment-buttons">
+                      <button class="inspector-alignment-btn" data-align="left" title="Left">◀</button>
+                      <button class="inspector-alignment-btn" data-align="center" title="Center">⬌</button>
+                      <button class="inspector-alignment-btn" data-align="right" title="Right">▶</button>
+                      <button class="inspector-alignment-btn" data-align="justify" title="Justify">⬌⬌</button>
+                      <button class="inspector-alignment-btn" data-align="flex-start" title="Flex Start">↑</button>
+                      <button class="inspector-alignment-btn" data-align="center" title="Center">★</button>
+                      <button class="inspector-alignment-btn" data-align="flex-end" title="Flex End">↓</button>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">
+                      Background
+                      <div class="inspector-icon-buttons">
+                        <button class="inspector-icon-btn" title="Color">🎨</button>
+                        <button class="inspector-icon-btn" title="Add">+</button>
+                      </div>
+                    </div>
+                    <div class="inspector-property-controls">
+                      <select id="inspectorBackgroundType" class="inspector-select">
+                        <option value="solid" selected>Solid</option>
+                        <option value="gradient">Gradient</option>
+                        <option value="image">Image</option>
+                      </select>
+                      <div class="inspector-input-group">
+                        <input type="color" id="inspectorBackgroundColor" class="inspector-color-picker" value="#1E1E1E">
+                        <input type="text" id="inspectorBackgroundHex" class="inspector-input" value="#1E1E1E">
+                        <input type="number" id="inspectorBackgroundOpacity" class="inspector-input" value="100" min="0" max="100">
+                        <span class="inspector-unit">%</span>
+                        <button class="inspector-icon-btn" title="Remove">−</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">
+                      Border
+                      <div class="inspector-icon-buttons">
+                        <button class="inspector-icon-btn" title="Color">🎨</button>
+                        <button class="inspector-icon-btn" title="Add">+</button>
+                      </div>
+                    </div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <label>W</label>
+                        <input type="number" id="inspectorBorderWidth" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <select id="inspectorBorderStyle" class="inspector-select">
+                        <option value="solid">solid</option>
+                        <option value="dashed">dashed</option>
+                        <option value="dotted">dotted</option>
+                        <option value="double">double</option>
+                        <option value="none">none</option>
+                      </select>
+                      <div class="inspector-input-group">
+                        <input type="color" id="inspectorBorderColor" class="inspector-color-picker" value="#000000">
+                        <input type="text" id="inspectorBorderHex" class="inspector-input" value="#000000">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="inspector-property-group">
+                    <div class="inspector-property-title">
+                      Shadow & Blur
+                      <button class="inspector-icon-btn" title="Add">+</button>
+                    </div>
+                    <div class="inspector-property-controls">
+                      <div class="inspector-input-group">
+                        <label>X</label>
+                        <input type="number" id="inspectorShadowX" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Y</label>
+                        <input type="number" id="inspectorShadowY" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Blur</label>
+                        <input type="number" id="inspectorShadowBlur" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <label>Spread</label>
+                        <input type="number" id="inspectorShadowSpread" class="inspector-input" value="0">
+                        <span class="inspector-unit">px</span>
+                      </div>
+                      <div class="inspector-input-group">
+                        <input type="color" id="inspectorShadowColor" class="inspector-color-picker" value="#000000">
+                        <input type="number" id="inspectorShadowOpacity" class="inspector-input" value="100" min="0" max="100">
+                        <span class="inspector-unit">%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="inspector-tab-content" id="inspectorCSS">
+                  <div class="inspector-css-header">
+                    <button id="inspectorCSSRefresh" class="inspector-css-refresh-btn" title="Refresh">🔄</button>
+                    <span class="inspector-css-label">Computed Styles</span>
+                  </div>
+                  <textarea id="inspectorCSSTextarea" class="inspector-css-textarea" placeholder="Loading computed styles..."></textarea>
+                  <div class="inspector-css-header">
+                    <span class="inspector-css-label">Inline Styles</span>
+                  </div>
+                  <textarea id="inspectorCSSInline" class="inspector-css-textarea" placeholder="Inline styles..."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="resizer resizer-editor" id="resizerEditor"></div>
     <div class="preview-panel" id="previewPanel">
