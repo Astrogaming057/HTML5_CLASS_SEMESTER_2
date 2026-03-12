@@ -737,10 +737,21 @@ body.resizing .resizer-terminal {
   padding: 6px 12px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
   white-space: nowrap;
   min-width: 120px;
+  position: relative;
+}
+
+.editor-tab.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.editor-tab.drag-over {
+  border-top: 2px solid var(--border-active);
+}
   max-width: 200px;
   transition: background 0.15s;
   position: relative;
@@ -999,10 +1010,21 @@ body.resizing .resizer {
   padding: 6px 12px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
   white-space: nowrap;
   min-width: 120px;
+  position: relative;
+}
+
+.browser-tab.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.browser-tab.drag-over {
+  border-top: 2px solid var(--border-active);
+}
   max-width: 200px;
   transition: background 0.15s;
   position: relative;

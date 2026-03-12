@@ -54,6 +54,7 @@ window.PreviewBrowserManager = (function() {
     const tab = document.createElement('div');
     tab.className = 'browser-tab';
     tab.dataset.tabId = tabId;
+    tab.draggable = true;
     
     const icon = document.createElement('span');
     icon.className = 'browser-tab-icon';
@@ -82,6 +83,67 @@ window.PreviewBrowserManager = (function() {
         switchToBrowserTab(tabId);
       }
     };
+    
+    // Drag and drop handlers
+    tab.addEventListener('dragstart', (e) => {
+      // Don't start drag if clicking on close button
+      if (e.target === closeBtn || closeBtn.contains(e.target)) {
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tabId);
+      tab.classList.add('dragging');
+    });
+    
+    tab.addEventListener('dragend', (e) => {
+      tab.classList.remove('dragging');
+      // Remove any drag-over classes from all tabs
+      document.querySelectorAll('.browser-tab').forEach(t => {
+        t.classList.remove('drag-over');
+      });
+    });
+    
+    tab.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      const draggingTab = document.querySelector('.browser-tab.dragging');
+      if (!draggingTab || draggingTab === tab) return;
+      
+      const tabs = Array.from(browserTabsContainer.querySelectorAll('.browser-tab'));
+      const draggingIndex = tabs.indexOf(draggingTab);
+      const currentIndex = tabs.indexOf(tab);
+      
+      tabs.forEach(t => t.classList.remove('drag-over'));
+      
+      if (draggingIndex < currentIndex) {
+        tab.classList.add('drag-over');
+      } else if (draggingIndex > currentIndex) {
+        tab.classList.add('drag-over');
+      }
+    });
+    
+    tab.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const draggedTabId = e.dataTransfer.getData('text/plain');
+      if (!draggedTabId || draggedTabId === tabId) return;
+      
+      const draggedIndex = browserTabs.indexOf(draggedTabId);
+      const dropIndex = browserTabs.indexOf(tabId);
+      
+      if (draggedIndex === -1 || dropIndex === -1) return;
+      
+      // Reorder the array
+      browserTabs.splice(draggedIndex, 1);
+      browserTabs.splice(dropIndex, 0, draggedTabId);
+      
+      // Re-render tabs and frames
+      renderBrowserTabs();
+      renderFrames();
+    });
     
     return tab;
   }

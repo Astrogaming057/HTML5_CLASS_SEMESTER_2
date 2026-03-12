@@ -52,6 +52,7 @@ window.PreviewTabManager = (function() {
     const tab = document.createElement('div');
     tab.className = 'editor-tab';
     tab.dataset.filePath = filePath;
+    tab.draggable = true;
     
     const icon = document.createElement('span');
     icon.className = 'tab-icon';
@@ -93,6 +94,66 @@ window.PreviewTabManager = (function() {
         switchToTab(filePath);
       }
     };
+    
+    // Drag and drop handlers
+    tab.addEventListener('dragstart', (e) => {
+      // Don't start drag if clicking on close button
+      if (e.target === closeBtn || closeBtn.contains(e.target)) {
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', filePath);
+      tab.classList.add('dragging');
+    });
+    
+    tab.addEventListener('dragend', (e) => {
+      tab.classList.remove('dragging');
+      // Remove any drag-over classes from all tabs
+      document.querySelectorAll('.editor-tab').forEach(t => {
+        t.classList.remove('drag-over');
+      });
+    });
+    
+    tab.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      const draggingTab = document.querySelector('.editor-tab.dragging');
+      if (!draggingTab || draggingTab === tab) return;
+      
+      const tabs = Array.from(tabContainer.querySelectorAll('.editor-tab'));
+      const draggingIndex = tabs.indexOf(draggingTab);
+      const currentIndex = tabs.indexOf(tab);
+      
+      tabs.forEach(t => t.classList.remove('drag-over'));
+      
+      if (draggingIndex < currentIndex) {
+        tab.classList.add('drag-over');
+      } else if (draggingIndex > currentIndex) {
+        tab.classList.add('drag-over');
+      }
+    });
+    
+    tab.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const draggedFilePath = e.dataTransfer.getData('text/plain');
+      if (!draggedFilePath || draggedFilePath === filePath) return;
+      
+      const draggedIndex = openTabs.indexOf(draggedFilePath);
+      const dropIndex = openTabs.indexOf(filePath);
+      
+      if (draggedIndex === -1 || dropIndex === -1) return;
+      
+      // Reorder the array
+      openTabs.splice(draggedIndex, 1);
+      openTabs.splice(dropIndex, 0, draggedFilePath);
+      
+      // Re-render tabs
+      renderTabs();
+    });
     
     return tab;
   }
