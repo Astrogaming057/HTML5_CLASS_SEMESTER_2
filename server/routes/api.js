@@ -30,6 +30,16 @@ async function copyDirectory(src, dest) {
 const router = express.Router();
 
 function setupAPI(baseDir) {
+  // Debug endpoint to check which BASE_DIR is being used
+  router.get('/debug/base-dir', (req, res) => {
+    res.json({
+      baseDir: baseDir,
+      cwd: process.cwd(),
+      envBaseDir: process.env.BASE_DIR,
+      resolvedBaseDir: path.resolve(baseDir)
+    });
+  });
+  
   router.get('/mode', (req, res) => {
     const mode = process.env.SERVER_MODE || global.__SERVER_MODE || 'browser';
     res.json({ 

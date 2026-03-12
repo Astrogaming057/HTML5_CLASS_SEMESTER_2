@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mode: 'app',
   getHardwareAcceleration: () => ipcRenderer.invoke('get-hardware-acceleration'),
   setHardwareAcceleration: (enabled) => ipcRenderer.invoke('set-hardware-acceleration', enabled),
+  getWorkingDirectory: () => ipcRenderer.invoke('get-working-directory'),
+  selectWorkingDirectory: () => ipcRenderer.invoke('select-working-directory'),
   restartApp: () => ipcRenderer.invoke('restart-app')
 });

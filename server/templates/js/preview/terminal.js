@@ -1,5 +1,160 @@
 window.PreviewTerminal = (function() {
   let logMessageListenerSetup = false;
+  
+  // Tab autocomplete state
+  let autocompleteState = {
+    client: { matches: [], index: -1, lastInput: '' },
+    powershell: { matches: [], index: -1, lastInput: '' },
+    log: { matches: [], index: -1, lastInput: '' },
+    commands: { matches: [], index: -1, lastInput: '' }
+  };
+  
+  // Get command suggestions from autocomplete files or use defaults
+  function getCommandSuggestions(terminalType) {
+    // Try to get from loaded autocomplete files
+    if (terminalType === 'client' && window.ClientAutocomplete) {
+      return window.ClientAutocomplete;
+    } else if (terminalType === 'commands' && window.CommandsAutocomplete) {
+      return window.CommandsAutocomplete;
+    } else if (terminalType === 'powershell' && window.PowerShellAutocomplete) {
+      return window.PowerShellAutocomplete;
+    } else if (terminalType === 'log' && window.LogAutocomplete) {
+      return window.LogAutocomplete;
+    }
+    
+    // Fallback to defaults if autocomplete files not loaded
+    const defaults = {
+      client: ['mode', 'app-mode', 'browser-mode', 'console', 'window', 'document', 'localStorage', 'sessionStorage'],
+      commands: ['help', 'ping', 'status', 'restart', 'reconnect', 'clear', 'exit'],
+      powershell: ['Get-Process', 'Get-ChildItem', 'Get-Location', 'Set-Location', 'Clear-Host', 'Write-Host', 'Get-Help'],
+      log: ['console', 'window', 'document', 'localStorage', 'sessionStorage']
+    };
+    return defaults[terminalType] || [];
+  }
+  
+  // Get autocomplete suggestions
+  function getAutocompleteSuggestions(input, terminalType, history) {
+    const suggestions = [];
+    const inputLower = input.toLowerCase();
+    const words = input.trim().split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    const prefix = words.slice(0, -1).join(' ') + (words.length > 1 ? ' ' : '');
+    
+    // Add command suggestions from autocomplete files
+    const commandSuggestions = getCommandSuggestions(terminalType);
+    commandSuggestions.forEach(cmd => {
+      if (cmd.toLowerCase().startsWith(lastWord.toLowerCase())) {
+        suggestions.push(prefix + cmd);
+      }
+    });
+    
+    // Add history matches
+    if (history && history.length > 0) {
+      history.forEach(cmd => {
+        if (cmd.toLowerCase().startsWith(inputLower) && !suggestions.includes(cmd)) {
+          suggestions.push(cmd);
+        }
+      });
+    }
+    
+    return suggestions.sort();
+  }
+  
+  // Get the first/best autocomplete suggestion
+  function getBestSuggestion(input, terminalType, history) {
+    const suggestions = getAutocompleteSuggestions(input, terminalType, history);
+    if (suggestions.length === 0) return '';
+    
+    // Return the first suggestion that extends the current input
+    const inputLower = input.toLowerCase();
+    for (const suggestion of suggestions) {
+      if (suggestion.toLowerCase().startsWith(inputLower) && suggestion !== input) {
+        return suggestion.substring(input.length);
+      }
+    }
+    return '';
+  }
+  
+  // Update autocomplete hint display
+  function updateAutocompleteHint(input, terminalType, history) {
+    const container = input.parentElement;
+    if (!container) return;
+    
+    // Get or create hint element
+    let hint = container.querySelector('.terminal-autocomplete-hint');
+    if (!hint) {
+      hint = document.createElement('span');
+      hint.className = 'terminal-autocomplete-hint';
+      container.appendChild(hint);
+    }
+    
+    const currentInput = input.value;
+    const suggestion = getBestSuggestion(currentInput, terminalType, history);
+    
+    if (suggestion && currentInput.length > 0) {
+      hint.textContent = suggestion;
+      hint.style.display = 'inline';
+      
+      // Create a temporary span to measure text width accurately
+      const tempSpan = document.createElement('span');
+      tempSpan.style.visibility = 'hidden';
+      tempSpan.style.position = 'absolute';
+      tempSpan.style.whiteSpace = 'pre';
+      tempSpan.style.font = window.getComputedStyle(input).font;
+      tempSpan.style.fontFamily = window.getComputedStyle(input).fontFamily;
+      tempSpan.style.fontSize = window.getComputedStyle(input).fontSize;
+      tempSpan.textContent = currentInput;
+      document.body.appendChild(tempSpan);
+      
+      const textWidth = tempSpan.offsetWidth;
+      document.body.removeChild(tempSpan);
+      
+      // Account for prompt width and padding
+      const prompt = container.querySelector('.terminal-prompt');
+      const promptWidth = prompt ? prompt.offsetWidth + 8 : 0;
+      const containerPadding = 8; // padding from container
+      
+      hint.style.left = (promptWidth + containerPadding + textWidth) + 'px';
+    } else {
+      hint.style.display = 'none';
+    }
+  }
+  
+  // Handle tab autocomplete
+  function handleTabAutocomplete(input, terminalType, history, e) {
+    const state = autocompleteState[terminalType];
+    const currentInput = input.value;
+    
+    // If input changed, reset autocomplete
+    if (currentInput !== state.lastInput) {
+      state.matches = getAutocompleteSuggestions(currentInput, terminalType, history);
+      state.index = -1;
+      state.lastInput = currentInput;
+    }
+    
+    if (state.matches.length === 0) {
+      return; // No matches, don't prevent default
+    }
+    
+    e.preventDefault();
+    
+    // Cycle through matches
+    state.index = (state.index + 1) % state.matches.length;
+    input.value = state.matches[state.index];
+    
+    // Update hint
+    updateAutocompleteHint(input, terminalType, history);
+    
+    // Reset on next input change
+    const originalValue = input.value;
+    const resetOnChange = () => {
+      if (input.value !== originalValue) {
+        state.lastInput = '';
+        input.removeEventListener('input', resetOnChange);
+      }
+    };
+    input.addEventListener('input', resetOnChange);
+  }
 
   return {
     addPreviewLog(message, type, receivedLogIds, generateLogId, syncChannel, ws) {
@@ -430,8 +585,17 @@ window.PreviewTerminal = (function() {
       };
       
       if (clientInput) {
+        // Update autocomplete hint on input
+        clientInput.addEventListener('input', () => {
+          const history = clientHistory.load();
+          updateAutocompleteHint(clientInput, 'client', history);
+        });
+        
         clientInput.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp') {
+          if (e.key === 'Tab') {
+            const history = clientHistory.load();
+            handleTabAutocomplete(clientInput, 'client', history, e);
+          } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             const history = clientHistory.load();
             if (history.length === 0) return;
@@ -458,7 +622,15 @@ window.PreviewTerminal = (function() {
               clientHistoryIndex = -1;
               clientInput.value = clientCurrentInput;
             }
+          } else if (e.key === 'Escape') {
+            // Hide autocomplete hint
+            const hint = clientInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
           } else if (e.key === 'Enter') {
+            // Hide autocomplete hint
+            const hint = clientInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+            
             const command = clientInput.value.trim();
             if (command) {
               clientHistory.add(command);
@@ -487,8 +659,19 @@ window.PreviewTerminal = (function() {
       }
       
       if (powershellInput) {
+        // Update autocomplete hint on input
+        powershellInput.addEventListener('input', () => {
+          if (powershellInput.disabled) return;
+          const history = powershellHistory.load();
+          updateAutocompleteHint(powershellInput, 'powershell', history);
+        });
+        
         powershellInput.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp') {
+          if (e.key === 'Tab') {
+            if (powershellInput.disabled) return;
+            const history = powershellHistory.load();
+            handleTabAutocomplete(powershellInput, 'powershell', history, e);
+          } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             if (powershellInput.disabled) return;
             const history = powershellHistory.load();
@@ -517,7 +700,15 @@ window.PreviewTerminal = (function() {
               powershellHistoryIndex = -1;
               powershellInput.value = powershellCurrentInput;
             }
+          } else if (e.key === 'Escape') {
+            // Hide autocomplete hint
+            const hint = powershellInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
           } else if (e.key === 'Enter') {
+            // Hide autocomplete hint
+            const hint = powershellInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+            
             const command = powershellInput.value.trim();
             if (command) {
               powershellHistory.add(command);
@@ -601,8 +792,17 @@ window.PreviewTerminal = (function() {
         logInput.disabled = false;
         logInput.style.pointerEvents = 'auto';
         
+        // Update autocomplete hint on input
+        logInput.addEventListener('input', () => {
+          const history = logHistory.load();
+          updateAutocompleteHint(logInput, 'log', history);
+        });
+        
         logInput.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp') {
+          if (e.key === 'Tab') {
+            const history = logHistory.load();
+            handleTabAutocomplete(logInput, 'log', history, e);
+          } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             const history = logHistory.load();
             if (history.length === 0) return;
@@ -629,7 +829,15 @@ window.PreviewTerminal = (function() {
               logHistoryIndex = -1;
               logInput.value = logCurrentInput;
             }
+          } else if (e.key === 'Escape') {
+            // Hide autocomplete hint
+            const hint = logInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
           } else if (e.key === 'Enter') {
+            // Hide autocomplete hint
+            const hint = logInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+            
             const command = logInput.value.trim();
             if (command) {
               logHistory.add(command);
@@ -672,8 +880,17 @@ window.PreviewTerminal = (function() {
       }
       
       if (commandsInput && commandsOutput) {
+        // Update autocomplete hint on input
+        commandsInput.addEventListener('input', () => {
+          const history = commandsHistory.load();
+          updateAutocompleteHint(commandsInput, 'commands', history);
+        });
+        
         commandsInput.addEventListener('keydown', (e) => {
-          if (e.key === 'ArrowUp') {
+          if (e.key === 'Tab') {
+            const history = commandsHistory.load();
+            handleTabAutocomplete(commandsInput, 'commands', history, e);
+          } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             const history = commandsHistory.load();
             if (history.length === 0) return;
@@ -700,7 +917,15 @@ window.PreviewTerminal = (function() {
               commandsHistoryIndex = -1;
               commandsInput.value = commandsCurrentInput;
             }
+          } else if (e.key === 'Escape') {
+            // Hide autocomplete hint
+            const hint = commandsInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
           } else if (e.key === 'Enter') {
+            // Hide autocomplete hint
+            const hint = commandsInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+            
             const command = commandsInput.value.trim();
             if (command) {
               commandsHistory.add(command);

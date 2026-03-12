@@ -119,7 +119,7 @@ require(['vs/editor/editor.main'], function() {
   function loadFileTree(dir) {
     PreviewFileExplorer.loadFileTree(
       dir, fileTree, currentDirRef, updateBackButton, saveState,
-      (files, dir) => renderFileTree(files, dir),
+      renderFileTree,
       (dir) => fetchDirectoryListing(dir)
     );
     currentDir = currentDirRef.currentDir;

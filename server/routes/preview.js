@@ -132,7 +132,34 @@ async function loadPreviewTemplates() {
         'utf-8'
       );
       
+      // Load autocomplete files
+      const autocompleteDir = path.join(previewModulesDir, 'autocomplete');
+      const clientAutocompleteJs = await fs.readFile(
+        path.join(autocompleteDir, 'client.js'),
+        'utf-8'
+      );
+      const commandsAutocompleteJs = await fs.readFile(
+        path.join(autocompleteDir, 'commands.js'),
+        'utf-8'
+      );
+      const powershellAutocompleteJs = await fs.readFile(
+        path.join(autocompleteDir, 'powershell.js'),
+        'utf-8'
+      );
+      const logAutocompleteJs = await fs.readFile(
+        path.join(autocompleteDir, 'log.js'),
+        'utf-8'
+      );
+      
       jsContent = [
+        '// Autocomplete - Client',
+        clientAutocompleteJs,
+        '// Autocomplete - Commands',
+        commandsAutocompleteJs,
+        '// Autocomplete - PowerShell',
+        powershellAutocompleteJs,
+        '// Autocomplete - Log',
+        logAutocompleteJs,
         '// Utils',
         utilsJs,
         '// Settings',

@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "description": "Directory listing server with auto-refresh",
   "main": "app/main.js",
+  "author": "Astrogaming057",
   "scripts": {
     "start": "node server/index.js",
     "start:app": "electron app/main.js",
-    "app": "electron app/main.js"
+    "app": "electron app/main.js",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:dir": "electron-builder --dir",
+    "dist": "electron-builder --publish=never"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
@@ -16,6 +21,65 @@
     "ws": "^8.14.2"
   },
   "devDependencies": {
-    "electron": "^28.3.3"
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.htmlclass.ide",
+    "productName": "Astro's IDE",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**/*",
+      "server/**/*",
+      "projects/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "server/**/*",
+      "node_modules/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "start-app.bat",
+        "to": "start-app.bat"
+      },
+      {
+        "from": "start-app.vbs",
+        "to": "start-app.vbs"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "sign": null,
+      "signingHashAlgorithms": []
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Astro's IDE"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
   }
 }

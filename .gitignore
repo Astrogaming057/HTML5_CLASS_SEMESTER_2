@@ -3,3 +3,4 @@ ai_instructions.md
 
 # Dependencies - can be regenerated with npm install
 node_modules/
+/dist

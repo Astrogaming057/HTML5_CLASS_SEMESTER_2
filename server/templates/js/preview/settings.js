@@ -175,6 +175,37 @@ window.PreviewSettings = (function() {
           }
         }
         
+        // Show/hide working directory setting based on Electron availability
+        const workingDirGroup = document.getElementById('workingDirectoryGroup');
+        if (workingDirGroup) {
+          if (window.electronAPI && window.electronAPI.isElectron) {
+            workingDirGroup.style.display = 'block';
+            // Load working directory from Electron
+            try {
+              const workingDir = await window.electronAPI.getWorkingDirectory();
+              const workingDirPath = document.getElementById('workingDirectoryPath');
+              if (workingDirPath) {
+                workingDirPath.value = workingDir || 'Not set (using default)';
+                workingDirPath.setAttribute('data-original-path', workingDir || '');
+              }
+              // Hide restart prompt when opening settings (will show again if changed)
+              const workingDirRestartPrompt = document.getElementById('workingDirectoryRestartPrompt');
+              if (workingDirRestartPrompt) {
+                workingDirRestartPrompt.style.display = 'none';
+              }
+            } catch (e) {
+              console.error('Error loading working directory:', e);
+              const workingDirPath = document.getElementById('workingDirectoryPath');
+              if (workingDirPath) {
+                workingDirPath.value = 'Error loading directory';
+                workingDirPath.setAttribute('data-original-path', '');
+              }
+            }
+          } else {
+            workingDirGroup.style.display = 'none';
+          }
+        }
+        
         settingsPanel.style.display = 'flex';
         
         const pageTheme = document.getElementById('pageTheme');

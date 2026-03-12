@@ -424,6 +424,22 @@ You can copy any theme file and modify it, or create your own!"></textarea>
           </div>
         </div>
         
+        <div class="setting-group" id="workingDirectoryGroup" style="display: none;">
+          <label class="setting-label">Working Directory</label>
+          <div class="working-directory-container">
+            <input type="text" id="workingDirectoryPath" class="setting-input" readonly placeholder="No directory selected">
+            <button class="btn btn-secondary" id="selectWorkingDirectoryBtn">Select Directory</button>
+          </div>
+          <p class="setting-description">The directory where the server will serve files from. This requires a restart when changed.</p>
+          <div id="workingDirectoryRestartPrompt" class="restart-prompt" style="display: none;">
+            <p class="restart-message">⚠️ A restart is required for this change to take effect.</p>
+            <div class="restart-actions">
+              <button class="btn btn-primary btn-restart" id="workingDirectoryRestartNowBtn">Restart Now</button>
+              <button class="btn btn-secondary btn-restart-later" id="workingDirectoryRestartLaterBtn">Restart Later</button>
+            </div>
+          </div>
+        </div>
+        
         <div class="settings-actions">
           <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
           <button class="btn btn-secondary" id="resetSettingsBtn2">Reset to Defaults</button>

@@ -28,7 +28,12 @@ window.PreviewFileExplorer = (function() {
         .then(res => res.json())
         .then(data => {
           if (data.success && data.files) {
-            renderFileTree(data.files, dirStr);
+            try {
+              renderFileTree(data.files, dirStr);
+            } catch (error) {
+              console.error('Error calling renderFileTree:', error);
+              fileTree.innerHTML = '<div class="file-tree-loading">Error rendering files</div>';
+            }
           } else {
             fileTree.innerHTML = '<div class="file-tree-loading">Error loading files</div>';
           }

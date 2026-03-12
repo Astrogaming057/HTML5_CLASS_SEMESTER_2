@@ -623,6 +623,20 @@ body.resizing .resizer-terminal {
   color: var(--text-tertiary);
 }
 
+.terminal-autocomplete-hint {
+  position: absolute;
+  pointer-events: none;
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
 .terminal-toggle-btn {
   background: transparent;
   border: none;
@@ -1599,6 +1613,37 @@ body.resizing .resizer {
 }
 
 .setting-toggle input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.working-directory-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.setting-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #2d2d2d);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  color: var(--text-primary, #e0e0e0);
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  cursor: default;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #00ff88);
+}
+
+#selectWorkingDirectoryBtn {
+  white-space: nowrap;
+  min-width: 120px;
+}
   transform: translateX(20px);
 }
 

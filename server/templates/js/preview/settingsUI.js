@@ -278,15 +278,83 @@ window.PreviewSettingsUI = (function() {
         });
       }
       
+      // Handle working directory selection button
+      const selectWorkingDirBtn = document.getElementById('selectWorkingDirectoryBtn');
+      if (selectWorkingDirBtn && window.electronAPI && window.electronAPI.isElectron) {
+        selectWorkingDirBtn.addEventListener('click', async () => {
+          try {
+            const result = await window.electronAPI.selectWorkingDirectory();
+            if (result && result.success) {
+              const workingDirPath = document.getElementById('workingDirectoryPath');
+              if (workingDirPath) {
+                workingDirPath.value = result.path;
+                // Update the original path so we know it changed
+                workingDirPath.setAttribute('data-original-path', result.path);
+                
+                // Show restart confirmation modal immediately
+                const restartModal = document.getElementById('restartConfirmModal');
+                if (restartModal) {
+                  // Update modal message to be specific about working directory
+                  const modalBody = restartModal.querySelector('.restart-confirm-body p');
+                  if (modalBody) {
+                    modalBody.innerHTML = `The working directory has been changed to:<br><strong>${result.path}</strong><br><br>This requires a restart to take effect. Would you like to restart now?`;
+                  }
+                  restartModal.style.display = 'flex';
+                  
+                  // Store that this is a working directory restart
+                  restartModal.setAttribute('data-restart-type', 'working-directory');
+                } else {
+                  // Fallback to inline prompt if modal not found
+                  const restartPrompt = document.getElementById('workingDirectoryRestartPrompt');
+                  if (restartPrompt) {
+                    restartPrompt.style.display = 'block';
+                  }
+                }
+              }
+            } else {
+              alert('Failed to select working directory');
+            }
+          } catch (e) {
+            console.error('Error selecting working directory:', e);
+            alert('Error selecting working directory: ' + e.message);
+          }
+        });
+      }
+      
+      // Handle working directory restart buttons
+      const workingDirRestartNowBtn = document.getElementById('workingDirectoryRestartNowBtn');
+      const workingDirRestartLaterBtn = document.getElementById('workingDirectoryRestartLaterBtn');
+      
+      if (workingDirRestartNowBtn) {
+        workingDirRestartNowBtn.addEventListener('click', async () => {
+          await handleRestartNow(status, editor);
+        });
+      }
+      
+      if (workingDirRestartLaterBtn) {
+        workingDirRestartLaterBtn.addEventListener('click', () => {
+          const restartPrompt = document.getElementById('workingDirectoryRestartPrompt');
+          if (restartPrompt) {
+            restartPrompt.style.display = 'none';
+          }
+        });
+      }
+      
       // Handle restart confirmation modal buttons
       const restartConfirmBtn = document.getElementById('restartConfirmBtn');
       const restartCancelBtn = document.getElementById('restartCancelBtn');
       
+      const restartConfirmModal = document.getElementById('restartConfirmModal');
+      
       if (restartConfirmBtn) {
         restartConfirmBtn.addEventListener('click', async () => {
-          const restartModal = document.getElementById('restartConfirmModal');
-          if (restartModal) {
-            restartModal.style.display = 'none';
+          if (restartConfirmModal) {
+            restartConfirmModal.style.display = 'none';
+          }
+          // Also hide the inline restart prompt if it's visible
+          const restartPrompt = document.getElementById('workingDirectoryRestartPrompt');
+          if (restartPrompt) {
+            restartPrompt.style.display = 'none';
           }
           await handleRestartNow(status, editor);
         });
@@ -294,13 +362,27 @@ window.PreviewSettingsUI = (function() {
       
       if (restartCancelBtn) {
         restartCancelBtn.addEventListener('click', () => {
-          const restartModal = document.getElementById('restartConfirmModal');
-          if (restartModal) {
-            restartModal.style.display = 'none';
+          if (restartConfirmModal) {
+            restartConfirmModal.style.display = 'none';
           }
-          const restartPrompt = document.getElementById('restartPrompt');
+          // Also hide the inline restart prompt if it's visible
+          const restartPrompt = document.getElementById('workingDirectoryRestartPrompt');
           if (restartPrompt) {
             restartPrompt.style.display = 'none';
+          }
+        });
+      }
+      
+      // Close modal when clicking outside
+      if (restartConfirmModal) {
+        restartConfirmModal.addEventListener('click', (e) => {
+          if (e.target === restartConfirmModal) {
+            restartConfirmModal.style.display = 'none';
+            // Also hide the inline restart prompt if it's visible
+            const restartPrompt = document.getElementById('workingDirectoryRestartPrompt');
+            if (restartPrompt) {
+              restartPrompt.style.display = 'none';
+            }
           }
         });
       }
