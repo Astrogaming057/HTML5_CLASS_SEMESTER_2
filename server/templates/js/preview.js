@@ -66,6 +66,629 @@ require(['vs/editor/editor.main'], function() {
   const terminalAtBottomRef = { current: false };
   const saveToEditorTimeout = { current: null };
   
+  // Mode indicator hover menu
+  let modeMenu = null;
+  let modeMenuTimeout = null;
+  
+  function createModeMenu() {
+    if (modeMenu) return modeMenu;
+    
+    modeMenu = document.createElement('div');
+    modeMenu.className = 'mode-menu';
+    modeMenu.id = 'modeMenu';
+    document.body.appendChild(modeMenu);
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function closeModeMenu(e) {
+      if (modeMenu && !modeMenu.contains(e.target) && !modeIndicator.contains(e.target)) {
+        hideModeMenu();
+      }
+    });
+    
+    return modeMenu;
+  }
+  
+  function getGPUInfo() {
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      
+      if (!gl) {
+        return {
+          vendor: 'Unknown',
+          renderer: 'WebGL not available',
+          hardwareAcceleration: false
+        };
+      }
+      
+      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+      const vendor = debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'Unknown';
+      const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'Unknown';
+      
+      // Check if hardware acceleration is enabled
+      const hardwareAcceleration = gl.getParameter(gl.VERSION).includes('WebGL') && 
+                                    renderer !== 'Unknown' && 
+                                    !renderer.toLowerCase().includes('software');
+      
+      return {
+        vendor: vendor || 'Unknown',
+        renderer: renderer || 'Unknown',
+        hardwareAcceleration: hardwareAcceleration
+      };
+    } catch (e) {
+      return {
+        vendor: 'Unknown',
+        renderer: 'Error detecting GPU',
+        hardwareAcceleration: false
+      };
+    }
+  }
+  
+  async function getHardwareAccelerationStatus() {
+    if (window.electronAPI && window.electronAPI.getHardwareAcceleration) {
+      try {
+        return await window.electronAPI.getHardwareAcceleration();
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+  
+  async function measurePing() {
+    const startTime = performance.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    try {
+      const response = await fetch('/__api__/mode', {
+        method: 'GET',
+        cache: 'no-cache',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      const endTime = performance.now();
+      const ping = Math.round(endTime - startTime);
+      
+      if (response.ok) {
+        pingHistory.push({
+          time: Date.now(),
+          ping: ping,
+          success: true
+        });
+      } else {
+        pingHistory.push({
+          time: Date.now(),
+          ping: null,
+          success: false
+        });
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      pingHistory.push({
+        time: Date.now(),
+        ping: null,
+        success: false
+      });
+    }
+    
+    // Keep only last MAX_PING_HISTORY entries
+    if (pingHistory.length > MAX_PING_HISTORY) {
+      pingHistory = pingHistory.slice(-MAX_PING_HISTORY);
+    }
+  }
+  
+  function startPingMonitoring() {
+    if (pingInterval) return;
+    
+    // Initial ping
+    measurePing();
+    
+    // Start interval
+    pingInterval = setInterval(measurePing, PING_INTERVAL);
+  }
+  
+  function stopPingMonitoring() {
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
+    }
+  }
+  
+  function getPingStats() {
+    const successfulPings = pingHistory.filter(p => p.success && p.ping !== null);
+    const failedPings = pingHistory.filter(p => !p.success || p.ping === null);
+    
+    if (successfulPings.length === 0) {
+      return {
+        average: null,
+        last: null,
+        packetLoss: pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0',
+        serverEndpoint: 'localhost:3000'
+      };
+    }
+    
+    const pings = successfulPings.map(p => p.ping);
+    const average = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
+    const last = successfulPings[successfulPings.length - 1].ping;
+    const packetLoss = pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0';
+    
+    return {
+      average,
+      last,
+      packetLoss,
+      serverEndpoint: 'localhost:3000'
+    };
+  }
+  
+  function drawPingGraph(canvas, ctx) {
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = 20;
+    const graphWidth = width - padding * 2;
+    const graphHeight = height - padding * 2;
+    
+    // Clear canvas
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw grid
+    ctx.strokeStyle = '#3a3a3a';
+    ctx.lineWidth = 1;
+    
+    // Horizontal grid lines (ping values)
+    for (let i = 0; i <= 4; i++) {
+      const y = padding + (graphHeight / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(width - padding, y);
+      ctx.stroke();
+      
+      // Y-axis labels
+      ctx.fillStyle = '#aaa';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      const value = 20 - (i * 5);
+      ctx.fillText(value.toString(), 5, y + 3);
+    }
+    
+    // Draw ping line
+    if (pingHistory.length > 1) {
+      const successfulPings = pingHistory.filter(p => p.success && p.ping !== null);
+      
+      if (successfulPings.length > 0) {
+        ctx.strokeStyle = '#4a9eff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        const maxPing = Math.max(20, ...successfulPings.map(p => p.ping));
+        const minPing = Math.min(0, ...successfulPings.map(p => p.ping));
+        const pingRange = maxPing - minPing || 20;
+        
+        successfulPings.forEach((pingData, index) => {
+          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
+          const normalizedPing = Math.min(pingData.ping, 20);
+          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
+          
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        
+        ctx.stroke();
+        
+        // Draw points
+        ctx.fillStyle = '#4a9eff';
+        successfulPings.forEach((pingData, index) => {
+          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
+          const normalizedPing = Math.min(pingData.ping, 20);
+          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    }
+    
+    // X-axis time labels (simplified - show start and end)
+    if (pingHistory.length > 0) {
+      ctx.fillStyle = '#aaa';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      
+      const firstTime = new Date(pingHistory[0].time);
+      const lastTime = new Date(pingHistory[pingHistory.length - 1].time);
+      
+      const formatTime = (date) => {
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+      };
+      
+      ctx.fillText(formatTime(firstTime), padding, height - 5);
+      ctx.fillText(formatTime(lastTime), width - padding, height - 5);
+    }
+  }
+  
+  function buildModeMenuContent(clientMode, serverMode) {
+    if (!modeMenu) createModeMenu();
+    
+    const clientModeText = clientMode === 'app' ? 'App (Electron)' : 'Browser';
+    const serverModeText = serverMode === 'app' ? 'App' : 'Browser';
+    const isApp = clientMode === 'app';
+    const isServerApp = serverMode === 'app';
+    
+    // Get GPU information
+    const gpuInfo = getGPUInfo();
+    
+    modeMenu.innerHTML = `
+      <div class="mode-menu-header">
+        <div class="mode-menu-title">Mode Information</div>
+        <div class="mode-menu-subtitle">Client: ${clientModeText} | Server: ${serverModeText}</div>
+      </div>
+      
+      <div class="mode-menu-section">
+        <div class="mode-menu-section-title">Status</div>
+        <div class="mode-menu-status">
+          <div class="mode-menu-status-dot"></div>
+          <span>Running in ${clientModeText} mode</span>
+        </div>
+        <div class="mode-menu-item local-hosted" style="margin-top: 8px;">
+          <span class="mode-menu-item-icon" style="color: #4caf50;">🔒</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">[Locally hosted]</div>
+            <div class="mode-menu-item-desc">All data stays on your machine</div>
+          </div>
+        </div>
+        <div class="mode-menu-item end-to-end-encrypted" style="margin-top: 6px;">
+          <span class="mode-menu-item-icon" style="color: #4caf50;">🔐</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">End-to-end encrypted</div>
+            <div class="mode-menu-item-desc">Your files are secure and private</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mode-menu-divider"></div>
+      
+      <div class="mode-menu-section">
+        <div class="mode-menu-section-title">Quick Actions</div>
+        ${isApp ? `
+          <div class="mode-menu-item" data-action="restart-app">
+            <span class="mode-menu-item-icon">🔄</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">Restart App</div>
+              <div class="mode-menu-item-desc">Restart the Electron application</div>
+            </div>
+          </div>
+          <div class="mode-menu-item" data-action="hardware-accel">
+            <span class="mode-menu-item-icon">⚡</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">Hardware Acceleration</div>
+              <div class="mode-menu-item-desc">Toggle GPU acceleration</div>
+            </div>
+          </div>
+          <div class="mode-menu-item" data-action="working-dir">
+            <span class="mode-menu-item-icon">📁</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">Change Working Directory</div>
+              <div class="mode-menu-item-desc">Select a different project folder</div>
+            </div>
+          </div>
+        ` : `
+          <div class="mode-menu-item" data-action="open-in-app">
+            <span class="mode-menu-item-icon">📱</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">Open in App</div>
+              <div class="mode-menu-item-desc">Launch in Electron application</div>
+            </div>
+          </div>
+          <div class="mode-menu-item" data-action="bookmark">
+            <span class="mode-menu-item-icon">⭐</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">Bookmark Page</div>
+              <div class="mode-menu-item-desc">Save this page to bookmarks</div>
+            </div>
+          </div>
+        `}
+        <div class="mode-menu-item" data-action="settings">
+          <span class="mode-menu-item-icon">⚙️</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">Settings</div>
+            <div class="mode-menu-item-desc">Open settings panel</div>
+          </div>
+        </div>
+        <div class="mode-menu-item" data-action="help">
+          <span class="mode-menu-item-icon">❓</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">Help & Documentation</div>
+            <div class="mode-menu-item-desc">View help menu</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mode-menu-divider"></div>
+      
+      <div class="mode-menu-section">
+        <div class="mode-menu-section-title">Connection</div>
+        <div class="mode-menu-connection-info">
+          <canvas id="pingGraph" width="240" height="80" class="ping-graph-canvas"></canvas>
+          <div class="mode-menu-connection-stats">
+            <div class="mode-menu-connection-server">
+              <strong>localhost:3000</strong>
+            </div>
+            <div class="mode-menu-connection-detail-item">
+              <span class="mode-menu-connection-label">Average ping:</span>
+              <span class="mode-menu-connection-value" id="avgPing">-</span>
+            </div>
+            <div class="mode-menu-connection-detail-item">
+              <span class="mode-menu-connection-label">Last ping:</span>
+              <span class="mode-menu-connection-value" id="lastPing">-</span>
+            </div>
+            <div class="mode-menu-connection-detail-item">
+              <span class="mode-menu-connection-label">Outbound packet loss rate:</span>
+              <span class="mode-menu-connection-value" id="packetLoss">0.0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mode-menu-divider"></div>
+      
+      <div class="mode-menu-section">
+        <div class="mode-menu-section-title">GPU</div>
+        <div class="mode-menu-gpu-info">
+          <div class="mode-menu-gpu-renderer">
+            <strong>${gpuInfo.renderer}</strong>
+          </div>
+          <div class="mode-menu-gpu-details">
+            <div class="mode-menu-gpu-detail-item">
+              <span class="mode-menu-gpu-label">Vendor:</span>
+              <span class="mode-menu-gpu-value">${gpuInfo.vendor}</span>
+            </div>
+            <div class="mode-menu-gpu-detail-item">
+              <span class="mode-menu-gpu-label">Hardware acceleration:</span>
+              <span class="mode-menu-gpu-value ${gpuInfo.hardwareAcceleration ? 'gpu-enabled' : 'gpu-disabled'}">
+                ${gpuInfo.hardwareAcceleration ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+            ${isApp ? `
+              <div class="mode-menu-gpu-detail-item" id="gpuAccelStatus">
+                <span class="mode-menu-gpu-label">App setting:</span>
+                <span class="mode-menu-gpu-value" id="gpuAccelValue">Loading...</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+      
+      <div class="mode-menu-divider"></div>
+      
+      <div class="mode-menu-section">
+        <div class="mode-menu-section-title">Information</div>
+        <div class="mode-menu-item">
+          <span class="mode-menu-item-icon">💻</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">Platform</div>
+            <div class="mode-menu-item-desc">${navigator.platform}</div>
+          </div>
+        </div>
+        <div class="mode-menu-item">
+          <span class="mode-menu-item-icon">🌐</span>
+          <div class="mode-menu-item-content">
+            <div class="mode-menu-item-label">User Agent</div>
+            <div class="mode-menu-item-desc">${navigator.userAgent.substring(0, 40)}...</div>
+          </div>
+        </div>
+        ${isApp ? `
+          <div class="mode-menu-item">
+            <span class="mode-menu-item-icon">📦</span>
+            <div class="mode-menu-item-content">
+              <div class="mode-menu-item-label">App Version</div>
+              <div class="mode-menu-item-desc">Astro Code 1.0.0</div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    
+    // Add event listeners to menu items
+    modeMenu.querySelectorAll('[data-action]').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleModeMenuAction(item.dataset.action);
+        hideModeMenu();
+      });
+    });
+  }
+  
+  function handleModeMenuAction(action) {
+    switch(action) {
+      case 'restart-app':
+        if (window.electronAPI && window.electronAPI.restartApp) {
+          window.electronAPI.restartApp();
+        }
+        break;
+      case 'hardware-accel':
+        if (window.electronAPI && window.electronAPI.getHardwareAcceleration) {
+          window.electronAPI.getHardwareAcceleration().then(enabled => {
+            if (window.electronAPI.setHardwareAcceleration) {
+              window.electronAPI.setHardwareAcceleration(!enabled).then(() => {
+                status.textContent = `Hardware acceleration ${!enabled ? 'enabled' : 'disabled'}. Restart required.`;
+                status.className = 'status';
+                setTimeout(() => {
+                  if (confirm('Hardware acceleration setting changed. Restart now?')) {
+                    window.electronAPI.restartApp();
+                  }
+                }, 100);
+              });
+            }
+          });
+        }
+        break;
+      case 'working-dir':
+        if (window.electronAPI && window.electronAPI.selectWorkingDirectory) {
+          window.electronAPI.selectWorkingDirectory().then(result => {
+            if (result.success) {
+              status.textContent = `Working directory changed. Restart required.`;
+              status.className = 'status';
+              setTimeout(() => {
+                if (confirm('Working directory changed. Restart now?')) {
+                  window.electronAPI.restartApp();
+                }
+              }, 100);
+            }
+          });
+        }
+        break;
+      case 'open-in-app':
+        // Try to open in app mode
+        const currentUrl = window.location.href;
+        if (currentUrl.includes('localhost')) {
+          // Extract the file path and open in app
+          const urlParams = new URLSearchParams(window.location.search);
+          const file = urlParams.get('file');
+          if (file) {
+            window.open(`http://localhost:3000/__preview__?file=${encodeURIComponent(file)}`, '_blank');
+          }
+        }
+        break;
+      case 'bookmark':
+        if (window.PreviewBookmarkManager) {
+          const urlInput = document.getElementById('browserUrlInput');
+          if (urlInput && urlInput.value) {
+            window.PreviewBookmarkManager.showAddDialog(urlInput.value);
+          }
+        }
+        break;
+      case 'settings':
+        const settingsBtnEl = document.getElementById('settingsBtn');
+        if (settingsBtnEl) settingsBtnEl.click();
+        break;
+      case 'help':
+        const helpBtnEl = document.getElementById('helpBtn');
+        if (helpBtnEl) helpBtnEl.click();
+        break;
+    }
+  }
+  
+  function updatePingGraph() {
+    const canvas = document.getElementById('pingGraph');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    drawPingGraph(canvas, ctx);
+    
+    // Update stats
+    const stats = getPingStats();
+    const avgPingEl = document.getElementById('avgPing');
+    const lastPingEl = document.getElementById('lastPing');
+    const packetLossEl = document.getElementById('packetLoss');
+    
+    if (avgPingEl) avgPingEl.textContent = stats.average !== null ? `${stats.average} ms` : '-';
+    if (lastPingEl) lastPingEl.textContent = stats.last !== null ? `${stats.last} ms` : '-';
+    if (packetLossEl) packetLossEl.textContent = `${stats.packetLoss}%`;
+  }
+  
+  function showModeMenu() {
+    if (!modeMenu) createModeMenu();
+    const clientMode = window.__CLIENT_MODE || (window.electronAPI && window.electronAPI.isElectron ? 'app' : 'browser');
+    
+    // Start ping monitoring if not already started
+    if (window.PreviewPingMonitor) {
+      window.PreviewPingMonitor.start();
+    }
+    
+    // Fetch server mode
+    fetch('/__api__/mode')
+      .then(res => res.json())
+      .then(data => {
+        buildModeMenuContent(clientMode, data.mode || 'browser');
+        positionModeMenu();
+        modeMenu.classList.add('show');
+        
+        // Draw initial ping graph
+        setTimeout(() => {
+          if (window.PreviewPingMonitor) {
+            window.PreviewPingMonitor.updateGraph();
+            // Update graph every second while menu is open
+            const graphUpdateInterval = setInterval(() => {
+              if (!modeMenu || !modeMenu.classList.contains('show')) {
+                clearInterval(graphUpdateInterval);
+                return;
+              }
+              if (window.PreviewPingMonitor) {
+                window.PreviewPingMonitor.updateGraph();
+              }
+            }, 1000);
+          }
+        }, 100);
+        
+        // Load hardware acceleration status if in app mode
+        if (clientMode === 'app' && window.electronAPI && window.electronAPI.getHardwareAcceleration) {
+          window.electronAPI.getHardwareAcceleration().then(enabled => {
+            const gpuAccelValue = document.getElementById('gpuAccelValue');
+            if (gpuAccelValue) {
+              gpuAccelValue.textContent = enabled ? 'Enabled' : 'Disabled';
+              gpuAccelValue.className = `mode-menu-gpu-value ${enabled ? 'gpu-enabled' : 'gpu-disabled'}`;
+            }
+          }).catch(() => {
+            const gpuAccelValue = document.getElementById('gpuAccelValue');
+            if (gpuAccelValue) {
+              gpuAccelValue.textContent = 'Unknown';
+            }
+          });
+        }
+      })
+      .catch(err => {
+        buildModeMenuContent(clientMode, 'browser');
+        positionModeMenu();
+        modeMenu.classList.add('show');
+        setTimeout(() => {
+          if (window.PreviewPingMonitor) {
+            window.PreviewPingMonitor.updateGraph();
+          }
+        }, 100);
+      });
+  }
+  
+  function hideModeMenu() {
+    if (modeMenu) {
+      modeMenu.classList.remove('show');
+    }
+    if (modeMenuTimeout) {
+      clearTimeout(modeMenuTimeout);
+      modeMenuTimeout = null;
+    }
+  }
+  
+  function positionModeMenu() {
+    if (!modeMenu || !modeIndicator) return;
+    
+    const rect = modeIndicator.getBoundingClientRect();
+    const menuRect = modeMenu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let left = rect.left;
+    let top = rect.bottom + 8;
+    
+    // Adjust if menu would go off screen
+    if (left + menuRect.width > viewportWidth) {
+      left = viewportWidth - menuRect.width - 16;
+    }
+    if (top + menuRect.height > viewportHeight) {
+      top = rect.top - menuRect.height - 8;
+    }
+    
+    modeMenu.style.left = left + 'px';
+    modeMenu.style.top = top + 'px';
+  }
+  
   // Update mode indicator
   function updateModeIndicator() {
     if (!modeIndicator) return;
@@ -80,16 +703,64 @@ require(['vs/editor/editor.main'], function() {
         const serverModeText = data.mode === 'app' ? 'App' : 'Browser';
         modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
         modeIndicator.className = `mode-indicator ${clientMode}`;
-        modeIndicator.title = `Client: ${clientModeText} | Server: ${serverModeText}`;
+        modeIndicator.title = `Click to view mode information`;
       })
       .catch(err => {
         modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
         modeIndicator.className = `mode-indicator ${clientMode}`;
-        modeIndicator.title = `Client: ${clientMode === 'app' ? 'App (Electron)' : 'Browser'}`;
+        modeIndicator.title = `Click to view mode information`;
       });
+    
+    // Add hover/click event listeners
+    if (modeIndicator) {
+      modeIndicator.addEventListener('mouseenter', () => {
+        if (modeMenuTimeout) clearTimeout(modeMenuTimeout);
+        modeMenuTimeout = setTimeout(() => {
+          showModeMenu();
+        }, 300);
+      });
+      
+      modeIndicator.addEventListener('mouseleave', () => {
+        if (modeMenuTimeout) {
+          clearTimeout(modeMenuTimeout);
+          modeMenuTimeout = null;
+        }
+        // Delay hiding to allow moving to menu
+        setTimeout(() => {
+          if (modeMenu && !modeMenu.matches(':hover') && !modeIndicator.matches(':hover')) {
+            hideModeMenu();
+          }
+        }, 200);
+      });
+      
+      modeIndicator.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (modeMenu && modeMenu.classList.contains('show')) {
+          hideModeMenu();
+        } else {
+          showModeMenu();
+        }
+      });
+      
+      // Keep menu open when hovering over it
+      if (modeMenu) {
+        modeMenu.addEventListener('mouseenter', () => {
+          if (modeMenuTimeout) clearTimeout(modeMenuTimeout);
+        });
+        
+        modeMenu.addEventListener('mouseleave', () => {
+          hideModeMenu();
+        });
+      }
+    }
   }
   
   updateModeIndicator();
+  
+  // Start ping monitoring on page load
+  if (window.PreviewPingMonitor) {
+    window.PreviewPingMonitor.start();
+  }
   
   const initResult = PreviewInitialization.initializeState(filePath, forceLoad, currentDirRef);
   if (initResult.error) {

@@ -4,32 +4,69 @@ const { spawn, exec } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 
-// Get app data path - use Local AppData when packaged
+// Get app data path - use Local AppData consistently for both packaged and dev
 function getAppDataPath() {
-  if (app.isPackaged) {
-    // Use Local AppData for packaged apps
-    const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
-    const appDataPath = path.join(localAppData, "Astro's IDE");
-    // Ensure directory exists
-    if (!fs.existsSync(appDataPath)) {
-      fs.mkdirSync(appDataPath, { recursive: true });
-    }
-    return appDataPath;
+  // Always use Local AppData with "Astro Code" folder for consistency
+  const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');
+  const appDataPath = path.join(localAppData, "Astro Code");
+  
+  // Ensure directory exists
+  if (!fs.existsSync(appDataPath)) {
+    fs.mkdirSync(appDataPath, { recursive: true });
   }
-  return app.getPath('userData');
+  
+  // Migration: If old Electron config exists and new one doesn't, copy it
+  if (!app.isPackaged) {
+    const oldConfigPath = app.getPath('userData');
+    const oldConfigFile = path.join(oldConfigPath, 'app-config.json');
+    const newConfigFile = path.join(appDataPath, 'app-config.json');
+    
+    if (fs.existsSync(oldConfigFile) && !fs.existsSync(newConfigFile)) {
+      try {
+        console.log(`[Config] Migrating config from ${oldConfigFile} to ${newConfigFile}`);
+        const oldConfig = JSON.parse(fs.readFileSync(oldConfigFile, 'utf8'));
+        fs.writeFileSync(newConfigFile, JSON.stringify(oldConfig, null, 2), 'utf8');
+        console.log(`[Config] Config migrated successfully`);
+      } catch (error) {
+        console.error(`[Config] Error migrating config:`, error);
+      }
+    }
+  }
+  
+  return appDataPath;
 }
 
 // Load hardware acceleration setting
 function loadHardwareAccelerationSetting() {
-  const configPath = path.join(getAppDataPath(), 'app-config.json');
   try {
+    const appDataPath = getAppDataPath();
+    const configPath = path.join(appDataPath, 'app-config.json');
+    
+    console.log(`[Config] Loading from: ${configPath}`);
+    console.log(`[Config] File exists: ${fs.existsSync(configPath)}`);
+    
     if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      return config.useHardwareAcceleration === true;
+      const fileContent = fs.readFileSync(configPath, 'utf8');
+      console.log(`[Config] File content: ${fileContent}`);
+      const config = JSON.parse(fileContent);
+      console.log(`[Config] Parsed config:`, JSON.stringify(config, null, 2));
+      
+      // Check if the setting exists and is explicitly set
+      if ('useHardwareAcceleration' in config) {
+        const value = config.useHardwareAcceleration === true;
+        console.log(`[Config] Hardware acceleration value from config: ${value} (raw: ${config.useHardwareAcceleration})`);
+        return value;
+      } else {
+        console.log(`[Config] useHardwareAcceleration key not found in config, defaulting to true`);
+      }
+    } else {
+      console.log(`[Config] Config file does not exist, defaulting to true`);
     }
   } catch (error) {
-    console.error('Error loading hardware acceleration setting:', error);
+    console.error('[Config] Error loading hardware acceleration setting:', error);
+    console.error('[Config] Error stack:', error.stack);
   }
+  console.log(`[Config] Returning default: true`);
   return true; // Default to enabled
 }
 
@@ -37,9 +74,16 @@ function loadHardwareAccelerationSetting() {
 function saveHardwareAccelerationSetting(enabled) {
   const configPath = path.join(getAppDataPath(), 'app-config.json');
   try {
+    // Ensure directory exists
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
     const config = loadAppConfig();
-    config.useHardwareAcceleration = enabled;
+    config.useHardwareAcceleration = enabled === true; // Ensure boolean
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log(`[Config] Hardware acceleration setting saved: ${enabled}`);
   } catch (error) {
     console.error('Error saving hardware acceleration setting:', error);
   }
@@ -124,7 +168,11 @@ async function selectWorkingDirectory() {
 }
 
 // Apply hardware acceleration setting
-const useHardwareAcceleration = loadHardwareAccelerationSetting();
+// Note: This must be called before app.whenReady()
+// We'll load it again in createWindow to ensure we have the latest value
+let useHardwareAcceleration = loadHardwareAccelerationSetting();
+console.log(`[Config] Initial hardware acceleration setting: ${useHardwareAcceleration}`);
+
 if (!useHardwareAcceleration) {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('disable-gpu');
@@ -139,6 +187,9 @@ if (!useHardwareAcceleration) {
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
   app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
   app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+  console.log('[Config] Hardware acceleration disabled via command line switches');
+} else {
+  console.log('[Config] Hardware acceleration enabled (default)');
 }
 
 
@@ -146,7 +197,7 @@ if (!useHardwareAcceleration) {
 let mainWindow = null;
 let serverProcess = null;
 const PORT = 3000;
-const APP_NAME = "Astro's IDE";
+const APP_NAME = "Astro Code";
 
 // Kill existing processes
 function killExistingProcesses(callback) {
@@ -291,10 +342,12 @@ function killExistingProcesses(callback) {
 function createWindow() {
   // Set app name to ensure proper AppData folder
   if (app.isPackaged) {
-    app.setName("Astro's IDE");
+    app.setName("Astro Code");
   }
   
+  // Reload hardware acceleration setting to ensure we have the latest value
   const useHwAccel = loadHardwareAccelerationSetting();
+  console.log(`[Config] Hardware acceleration setting in createWindow: ${useHwAccel}`);
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -310,8 +363,8 @@ function createWindow() {
       offscreen: false,
       backgroundThrottling: false
     },
-    icon: path.join(__dirname, '..', 'server', 'templates', 'html', 'favicon.ico').replace(/\\/g, '/'),
-    title: "Astro's IDE",
+    icon: path.join(__dirname, '..', 'build', 'icon.ico').replace(/\\/g, '/'),
+    title: "Astro Code",
     backgroundColor: '#1e1e1e',
     show: false, // Don't show until ready to prevent flicker
     autoHideMenuBar: true // Hide the menu bar (File, Edit, View, etc.)
@@ -329,6 +382,9 @@ function createWindow() {
 
   // Completely remove the menu bar
   mainWindow.setMenuBarVisibility(false);
+  
+  // Setup zoom keyboard shortcuts (Ctrl+ and Ctrl-)
+  setupZoomShortcuts(mainWindow);
 
   // Prevent window from being minimized/maximized during remote desktop
   mainWindow.on('will-move', (event) => {
@@ -354,6 +410,36 @@ function createWindow() {
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
+}
+
+function setupZoomShortcuts(window) {
+  // Handle zoom keyboard shortcuts
+  window.webContents.on('before-input-event', (event, input) => {
+    if (!input.control) return;
+    
+    // Zoom in: Ctrl+Plus, Ctrl+Equal, or Ctrl+NumpadAdd
+    if (input.key === '=' || input.code === 'Equal' || input.code === 'NumpadAdd') {
+      event.preventDefault();
+      const currentZoom = window.webContents.getZoomLevel();
+      window.webContents.setZoomLevel(currentZoom + 0.5);
+      return;
+    }
+    
+    // Zoom out: Ctrl+Minus or Ctrl+NumpadSubtract
+    if (input.key === '-' || input.code === 'Minus' || input.code === 'NumpadSubtract') {
+      event.preventDefault();
+      const currentZoom = window.webContents.getZoomLevel();
+      window.webContents.setZoomLevel(currentZoom - 0.5);
+      return;
+    }
+    
+    // Zoom reset: Ctrl+0
+    if (input.key === '0') {
+      event.preventDefault();
+      window.webContents.setZoomLevel(0);
+      return;
+    }
+  });
 }
 
 function startServer() {
@@ -639,12 +725,18 @@ function restartApp() {
 
 // IPC handlers
 ipcMain.handle('get-hardware-acceleration', () => {
-  return loadHardwareAccelerationSetting();
+  const value = loadHardwareAccelerationSetting();
+  console.log(`[IPC] get-hardware-acceleration: ${value}`);
+  return value;
 });
 
 ipcMain.handle('set-hardware-acceleration', async (event, enabled) => {
+  console.log(`[IPC] set-hardware-acceleration: ${enabled}`);
   saveHardwareAccelerationSetting(enabled);
-  return { success: true };
+  // Verify it was saved
+  const saved = loadHardwareAccelerationSetting();
+  console.log(`[IPC] Hardware acceleration setting saved and verified: ${saved}`);
+  return { success: true, saved: saved };
 });
 
 ipcMain.handle('restart-app', async () => {

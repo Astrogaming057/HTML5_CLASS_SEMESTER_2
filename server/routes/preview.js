@@ -139,6 +139,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'bookmarkManager.js'),
         'utf-8'
       );
+      const pingMonitorJs = await fs.readFile(
+        path.join(previewModulesDir, 'pingMonitor.js'),
+        'utf-8'
+      );
       const mainJs = await fs.readFile(
         path.join(jsDir, 'preview.js'),
         'utf-8'
@@ -226,6 +230,8 @@ async function loadPreviewTemplates() {
         inspectorManagerJs,
         '// Bookmark Manager',
         bookmarkManagerJs,
+        '// Ping Monitor',
+        pingMonitorJs,
         '// Initialization',
         initializationJs,
         '// Main',

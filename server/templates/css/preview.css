@@ -69,8 +69,14 @@ body {
   font-weight: bold;
   text-transform: uppercase;
   margin-left: 8px;
-  cursor: help;
-  transition: opacity 0.2s;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  position: relative;
+}
+
+.mode-indicator:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
 }
 
 .mode-indicator.app {
@@ -81,6 +87,301 @@ body {
 .mode-indicator.browser {
   background: var(--text-tertiary, #888);
   color: white;
+}
+
+/* Mode Indicator Hover Menu */
+.mode-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: var(--bg-primary, #1e1e1e);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 280px;
+  max-width: 320px;
+  max-height: 80vh;
+  z-index: 10000;
+  padding: 12px;
+  display: none;
+  animation: fadeIn 0.2s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mode-menu.show {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mode-menu-header {
+  border-bottom: 1px solid var(--border-color, #333);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.mode-menu-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-primary, #fff);
+  margin-bottom: 4px;
+}
+
+.mode-menu-subtitle {
+  font-size: 10px;
+  color: var(--text-secondary, #aaa);
+}
+
+.mode-menu-section {
+  margin: 8px 0;
+}
+
+/* Scrollbar styling for mode menu */
+.mode-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mode-menu::-webkit-scrollbar-track {
+  background: var(--bg-secondary, #2a2a2a);
+  border-radius: 4px;
+}
+
+.mode-menu::-webkit-scrollbar-thumb {
+  background: var(--border-color, #444);
+  border-radius: 4px;
+}
+
+.mode-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary, #666);
+}
+
+.mode-menu-section-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--text-secondary, #aaa);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  padding: 4px 0;
+}
+
+.mode-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-primary, #fff);
+  transition: background 0.2s;
+  margin: 2px 0;
+}
+
+.mode-menu-item:hover {
+  background: var(--bg-secondary, #2a2a2a);
+}
+
+.mode-menu-item-icon {
+  margin-right: 8px;
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.mode-menu-item-content {
+  flex: 1;
+}
+
+.mode-menu-item-label {
+  font-weight: 500;
+}
+
+.mode-menu-item-desc {
+  font-size: 9px;
+  color: var(--text-tertiary, #888);
+  margin-top: 2px;
+}
+
+.mode-menu-item-action {
+  font-size: 10px;
+  color: var(--text-tertiary, #888);
+  margin-left: 8px;
+}
+
+.mode-menu-divider {
+  height: 1px;
+  background: var(--border-color, #333);
+  margin: 8px 0;
+}
+
+.mode-menu-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-secondary, #2a2a2a);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.mode-menu-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+}
+
+.mode-menu-status-dot.warning {
+  background: #ff9800;
+}
+
+.mode-menu-status-dot.error {
+  background: #f44336;
+}
+
+.mode-menu-item.local-hosted {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  cursor: default;
+}
+
+.mode-menu-item.local-hosted:hover {
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.mode-menu-item.local-hosted .mode-menu-item-label {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.mode-menu-item.end-to-end-encrypted {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  cursor: default;
+}
+
+.mode-menu-item.end-to-end-encrypted:hover {
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.mode-menu-item.end-to-end-encrypted .mode-menu-item-label {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+/* GPU Information Section */
+.mode-menu-gpu-info {
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 4px;
+}
+
+.mode-menu-gpu-renderer {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--text-primary, #fff);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color, #333);
+  word-break: break-word;
+}
+
+.mode-menu-gpu-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mode-menu-gpu-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  padding: 2px 0;
+}
+
+.mode-menu-gpu-label {
+  color: var(--text-secondary, #aaa);
+  font-weight: 500;
+}
+
+.mode-menu-gpu-value {
+  color: var(--text-primary, #fff);
+  font-weight: 600;
+  text-align: right;
+  margin-left: 8px;
+}
+
+.mode-menu-gpu-value.gpu-enabled {
+  color: #4caf50;
+}
+
+.mode-menu-gpu-value.gpu-disabled {
+  color: #ff9800;
+}
+
+/* Connection/Ping Information Section */
+.mode-menu-connection-info {
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 4px;
+}
+
+.ping-graph-canvas {
+  width: 100%;
+  height: 80px;
+  display: block;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.mode-menu-connection-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mode-menu-connection-server {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--text-primary, #fff);
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.mode-menu-connection-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  padding: 2px 0;
+}
+
+.mode-menu-connection-label {
+  color: var(--text-secondary, #aaa);
+  font-weight: 500;
+}
+
+.mode-menu-connection-value {
+  color: var(--text-primary, #fff);
+  font-weight: 600;
+  text-align: right;
+  margin-left: 8px;
 }
 
 .file-icon {

@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.htmlclass.ide",
-    "productName": "Astro's IDE",
+    "productName": "Astro Code",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -68,6 +68,7 @@
           ]
         }
       ],
+      "icon": "build/icon.ico",
       "sign": null,
       "signingHashAlgorithms": []
     },
@@ -76,7 +77,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Astro's IDE"
+      "shortcutName": "Astro Code",
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"

@@ -161,13 +161,17 @@ window.PreviewSettings = (function() {
             // Load hardware acceleration setting from Electron
             try {
               const hwAccel = await window.electronAPI.getHardwareAcceleration();
+              console.log('[Settings] Loaded hardware acceleration value:', hwAccel, typeof hwAccel);
               originalHardwareAcceleration = hwAccel; // Store original value
               const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
               if (useHardwareAcceleration) {
-                useHardwareAcceleration.checked = hwAccel;
+                useHardwareAcceleration.checked = hwAccel === true;
+                console.log('[Settings] Set checkbox to:', useHardwareAcceleration.checked);
+              } else {
+                console.error('[Settings] useHardwareAcceleration element not found');
               }
             } catch (e) {
-              console.error('Error loading hardware acceleration setting:', e);
+              console.error('[Settings] Error loading hardware acceleration setting:', e);
               originalHardwareAcceleration = false;
             }
           } else {
