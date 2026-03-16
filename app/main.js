@@ -102,28 +102,6 @@ function loadAppConfig() {
   return {};
 }
 
-// Load remote (proxy) settings from app config
-function loadRemoteConfig() {
-  const config = loadAppConfig();
-  return {
-    enableRemote: config.remoteEnable === true,
-    proxyUrl: config.remoteProxyUrl || '',
-    userToken: config.remoteUserToken || '',
-    machineId: config.remoteMachineId || ''
-  };
-}
-
-// Save remote (proxy) settings to app config
-function saveRemoteConfig(remoteConfig) {
-  const toSave = {
-    remoteEnable: remoteConfig.enableRemote === true,
-    remoteProxyUrl: remoteConfig.proxyUrl || undefined,
-    remoteUserToken: remoteConfig.userToken || undefined,
-    remoteMachineId: remoteConfig.machineId || undefined
-  };
-  saveAppConfig(toSave);
-}
-
 // Save app config
 function saveAppConfig(config) {
   const configPath = path.join(getAppDataPath(), 'app-config.json');
@@ -520,22 +498,6 @@ function startServer() {
     windowsHide: true, // Hide console window on Windows
     detached: false
   };
-
-  // Apply remote (proxy) settings from app config to server environment
-  const remoteConfig = loadRemoteConfig();
-  if (remoteConfig.enableRemote) {
-    spawnOptions.env.ENABLE_REMOTE = 'true';
-    if (remoteConfig.proxyUrl) {
-      spawnOptions.env.REMOTE_PROXY_WS_URL = remoteConfig.proxyUrl;
-    }
-    if (remoteConfig.userToken) {
-      spawnOptions.env.REMOTE_USER_TOKEN = remoteConfig.userToken;
-    }
-    if (remoteConfig.machineId) {
-      spawnOptions.env.REMOTE_MACHINE_ID = remoteConfig.machineId;
-    }
-    console.log('[Server] Remote enabled via app-config:', remoteConfig);
-  }
   
   console.log(`[Server] Starting server with BASE_DIR: ${spawnOptions.env.BASE_DIR}`);
   console.log(`[Server] Working directory (cwd): ${workingDir}`);
@@ -794,30 +756,6 @@ ipcMain.handle('select-working-directory', async () => {
     return { success: true, path: selectedPath, requiresRestart: true };
   }
   return { success: false };
-});
-
-ipcMain.handle('get-remote-config', () => {
-  const cfg = loadRemoteConfig();
-  console.log('[IPC] get-remote-config:', cfg);
-  return cfg;
-});
-
-ipcMain.handle('set-remote-config', async (event, cfg) => {
-  console.log('[IPC] set-remote-config:', cfg);
-  try {
-    saveRemoteConfig({
-      enableRemote: !!cfg.enableRemote,
-      proxyUrl: cfg.proxyUrl || '',
-      userToken: cfg.userToken || '',
-      machineId: cfg.machineId || ''
-    });
-    const saved = loadRemoteConfig();
-    console.log('[IPC] Remote config saved and verified:', saved);
-    return { success: true, config: saved };
-  } catch (err) {
-    console.error('[IPC] Error saving remote config:', err);
-    return { success: false, error: err.message };
-  }
 });
 
 // Prevent multiple instances

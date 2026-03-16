@@ -10,14 +10,7 @@ window.PreviewSettings = (function() {
     editorLineNumbers: true,
     editorTabSize: 4,
     defaultExplorerVisible: true,
-    defaultTerminalVisible: false,
-    // Remote connection settings (used by preview header / UI)
-    remoteEnabled: false,
-    remoteLabel: 'Local',
-    remoteUsername: '',
-    remotePassword: '',
-    remoteSelectedMachineId: '',
-    remoteMachines: []
+    defaultTerminalVisible: false
   };
 
   let originalTheme = null;
@@ -129,11 +122,6 @@ window.PreviewSettings = (function() {
         const editorTabSize = document.getElementById('editorTabSize');
         const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
-        const remoteEnabled = document.getElementById('remoteEnabled');
-        const remoteLabel = document.getElementById('remoteLabel');
-        const remoteUsername = document.getElementById('remoteUsername');
-        const remotePassword = document.getElementById('remotePassword');
-        const remoteMachineSelect = document.getElementById('remoteMachineSelect');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
         const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
         
@@ -153,36 +141,6 @@ window.PreviewSettings = (function() {
         if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
         if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
         if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
-        if (remoteEnabled) remoteEnabled.checked = !!previewSettings.remoteEnabled;
-        if (remoteLabel) remoteLabel.value = previewSettings.remoteLabel || (previewSettings.remoteEnabled ? 'Remote' : 'Local');
-        if (remoteUsername) remoteUsername.value = previewSettings.remoteUsername || '';
-        if (remotePassword) remotePassword.value = previewSettings.remotePassword || '';
-
-        if (remoteMachineSelect) {
-          // Clear current options
-          while (remoteMachineSelect.firstChild) {
-            remoteMachineSelect.removeChild(remoteMachineSelect.firstChild);
-          }
-
-          // Local option
-          const localOpt = document.createElement('option');
-          localOpt.value = '';
-          localOpt.textContent = 'This machine (local)';
-          remoteMachineSelect.appendChild(localOpt);
-
-          // Remote machines (if any cached)
-          if (Array.isArray(previewSettings.remoteMachines)) {
-            previewSettings.remoteMachines.forEach(machineId => {
-              const opt = document.createElement('option');
-              opt.value = machineId;
-              opt.textContent = machineId;
-              remoteMachineSelect.appendChild(opt);
-            });
-          }
-
-          // Select previously chosen machine
-          remoteMachineSelect.value = previewSettings.remoteSelectedMachineId || '';
-        }
       }
       
       // Always apply theme to preview frame (not just when settings panel is open)
@@ -194,24 +152,6 @@ window.PreviewSettings = (function() {
       if (settingsPanel) {
         originalTheme = previewSettings.pageTheme;
         this.applyPreviewSettings();
-        
-        // Refresh remote machine list from server when opening settings
-        try {
-          const username = previewSettings.remoteUsername || '';
-          if (username) {
-            const resp = await fetch(`/__remote__/machines?username=${encodeURIComponent(username)}`);
-            const data = await resp.json();
-            if (data && data.success && Array.isArray(data.machines)) {
-              previewSettings.remoteMachines = data.machines;
-              // Re-render dropdown with new machines
-              this.applyPreviewSettings();
-            } else {
-              console.warn('[Settings] Failed to load remote machines list', data);
-            }
-          }
-        } catch (e) {
-          console.error('[Settings] Error loading remote machines list:', e);
-        }
         
         // Show/hide hardware acceleration setting based on Electron availability
         const hwAccelGroup = document.getElementById('hardwareAccelGroup');

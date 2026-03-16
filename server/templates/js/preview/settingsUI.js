@@ -39,11 +39,6 @@ window.PreviewSettingsUI = (function() {
           const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
           const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
           const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
-          const remoteEnabled = document.getElementById('remoteEnabled');
-          const remoteLabel = document.getElementById('remoteLabel');
-          const remoteUsername = document.getElementById('remoteUsername');
-          const remotePassword = document.getElementById('remotePassword');
-          const remoteMachineSelect = document.getElementById('remoteMachineSelect');
           const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
           
           // Check if hardware acceleration setting changed
@@ -99,12 +94,7 @@ window.PreviewSettingsUI = (function() {
             editorLineNumbers: editorLineNumbers ? editorLineNumbers.checked : true,
             editorTabSize: editorTabSize ? parseInt(editorTabSize.value) : 4,
             defaultExplorerVisible: defaultExplorerVisible ? defaultExplorerVisible.checked : true,
-            defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false,
-            remoteEnabled: remoteEnabled ? remoteEnabled.checked : false,
-            remoteLabel: remoteLabel ? remoteLabel.value || (remoteEnabled && remoteEnabled.checked ? 'Remote' : 'Local') : 'Local',
-            remoteUsername: remoteUsername ? remoteUsername.value || '' : '',
-            remotePassword: remotePassword ? remotePassword.value || '' : '',
-            remoteSelectedMachineId: remoteMachineSelect ? remoteMachineSelect.value || '' : ''
+            defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false
           });
           
           const pageThemeEl = document.getElementById('pageTheme');
@@ -113,49 +103,6 @@ window.PreviewSettingsUI = (function() {
           }
           
           PreviewSettings.savePreviewSettings();
-
-          // Persist remote engine config to Electron (for next restart)
-          if (window.electronAPI && window.electronAPI.isElectron) {
-            try {
-              const enableRemote = remoteEnabled ? remoteEnabled.checked : false;
-              const userToken = remoteUsername ? remoteUsername.value || '' : '';
-              const machineId = remoteMachineSelect ? remoteMachineSelect.value || '' : '';
-
-              window.electronAPI.setRemoteConfig({
-                enableRemote,
-                // Proxy URL stays whatever the app is already configured with;
-                // we only persist enable + identity from here.
-                proxyUrl: '',
-                userToken,
-                machineId
-              }).then(() => {
-                console.log('[Settings] Remote engine config saved, restart required to fully apply');
-              }).catch(err => {
-                console.error('Error saving remote engine config:', err);
-              });
-            } catch (e) {
-              console.error('Error calling setRemoteConfig:', e);
-            }
-          }
-
-          // Notify server about remote session (best-effort, no hard fail)
-          try {
-            const body = {
-              enabled: remoteEnabled ? remoteEnabled.checked : false,
-              username: remoteUsername ? remoteUsername.value || '' : '',
-              password: remotePassword ? remotePassword.value || '' : '',
-              selectedMachineId: remoteMachineSelect ? remoteMachineSelect.value || '' : ''
-            };
-            fetch('/__remote__/session', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body)
-            }).catch(err => {
-              console.error('Failed to update remote session on server', err);
-            });
-          } catch (e) {
-            console.error('Error sending remote session to server', e);
-          }
           
           PreviewSettings.loadTheme(PreviewSettings.getSettings().pageTheme).then(() => {
             PreviewSettings.applyPreviewSettings(editor);

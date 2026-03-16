@@ -11,7 +11,7 @@
   <div class="preview-header">
     <div class="preview-title">
       <span id="fileName">{{FILENAME}}</span>
-      <span id="modeIndicator" class="mode-indicator browser" title="Local mode">LOCAL</span>
+      <span id="modeIndicator" class="mode-indicator" title="Client Mode"></span>
     </div>
     <div class="preview-actions">
       <button id="backToFilesBtn" class="btn btn-secondary" title="Back to File Discovery">← Files</button>
@@ -662,36 +662,6 @@
         <button class="settings-close-btn" id="settingsCloseBtn">✕</button>
       </div>
       <div class="settings-body">
-        <div class="setting-group">
-          <label class="setting-label">Remote Connection (Preview)</label>
-          <label class="setting-toggle">
-            <input type="checkbox" id="remoteEnabled">
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Use remote workspace instead of local files</span>
-          </label>
-          <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="setting-label" style="font-size: 11px; min-width: 80px;">Username</span>
-              <input type="text" id="remoteUsername" class="setting-input" placeholder="your username">
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="setting-label" style="font-size: 11px; min-width: 80px;">Password</span>
-              <input type="password" id="remotePassword" class="setting-input" placeholder="password">
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="setting-label" style="font-size: 11px; min-width: 80px;">Machine</span>
-              <select id="remoteMachineSelect" class="setting-select" style="flex: 1;">
-                <option value="">This machine (local)</option>
-              </select>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="setting-label" style="font-size: 11px; min-width: 80px;">Label</span>
-              <input type="text" id="remoteLabel" class="setting-input" placeholder="e.g. Home PC, Laptop">
-            </div>
-          </div>
-          <p class="setting-description">Turn this on, enter your username/password, then choose which machine to use (this PC or a remote one). All IDEs online under that account will appear in the machine list.</p>
-        </div>
-
         <div class="setting-group">
           <label class="setting-label">Auto-refresh Preview</label>
           <label class="setting-toggle">
