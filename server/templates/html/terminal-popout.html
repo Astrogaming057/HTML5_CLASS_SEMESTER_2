@@ -16,6 +16,7 @@
       <button class="terminal-tab" data-tab="server">Server</button>
       <button class="terminal-tab" data-tab="commands">Commands</button>
       <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+      <button class="terminal-tab" data-tab="compiler">Compiler</button>
       <button class="terminal-tab" data-tab="log">Log</button>
     </div>
       <button class="popout-close" id="closePopout">✕ Close</button>
@@ -44,6 +45,46 @@
       <div class="terminal-input-container">
         <span class="terminal-prompt">PS></span>
         <input type="text" class="terminal-input" id="terminalPowerShellInput" placeholder="Type PowerShell commands...">
+      </div>
+    </div>
+    <div class="terminal-tab-content" id="terminalCompiler">
+      <div class="compiler-toolbar">
+        <div class="compiler-toolbar-left">
+          <label class="compiler-label" for="compilerLanguage">Language</label>
+          <select id="compilerLanguage" class="compiler-select" title="Select a language to run">
+            <option value="63">JavaScript (Node.js)</option>
+            <option value="71">Python</option>
+            <option value="62">Java</option>
+            <option value="76">C++</option>
+            <option value="50">C</option>
+            <option value="51">C#</option>
+            <option value="78">Kotlin</option>
+            <option value="74">TypeScript</option>
+            <option value="73">Rust</option>
+            <option value="60">Go</option>
+            <option value="68">PHP</option>
+            <option value="64">Lua</option>
+          </select>
+          <label class="compiler-label" for="compilerRuntime">Runtime</label>
+          <select id="compilerRuntime" class="compiler-select" title="Choose where code runs">
+            <option value="sandbox" selected>Sandbox (many languages)</option>
+            <option value="local-node">Local Node (imports/requires)</option>
+          </select>
+          <button id="compilerUseFileLang" class="btn btn-secondary compiler-small-btn" title="Pick language based on the currently open file">Use file language</button>
+        </div>
+        <div class="compiler-toolbar-right">
+          <button id="compilerRunBtn" class="btn btn-primary compiler-run-btn" title="Run the currently open file (Ctrl+Enter)">▶ Run</button>
+        </div>
+      </div>
+      <div class="compiler-io">
+        <div class="compiler-io-pane stdin-pane">
+          <div class="compiler-io-header">stdin</div>
+          <textarea id="compilerStdin" class="compiler-textarea" placeholder="Optional input for your program..."></textarea>
+        </div>
+        <div class="compiler-io-pane">
+          <div class="compiler-io-header">Output</div>
+          <div id="compilerOutput" class="compiler-output"></div>
+        </div>
       </div>
     </div>
     <div class="terminal-tab-content" id="terminalLog">

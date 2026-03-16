@@ -6,6 +6,7 @@ const customCSS = urlParams.get('customCSS') ? atob(urlParams.get('customCSS')) 
 
 let activeTab = 'client';
 let ws = null;
+let compilerInitialized = false;
 
 // Load theme from localStorage if available, otherwise use URL params
 function getTheme() {
@@ -82,6 +83,120 @@ function switchTab(tabName) {
   }
   document.querySelectorAll('.terminal-tab-content').forEach(c => {
     c.classList.toggle('active', c.id === contentId);
+  });
+
+  if (tabName === 'compiler') {
+    initCompilerPopout();
+  }
+}
+
+function initCompilerPopout() {
+  if (compilerInitialized) return;
+  compilerInitialized = true;
+
+  const runBtn = document.getElementById('compilerRunBtn');
+  const useBtn = document.getElementById('compilerUseFileLang');
+  const select = document.getElementById('compilerLanguage');
+  const runtimeSel = document.getElementById('compilerRuntime');
+  const stdinEl = document.getElementById('compilerStdin');
+  const outputEl = document.getElementById('compilerOutput');
+
+  if (!runBtn || !select || !outputEl) return;
+
+  function addLine(text, type) {
+    const line = document.createElement('div');
+    line.className = `compiler-line ${type || 'log'}`;
+    line.textContent = text;
+    outputEl.appendChild(line);
+    outputEl.scrollTop = outputEl.scrollHeight;
+  }
+
+  function clear() {
+    outputEl.textContent = '';
+  }
+
+  function setBusy(busy) {
+    runBtn.disabled = !!busy;
+    runBtn.textContent = busy ? 'Running…' : '▶ Run';
+  }
+
+  // The popout doesn't have access to Monaco, so "Use file language" is best-effort only.
+  if (useBtn) {
+    useBtn.addEventListener('click', () => {
+      addLine('Tip: “Use file language” works best in the main window. In the popout, pick a language manually.', 'info');
+    });
+  }
+
+  async function run() {
+    clear();
+    const runtime = runtimeSel && runtimeSel.value ? runtimeSel.value : (localStorage.getItem('lastCompilerRuntime') || 'sandbox');
+    const moduleType = localStorage.getItem('lastCompilerModuleType') || 'cjs';
+    const filePath = localStorage.getItem('lastCompilerFilePath') || null;
+
+    addLine(`Running… (runtime=${runtime}${runtime === 'sandbox' ? `, languageId=${Number(select.value)}` : ''})`, 'info');
+    setBusy(true);
+
+    try {
+      // In popout, user pastes code into stdin as a workaround? Better: run the last shared source from localStorage if present.
+      // We'll look for a shared value set by main window (optional).
+      const source = localStorage.getItem('lastCompilerSource') || '';
+      if (!source.trim()) {
+        addLine('No source code found. Run from the main window (it will share the last run source), or add sharing later.', 'warn');
+        return;
+      }
+
+      const stdin = stdinEl && typeof stdinEl.value === 'string' ? stdinEl.value : '';
+      const endpoint = runtime === 'local-node' ? '/__api__/run/node' : '/__api__/compile';
+      const body =
+        runtime === 'local-node'
+          ? { source, stdin, moduleType, filePath }
+          : { languageId: Number(select.value), source, stdin };
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json().catch(() => null);
+
+      if (!data || !data.success) {
+        addLine(data && data.error ? data.error : 'Run failed.', 'error');
+        return;
+      }
+
+      const r = data.result || {};
+      const statusDesc = r.status && r.status.description ? r.status.description : 'Unknown';
+      const runner = r.runner ? ` | runner=${r.runner}` : '';
+      addLine(`Status: ${statusDesc}${runner}${r.time ? ` | time=${r.time}s` : ''}${r.memory ? ` | memory=${r.memory}KB` : ''}`, 'info');
+
+      if (r.compile_output) {
+        addLine('--- compile_output ---', 'warn');
+        r.compile_output.split('\n').forEach(line => addLine(line, 'warn'));
+      }
+      if (r.stderr) {
+        addLine('--- stderr ---', 'error');
+        r.stderr.split('\n').forEach(line => addLine(line, 'error'));
+      }
+      if (r.stdout) {
+        addLine('--- stdout ---', 'log');
+        r.stdout.split('\n').forEach(line => addLine(line, 'log'));
+      }
+      if (!r.stdout && !r.stderr && !r.compile_output) {
+        addLine('(no output)', 'log');
+      }
+    } catch (e) {
+      addLine(e && e.message ? e.message : 'Run failed.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  runBtn.addEventListener('click', run);
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter' && activeTab === 'compiler') {
+      e.preventDefault();
+      run();
+    }
   });
 }
 

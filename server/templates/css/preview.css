@@ -962,6 +962,130 @@ body.resizing .resizer-terminal {
   color: var(--text-tertiary);
 }
 
+/* Compiler tab */
+.compiler-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.compiler-toolbar-left,
+.compiler-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compiler-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.compiler-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+  font-size: 12px;
+}
+
+.compiler-small-btn {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+
+.compiler-run-btn {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+}
+
+.compiler-io {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+  height: calc(100% - 46px);
+  min-height: 0;
+}
+
+.compiler-io.no-stdin {
+  grid-template-columns: 1fr;
+}
+
+.compiler-io.no-stdin .compiler-io-pane.stdin-pane {
+  display: none;
+}
+
+.compiler-io-pane.stdin-pane {
+  display: flex;
+}
+
+.compiler-io-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.compiler-io-header {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.compiler-textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  outline: none;
+}
+
+.compiler-output {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.compiler-line {
+  margin: 2px 0;
+  line-height: 1.35;
+}
+
+.compiler-line.log {
+  color: var(--text-secondary);
+}
+.compiler-line.info {
+  color: var(--status-info, #4ec9b0);
+}
+.compiler-line.warn {
+  color: var(--status-warn, #dcdcaa);
+}
+.compiler-line.error {
+  color: var(--status-error, #f48771);
+}
+
 .terminal-autocomplete-hint {
   position: absolute;
   pointer-events: none;

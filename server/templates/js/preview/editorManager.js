@@ -90,8 +90,16 @@ window.PreviewEditorManager = (function() {
       status.textContent = 'Loading...';
       status.className = 'status';
       
+      const lowerPath = path.toLowerCase();
       const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
-      const isImage = imageExtensions.some(ext => path.toLowerCase().endsWith(ext));
+      const isImage = imageExtensions.some(ext => lowerPath.endsWith(ext));
+      const documentExtensions = [
+        '.doc', '.docx', '.rtf', '.odt',
+        '.pdf',
+        '.ppt', '.pptx', '.odp',
+        '.xls', '.xlsx', '.ods'
+      ];
+      const isDocument = documentExtensions.some(ext => lowerPath.endsWith(ext));
       
       if (isImage) {
         showImagePreview(path);
@@ -101,6 +109,43 @@ window.PreviewEditorManager = (function() {
         originalContent.current = '';
         isDirty.current = false;
         updateStatus();
+        return { originalContent: originalContent.current, isDirty: isDirty.current };
+      }
+
+      if (isDocument) {
+        // For document-like files, don't attempt to load as text into the editor.
+        status.textContent = 'Ready';
+        status.className = 'status';
+        editor.setValue('// Document file - not editable as text. Use the Preview panel to view it.');
+        originalContent.current = '';
+        isDirty.current = false;
+        updateStatus();
+
+        const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
+        const pinned = typeof isPreviewPinned === 'function' ? isPreviewPinned() : false;
+
+        if (!isPreviewPoppedOut && previewFrame && !pinned) {
+          const previewPanel = previewFrame.closest('#previewPanel');
+          const isPreviewCollapsed = previewPanel && previewPanel.classList.contains('collapsed');
+
+          if (!isPreviewCollapsed) {
+            showHtmlPreview();
+            let previewUrl = '/__preview-content__?file=' + encodeURIComponent(path) + '&theme=' + encodeURIComponent(previewSettings.pageTheme);
+            if (previewSettings.pageTheme === 'custom' && previewSettings.customThemeCSS) {
+              previewUrl += '&customCSS=' + encodeURIComponent(btoa(previewSettings.customThemeCSS));
+            }
+            previewUrl += '&t=' + Date.now();
+            previewFrame.src = previewUrl;
+            previewFrame.onload = () => {
+              if (setupPreviewLogInterception) {
+                setTimeout(() => {
+                  setupPreviewLogInterception();
+                }, 100);
+              }
+            };
+          }
+        }
+
         return { originalContent: originalContent.current, isDirty: isDirty.current };
       }
       

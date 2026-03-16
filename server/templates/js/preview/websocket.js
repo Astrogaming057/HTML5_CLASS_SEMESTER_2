@@ -197,17 +197,31 @@ window.PreviewWebSocket = (function() {
     handleFileSystemEvent(data, getCurrentDir, loadFileTree) {
       const normalizePath = (p) => {
         const pathStr = typeof p === 'function' ? p() : (typeof p === 'string' ? p : String(p || ''));
-        return pathStr.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
+        const cleaned = pathStr.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
+        return cleaned;
       };
+
       const eventPath = normalizePath(data.path);
       const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
-      const currentDirNormalized = normalizePath(currentDir || '/');
-      
-      const isInCurrentDir = eventPath.startsWith(currentDirNormalized + '/') || 
-                            eventPath === currentDirNormalized ||
-                            currentDirNormalized === '/';
-      
-      const isParentChange = currentDirNormalized.startsWith(eventPath + '/');
+      let currentDirNormalized = normalizePath(currentDir || '/');
+
+      // Treat empty normalized path as root directory
+      if (!currentDirNormalized) {
+        currentDirNormalized = '/';
+      }
+
+      let isInCurrentDir = false;
+      let isParentChange = false;
+
+      if (currentDirNormalized === '/') {
+        // When viewing the project root, any file system change should refresh the tree
+        isInCurrentDir = true;
+        isParentChange = false;
+      } else {
+        isInCurrentDir = eventPath.startsWith(currentDirNormalized + '/') ||
+                         eventPath === currentDirNormalized;
+        isParentChange = currentDirNormalized.startsWith(eventPath + '/');
+      }
       
       if (isInCurrentDir || isParentChange) {
         // Debounce rapid file system events to prevent multiple refreshes
@@ -215,7 +229,7 @@ window.PreviewWebSocket = (function() {
           clearTimeout(refreshTimeout);
         }
         refreshTimeout = setTimeout(() => {
-        loadFileTree(currentDir);
+          loadFileTree(currentDir || '/');
           refreshTimeout = null;
         }, 100);
       }

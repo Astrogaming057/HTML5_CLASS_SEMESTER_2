@@ -6,6 +6,7 @@ const { escapeHtml } = require('../utils/formatters');
 const { renderMarkdownWithStyles } = require('../utils/markdownRenderer');
 const { getStatusPage } = require('../templates/status/statusHandler');
 const logger = require('../utils/logger');
+const mammoth = require('mammoth');
 
 let htmlTemplate = null;
 let cssContent = null;
@@ -69,6 +70,10 @@ async function loadPreviewTemplates() {
       );
       const terminalJs = await fs.readFile(
         path.join(previewModulesDir, 'terminal.js'),
+        'utf-8'
+      );
+      const compilerJs = await fs.readFile(
+        path.join(previewModulesDir, 'compiler.js'),
         'utf-8'
       );
       const fileExplorerJs = await fs.readFile(
@@ -198,6 +203,8 @@ async function loadPreviewTemplates() {
         websocketJs,
         '// Terminal',
         terminalJs,
+        '// Compiler',
+        compilerJs,
         '// File Explorer',
         fileExplorerJs,
         '// Resizers',
@@ -383,10 +390,187 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
       const ext = fileName.split('.').pop().toLowerCase();
       const isHTML = ext === 'html' || ext === 'htm';
       const isMarkdown = ext === 'md' || ext === 'markdown';
+      const isDocumentLike = [
+        'doc', 'docx', 'rtf', 'odt',
+        'pdf',
+        'ppt', 'pptx', 'odp',
+        'xls', 'xlsx', 'ods'
+      ].includes(ext);
 
       let modifiedContent = content;
-      
-      if (isHTML) {
+
+      // Initialize theme styles BEFORE document-like preview branch uses them (avoids TDZ ReferenceError)
+      const themeName = req.query.theme || 'dark';
+      let themeStyles = '';
+      try {
+        if (themeName === 'custom' && req.query.customCSS) {
+          const customCSS = Buffer.from(req.query.customCSS, 'base64').toString('utf-8');
+          if (customCSS.trim() === '') {
+            // Fallback to dark theme if custom CSS is empty
+            const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
+            const themeContent = await fs.readFile(themePath, 'utf-8');
+            themeStyles = `<style id="theme-style">${themeContent}</style>`;
+          } else {
+            themeStyles = `<style id="theme-style">${customCSS}</style>`;
+          }
+        } else {
+          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', `${themeName}.css`);
+          const themeContent = await fs.readFile(themePath, 'utf-8');
+          themeStyles = `<style id="theme-style">${themeContent}</style>`;
+        }
+      } catch (error) {
+        logger.warn('Error loading theme for preview', { theme: themeName, error: error.message });
+        // Fallback to dark theme on error
+        try {
+          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
+          const themeContent = await fs.readFile(themePath, 'utf-8');
+          themeStyles = `<style id="theme-style">${themeContent}</style>`;
+        } catch (fallbackError) {
+          logger.error('Error loading fallback theme', fallbackError);
+        }
+      }
+
+      if (isDocumentLike && ext === 'docx') {
+        // Convert DOCX to HTML using mammoth for in-IDE document-style preview
+        try {
+          const fullDocPath = path.join(baseDir, filePath);
+          const resolvedDocPath = path.resolve(fullDocPath);
+          
+          if (!isPathSafe(resolvedDocPath, baseDir)) {
+            const statusPage = await getStatusPage(403);
+            return res.status(403).send(statusPage || 'Forbidden');
+          }
+
+          const docxBuffer = await fs.readFile(resolvedDocPath);
+
+          const result = await mammoth.convertToHtml({ buffer: docxBuffer });
+          const bodyHtml = result.value || '';
+
+          const docxStyles = `
+<style>
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg-primary, #111827);
+    color: var(--text-primary, #e5e7eb);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .docx-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 40px;
+    background: #ffffff;
+    color: #111827;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+    box-sizing: border-box;
+  }
+  .docx-title {
+    font-size: 14px;
+    color: var(--text-secondary, #9ca3af);
+    margin-bottom: 12px;
+  }
+  .docx-content {
+    color: #111827;
+  }
+  .docx-content h1,
+  .docx-content h2,
+  .docx-content h3 {
+    color: #111827;
+  }
+  .docx-content p {
+    line-height: 1.6;
+    margin: 0 0 0.75em;
+  }
+</style>`;
+
+          modifiedContent = `<!DOCTYPE html>
+<html>
+<head>
+${themeStyles}${docxStyles}
+</head>
+<body>
+  <div class="docx-page">
+    <div class="docx-title">${escapeHtml(fileName)}</div>
+    <div class="docx-content">
+      ${bodyHtml}
+    </div>
+  </div>
+</body>
+</html>`;
+
+        } catch (error) {
+          logger.error('Error converting DOCX for preview', { path: filePath, error: error.message });
+
+          // Fallback to iframe-based document embedding
+          const fileUrl = '/' + filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+          modifiedContent = `<!DOCTYPE html>
+<html>
+<head>
+<base href="${baseUrl}">${themeStyles}</head>
+<body>
+  <iframe src="${encodeURI(fileUrl)}" style="border:none;width:100%;height:100vh;background:#111827;"></iframe>
+</body>
+</html>`;
+        }
+      } else if (isDocumentLike) {
+        // For document-like files, don't try to read or render the binary content directly.
+        // Instead, embed the original file using an iframe so the browser (or associated
+        // plugins) can handle the rendering.
+        const fileUrl = '/' + filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+        const docStyles = `
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary, #111827);
+    color: var(--text-primary, #e5e7eb);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .doc-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
+    padding: 12px;
+    gap: 8px;
+  }
+  .doc-preview-header {
+    font-size: 13px;
+    color: var(--text-secondary, #9ca3af);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .doc-preview-frame {
+    flex: 1;
+    border-radius: 6px;
+    border: 1px solid var(--border-primary, #374151);
+    background: #ffffff;
+    width: 100%;
+  }
+  .doc-preview-note {
+    font-size: 11px;
+    color: var(--text-tertiary, #6b7280);
+  }
+</style>`;
+
+        modifiedContent = `<!DOCTYPE html>
+<html>
+<head>
+<base href="${baseUrl}">${themeStyles}${docStyles}
+</head>
+<body>
+  <div class="doc-preview-wrapper">
+    <div class="doc-preview-header">
+      <span>Document preview: ${escapeHtml(fileName)}</span>
+      <span class="doc-preview-note">If this doesn't render, your browser may download it instead.</span>
+    </div>
+    <iframe class="doc-preview-frame" src="${encodeURI(fileUrl)}"></iframe>
+  </div>
+</body>
+</html>`;
+      } else if (isHTML) {
         modifiedContent = modifiedContent.replace(/<base[^>]*>/gi, '');
         
         const rewriteResourceLink = (tag, attr) => {
@@ -641,37 +825,7 @@ function setupPreviewContentRoutes(baseDir, wsManager) {
   });
 })();
 </script>`;
-      
-      const themeName = req.query.theme || 'dark';
-      let themeStyles = '';
-      try {
-        if (themeName === 'custom' && req.query.customCSS) {
-          const customCSS = Buffer.from(req.query.customCSS, 'base64').toString('utf-8');
-          if (customCSS.trim() === '') {
-            // Fallback to dark theme if custom CSS is empty
-            const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
-            const themeContent = await fs.readFile(themePath, 'utf-8');
-            themeStyles = `<style id="theme-style">${themeContent}</style>`;
-          } else {
-            themeStyles = `<style id="theme-style">${customCSS}</style>`;
-          }
-        } else {
-          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', `${themeName}.css`);
-          const themeContent = await fs.readFile(themePath, 'utf-8');
-          themeStyles = `<style id="theme-style">${themeContent}</style>`;
-        }
-      } catch (error) {
-        logger.warn('Error loading theme for preview', { theme: themeName, error: error.message });
-        // Fallback to dark theme on error
-        try {
-          const themePath = path.join(__dirname, '..', 'templates', 'css', 'themes', 'dark.css');
-          const themeContent = await fs.readFile(themePath, 'utf-8');
-          themeStyles = `<style id="theme-style">${themeContent}</style>`;
-        } catch (fallbackError) {
-          logger.error('Error loading fallback theme', fallbackError);
-        }
-      }
-      
+
       if (isHTML) {
         if (modifiedContent.match(/<head[^>]*>/i)) {
           modifiedContent = modifiedContent.replace(/<head[^>]*>/i, (match) => {

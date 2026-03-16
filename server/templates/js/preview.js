@@ -979,6 +979,12 @@ require(['vs/editor/editor.main'], function() {
   function setupTerminal() {
     PreviewTerminal.setupTerminal(saveState, syncChannel, previewFrame, addPreviewLog, setupPreviewLogInterception, ws);
   }
+
+  function setupCompiler() {
+    if (window.PreviewCompiler && typeof window.PreviewCompiler.init === 'function') {
+      window.PreviewCompiler.init();
+    }
+  }
   
   function openEditorPopout() {
     PreviewPopouts.openEditorPopout(() => filePathRef.current, () => previewSettings);
@@ -1338,6 +1344,7 @@ require(['vs/editor/editor.main'], function() {
   setupContextMenu();
   setupDragAndDrop();
   setupTerminal();
+  setupCompiler();
   setupWebSocket();
   
   PreviewSyncChannel.setupSyncChannel(

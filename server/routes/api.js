@@ -1,10 +1,18 @@
 const express = require('express');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
+const os = require('os');
+const { spawn } = require('child_process');
+const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
 
 let wsManager = null;
+
+// In-memory registry for long-running local Node processes (per server instance)
+// Map<runId, { child, logs: Array<{ type, text, timestamp }>, exited, exitCode, runner, moduleType }>
+const activeNodeRuns = new Map();
 
 function setWebSocketManager(manager) {
   wsManager = manager;
@@ -481,6 +489,687 @@ function setupAPI(baseDir) {
     } catch (error) {
       logger.error('API: Error executing terminal command', error);
       res.json({ success: false, error: error.message });
+    }
+  });
+
+  // Compress a file or folder into an archive (zip / 7z / tar.gz)
+  router.post('/files/compress', async (req, res) => {
+    try {
+      const { path: filePath, format } = req.body || {};
+
+      if (!filePath || !format) {
+        return res.json({ success: false, error: 'Missing path or format' });
+      }
+
+      const allowedFormats = ['zip', '7z', 'tar.gz'];
+      if (!allowedFormats.includes(format)) {
+        return res.json({ success: false, error: 'Unsupported format' });
+      }
+
+      const fullPath = path.join(baseDir, filePath);
+      const resolvedPath = path.resolve(fullPath);
+
+      if (!isPathSafe(resolvedPath, baseDir)) {
+        logger.warn('API: Forbidden path access for compress', { path: filePath });
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+
+      const stats = await fs.stat(resolvedPath).catch(() => null);
+      if (!stats) {
+        return res.json({ success: false, error: 'Source path does not exist' });
+      }
+
+      const parentDir = path.dirname(resolvedPath);
+      const baseName = path.basename(resolvedPath);
+
+      function buildOutputPath(ext) {
+        let name = `${baseName}${ext}`;
+        let candidate = path.join(parentDir, name);
+        let counter = 1;
+        while (fsSync.existsSync(candidate)) {
+          name = `${baseName} (${counter})${ext}`;
+          candidate = path.join(parentDir, name);
+          counter += 1;
+        }
+        return candidate;
+      }
+
+      let outputPath;
+      let outputExt;
+      if (format === 'zip') {
+        outputExt = '.zip';
+      } else if (format === '7z') {
+        outputExt = '.7z';
+      } else {
+        outputExt = '.tar.gz';
+      }
+      outputPath = buildOutputPath(outputExt);
+
+      const platform = os.platform();
+      let command;
+      let args;
+      let spawnOptions = { cwd: parentDir };
+
+      if (format === 'zip') {
+        if (platform === 'win32') {
+          // Use PowerShell Compress-Archive on Windows
+          const psCommand = [
+            'Compress-Archive',
+            '-Path',
+            `"${resolvedPath}"`,
+            '-DestinationPath',
+            `"${outputPath}"`,
+            '-Force'
+          ].join(' ');
+          command = 'powershell.exe';
+          args = ['-NoLogo', '-NoProfile', '-Command', psCommand];
+          spawnOptions = { cwd: parentDir, windowsHide: true };
+        } else {
+          // Use zip CLI on Unix-like systems
+          command = 'zip';
+          args = ['-r', outputPath, baseName];
+        }
+      } else if (format === '7z') {
+        // 7-Zip CLI (must be installed on the system)
+        command = '7z';
+        args = ['a', '-t7z', outputPath, stats.isDirectory() ? baseName : baseName];
+      } else {
+        // tar.gz using tar
+        command = 'tar';
+        args = ['-czf', outputPath, baseName];
+      }
+
+      logger.info('API: Starting compression', { path: filePath, format, outputPath, command, args });
+
+      await new Promise((resolvePromise, rejectPromise) => {
+        const child = spawn(command, args, spawnOptions);
+
+        let stderr = '';
+
+        child.stdout.on('data', (data) => {
+          logger.debug('Compress stdout', { chunk: data.toString().slice(0, 200) });
+        });
+
+        child.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('error', (err) => {
+          rejectPromise(err);
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolvePromise();
+          } else {
+            const error = new Error(stderr || `Compression failed with exit code ${code}`);
+            rejectPromise(error);
+          }
+        });
+      });
+
+      const relativeOutput = path.relative(baseDir, outputPath).replace(/\\/g, '/');
+
+      if (wsManager) {
+        const rel = relativeOutput.startsWith('/') ? relativeOutput : '/' + relativeOutput;
+        wsManager.notifyFileChange(rel, 'add');
+      }
+
+      logger.info('API: Compression successful', { path: filePath, format, output: relativeOutput });
+
+      return res.json({
+        success: true,
+        outputFile: relativeOutput
+      });
+    } catch (error) {
+      logger.error('API: Error compressing file/folder', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Compression failed' });
+    }
+  });
+
+  // Extract an archive (zip / 7z / tar.gz) into its containing directory
+  router.post('/files/extract', async (req, res) => {
+    try {
+      const { path: filePath } = req.body || {};
+
+      if (!filePath) {
+        return res.json({ success: false, error: 'Missing path' });
+      }
+
+      const fullPath = path.join(baseDir, filePath);
+      const resolvedPath = path.resolve(fullPath);
+
+      if (!isPathSafe(resolvedPath, baseDir)) {
+        logger.warn('API: Forbidden path access for extract', { path: filePath });
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+
+      const stats = await fs.stat(resolvedPath).catch(() => null);
+      if (!stats || !stats.isFile()) {
+        return res.json({ success: false, error: 'Archive file does not exist' });
+      }
+
+      const extLower = filePath.toLowerCase();
+      let format = null;
+      if (extLower.endsWith('.zip')) {
+        format = 'zip';
+      } else if (extLower.endsWith('.7z')) {
+        format = '7z';
+      } else if (extLower.endsWith('.tar.gz') || extLower.endsWith('.tgz')) {
+        format = 'tar.gz';
+      } else {
+        return res.json({ success: false, error: 'Unsupported archive format' });
+      }
+
+      const parentDir = path.dirname(resolvedPath);
+      const platform = os.platform();
+      let command;
+      let args;
+      let spawnOptions = { cwd: parentDir };
+
+      if (format === 'zip') {
+        if (platform === 'win32') {
+          // Use PowerShell Expand-Archive on Windows
+          const psCommand = [
+            'Expand-Archive',
+            '-Path',
+            `"${resolvedPath}"`,
+            '-DestinationPath',
+            `"${parentDir}"`,
+            '-Force'
+          ].join(' ');
+          command = 'powershell.exe';
+          args = ['-NoLogo', '-NoProfile', '-Command', psCommand];
+          spawnOptions = { cwd: parentDir, windowsHide: true };
+        } else {
+          // Use unzip on Unix-like systems
+          command = 'unzip';
+          args = ['-o', resolvedPath];
+        }
+      } else if (format === '7z') {
+        command = '7z';
+        args = ['x', resolvedPath, `-o${parentDir}`, '-y'];
+      } else {
+        // tar.gz
+        command = 'tar';
+        args = ['-xzf', resolvedPath, '-C', parentDir];
+      }
+
+      logger.info('API: Starting extraction', { path: filePath, format, command, args });
+
+      await new Promise((resolvePromise, rejectPromise) => {
+        const child = spawn(command, args, spawnOptions);
+
+        let stderr = '';
+
+        child.stdout.on('data', (data) => {
+          logger.debug('Extract stdout', { chunk: data.toString().slice(0, 200) });
+        });
+
+        child.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('error', (err) => {
+          rejectPromise(err);
+        });
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolvePromise();
+          } else {
+            const error = new Error(stderr || `Extraction failed with exit code ${code}`);
+            rejectPromise(error);
+          }
+        });
+      });
+
+      // Let the file watcher broadcast actual file additions; we can optionally poke the parent dir
+      if (wsManager) {
+        const relDir = path.relative(baseDir, parentDir).replace(/\\/g, '/');
+        const dirPath = relDir.startsWith('/') ? relDir : '/' + relDir;
+        wsManager.notifyFileChange(dirPath, 'addDir');
+      }
+
+      logger.info('API: Extraction successful', { path: filePath, format });
+
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error('API: Error extracting archive', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Extraction failed' });
+    }
+  });
+
+  // Multi-language compilation/execution via Judge0 (remote sandbox)
+  router.post('/compile', async (req, res) => {
+    try {
+      const {
+        languageId,
+        source,
+        stdin,
+        args,
+        compilerOptions,
+        commandLineArguments,
+        timeLimit,
+        memoryLimit
+      } = req.body || {};
+
+      const langIdNum = Number(languageId);
+      if (!Number.isFinite(langIdNum) || langIdNum <= 0) {
+        return res.json({ success: false, error: 'Invalid languageId' });
+      }
+
+      if (typeof source !== 'string' || source.trim().length === 0) {
+        return res.json({ success: false, error: 'Missing source code' });
+      }
+
+      // Keep payload sane (the UI can still run large code, but we protect the server)
+      if (source.length > 1_000_000) {
+        return res.json({ success: false, error: 'Source code too large' });
+      }
+      if (typeof stdin === 'string' && stdin.length > 200_000) {
+        return res.json({ success: false, error: 'stdin too large' });
+      }
+
+      const judge0Base = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/+$/, '');
+      const endpoint = `${judge0Base}/submissions?base64_encoded=false&wait=true`;
+
+      const payload = {
+        language_id: langIdNum,
+        source_code: source,
+        stdin: typeof stdin === 'string' ? stdin : '',
+        // Judge0 supports these fields; safe to omit when not provided
+        compiler_options: typeof compilerOptions === 'string' ? compilerOptions : undefined,
+        command_line_arguments: typeof commandLineArguments === 'string' ? commandLineArguments : undefined,
+        args: typeof args === 'string' ? args : undefined,
+        cpu_time_limit: Number.isFinite(Number(timeLimit)) ? Number(timeLimit) : undefined,
+        memory_limit: Number.isFinite(Number(memoryLimit)) ? Number(memoryLimit) : undefined
+      };
+
+      logger.info('API: Compile request', {
+        languageId: langIdNum,
+        sourceLength: source.length,
+        stdinLength: typeof stdin === 'string' ? stdin.length : 0,
+        endpoint: judge0Base
+      });
+
+      const controller = new AbortController();
+      const timeoutMs = 60_000;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+      let judgeRes;
+      try {
+        judgeRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (!judgeRes.ok) {
+        const text = await judgeRes.text().catch(() => '');
+        logger.warn('API: Compile upstream error', { status: judgeRes.status, text: text.substring(0, 500) });
+        return res.json({ success: false, error: `Compiler service error (${judgeRes.status})` });
+      }
+
+      const result = await judgeRes.json();
+
+      // Normalize response for UI
+      return res.json({
+        success: true,
+        result: {
+          token: result.token || null,
+          status: result.status || null,
+          stdout: result.stdout || '',
+          stderr: result.stderr || '',
+          compile_output: result.compile_output || '',
+          message: result.message || '',
+          time: result.time || null,
+          memory: result.memory || null,
+          exit_code: result.exit_code ?? null
+        }
+      });
+    } catch (error) {
+      const isAbort = error && (error.name === 'AbortError' || String(error.message || '').includes('aborted'));
+      logger.error('API: Compile error', { message: error.message, stack: error.stack, isAbort });
+      return res.json({ success: false, error: isAbort ? 'Compile request timed out' : (error.message || 'Compile failed') });
+    }
+  });
+
+  // Local JS runner (Node.js) - allows require()/import and local file access like VS Code.
+  // NOTE: This executes code on the user's machine. Keep timeouts and output limits.
+  router.post('/run/node', async (req, res) => {
+    try {
+      const { source, stdin, moduleType, filePath } = req.body || {};
+
+      if (typeof source !== 'string' || source.trim().length === 0) {
+        return res.json({ success: false, error: 'Missing source code' });
+      }
+      if (source.length > 1_000_000) {
+        return res.json({ success: false, error: 'Source code too large' });
+      }
+      if (typeof stdin === 'string' && stdin.length > 200_000) {
+        return res.json({ success: false, error: 'stdin too large' });
+      }
+
+      // Optional: if a filePath is provided, ensure it's within baseDir (for display only; we execute source anyway)
+      if (typeof filePath === 'string' && filePath.trim()) {
+        const fullPath = path.join(baseDir, filePath);
+        const resolvedPath = path.resolve(fullPath);
+        if (!isPathSafe(resolvedPath, baseDir)) {
+          return res.json({ success: false, error: 'Forbidden filePath' });
+        }
+      }
+
+      const type = moduleType === 'esm' ? 'esm' : 'cjs';
+
+      // Place the temp file next to the "virtual" file so relative requires like "./config" work.
+      let targetDir = path.join(baseDir, 'ide_editor_cache', '.run');
+      if (typeof filePath === 'string' && filePath.trim()) {
+        const normalized = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+        const virtualFull = path.join(baseDir, normalized);
+        const resolvedVirtual = path.resolve(virtualFull);
+        if (isPathSafe(resolvedVirtual, baseDir)) {
+          targetDir = path.dirname(resolvedVirtual);
+        }
+      }
+
+      if (!fsSync.existsSync(targetDir)) {
+        fsSync.mkdirSync(targetDir, { recursive: true });
+      }
+
+      const ext = type === 'esm' ? '.mjs' : '.cjs';
+      const tmpFile = path.join(targetDir, `.__run-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`);
+      await fs.writeFile(tmpFile, source, 'utf8');
+
+      // Use the Node binary running this server.
+      const nodeBin = process.execPath;
+      const args = [tmpFile];
+
+      const child = spawn(nodeBin, args, {
+        cwd: baseDir,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          // Make sure relative requires resolve like a project run
+          NODE_ENV: process.env.NODE_ENV || 'development'
+        }
+      });
+
+      let stdout = '';
+      let stderr = '';
+      const maxOut = 2 * 1024 * 1024; // 2MB combined
+
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch {}
+      }, 15_000);
+
+      child.stdout.on('data', (d) => {
+        if (stdout.length + stderr.length >= maxOut) return;
+        stdout += d.toString('utf8');
+      });
+      child.stderr.on('data', (d) => {
+        if (stdout.length + stderr.length >= maxOut) return;
+        stderr += d.toString('utf8');
+      });
+
+      child.on('error', async (err) => {
+        clearTimeout(killTimer);
+        try { await fs.unlink(tmpFile); } catch {}
+        return res.json({ success: false, error: err.message || 'Failed to start Node' });
+      });
+
+      // Write stdin then close
+      if (typeof stdin === 'string' && stdin.length) {
+        try {
+          child.stdin.write(stdin);
+        } catch {}
+      }
+      try { child.stdin.end(); } catch {}
+
+      child.on('close', async (code, signal) => {
+        clearTimeout(killTimer);
+        try { await fs.unlink(tmpFile); } catch {}
+
+        const timedOut = signal === 'SIGKILL' || signal === 'SIGTERM';
+        if (timedOut) {
+          return res.json({
+            success: true,
+            result: {
+              status: { description: 'Time Limit Exceeded' },
+              stdout,
+              stderr: stderr || 'Process timed out',
+              exit_code: null,
+              runner: 'local-node',
+              moduleType: type
+            }
+          });
+        }
+
+        return res.json({
+          success: true,
+          result: {
+            status: { description: code === 0 ? 'Accepted' : 'Runtime Error' },
+            stdout,
+            stderr,
+            exit_code: code,
+            runner: 'local-node',
+            moduleType: type
+          }
+        });
+      });
+    } catch (error) {
+      logger.error('API: Local Node run error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Local run failed' });
+    }
+  });
+
+  // Start a long-running local Node process and stream logs via polling.
+  router.post('/run/node/start', async (req, res) => {
+    try {
+      const { source, stdin, moduleType, filePath } = req.body || {};
+
+      if (typeof source !== 'string' || source.trim().length === 0) {
+        return res.json({ success: false, error: 'Missing source code' });
+      }
+      if (source.length > 1_000_000) {
+        return res.json({ success: false, error: 'Source code too large' });
+      }
+      if (typeof stdin === 'string' && stdin.length > 200_000) {
+        return res.json({ success: false, error: 'stdin too large' });
+      }
+
+      let type = moduleType === 'esm' ? 'esm' : 'cjs';
+
+      // Place the temp file next to the "virtual" file so relative requires like "./config" work.
+      let targetDir = path.join(baseDir, 'ide_editor_cache', '.run');
+      let normalizedPath = null;
+      if (typeof filePath === 'string' && filePath.trim()) {
+        normalizedPath = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+        const virtualFull = path.join(baseDir, normalizedPath);
+        const resolvedVirtual = path.resolve(virtualFull);
+        if (isPathSafe(resolvedVirtual, baseDir)) {
+          targetDir = path.dirname(resolvedVirtual);
+        }
+      }
+
+      if (!fsSync.existsSync(targetDir)) {
+        fsSync.mkdirSync(targetDir, { recursive: true });
+      }
+
+      const ext = type === 'esm' ? '.mjs' : '.cjs';
+      const tmpFile = path.join(targetDir, `.__run-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`);
+      await fs.writeFile(tmpFile, source, 'utf8');
+
+      const nodeBin = process.execPath;
+      const args = [tmpFile];
+
+      const child = spawn(nodeBin, args, {
+        cwd: baseDir,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          NODE_ENV: process.env.NODE_ENV || 'development'
+        }
+      });
+
+      const runId = crypto.randomBytes(8).toString('hex');
+      const logs = [];
+
+      const record = {
+        child,
+        logs,
+        exited: false,
+        exitCode: null,
+        runner: 'local-node',
+        moduleType: type,
+        tmpFile
+      };
+      activeNodeRuns.set(runId, record);
+
+      const maxOut = 2 * 1024 * 1024; // 2MB combined
+
+      function pushLog(typeLog, chunk) {
+        if (!chunk) return;
+        const text = chunk.toString('utf8');
+        if (!text.trim()) return;
+        const currentSize = logs.reduce((acc, l) => acc + (l.text ? l.text.length : 0), 0);
+        if (currentSize >= maxOut) return;
+        logs.push({
+          type: typeLog,
+          text,
+          timestamp: Date.now()
+        });
+      }
+
+      child.stdout.on('data', (d) => pushLog('stdout', d));
+      child.stderr.on('data', (d) => pushLog('stderr', d));
+
+      child.on('error', (err) => {
+        pushLog('stderr', err.message || 'Process error');
+      });
+
+      child.on('close', async (code, signal) => {
+        record.exited = true;
+        record.exitCode = code;
+        const desc =
+          signal === 'SIGKILL' || signal === 'SIGTERM'
+            ? 'Killed'
+            : code === 0
+              ? 'Accepted'
+              : 'Runtime Error';
+        pushLog('info', `\n[process exited] status=${desc} code=${code ?? 'null'} signal=${signal || 'null'}\n`);
+        try {
+          await fs.unlink(tmpFile);
+        } catch {}
+        // Keep record in map so client can read final logs; it will be cleaned up on kill/logs after exit.
+      });
+
+      // Optional initial stdin write (non-streaming)
+      if (typeof stdin === 'string' && stdin.length) {
+        try {
+          child.stdin.write(stdin);
+        } catch {}
+      }
+      try {
+        child.stdin.end();
+      } catch {}
+
+      logger.info('API: Local Node run started', { runId, moduleType: type, filePath: normalizedPath || filePath || null });
+
+      return res.json({ success: true, runId });
+    } catch (error) {
+      logger.error('API: Local Node start error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Failed to start local run' });
+    }
+  });
+
+  // Poll logs for a running local Node process
+  router.get('/run/node/logs', async (req, res) => {
+    try {
+      const runId = req.query.runId;
+      const cursor = parseInt(req.query.cursor || '0', 10) || 0;
+      if (!runId || !activeNodeRuns.has(runId)) {
+        return res.json({ success: false, error: 'Run not found', notFound: true });
+      }
+
+      const record = activeNodeRuns.get(runId);
+      const { logs, exited, exitCode, runner, moduleType } = record;
+
+      const slice = logs.slice(cursor);
+      const nextCursor = logs.length;
+
+      // Auto cleanup small finished runs when client has read everything
+      let cleanedUp = false;
+      if (exited && nextCursor === logs.length) {
+        // Caller might call once more; we leave cleanup decision to client via /kill or timeout.
+        cleanedUp = false;
+      }
+
+      return res.json({
+        success: true,
+        runId,
+        cursor: nextCursor,
+        logs: slice,
+        exited,
+        exitCode,
+        runner: runner || 'local-node',
+        moduleType,
+        cleanedUp
+      });
+    } catch (error) {
+      logger.error('API: Local Node logs error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Failed to read logs' });
+    }
+  });
+
+  // Kill a running local Node process
+  router.post('/run/node/kill', async (req, res) => {
+    try {
+      const { runId } = req.body || {};
+      if (!runId || !activeNodeRuns.has(runId)) {
+        return res.json({ success: false, error: 'Run not found', notFound: true });
+      }
+
+      const record = activeNodeRuns.get(runId);
+      const { child, logs, tmpFile } = record;
+
+      if (!record.exited && child && !child.killed) {
+        try {
+          child.kill('SIGTERM');
+          setTimeout(() => {
+            if (!record.exited && child && !child.killed) {
+              try {
+                child.kill('SIGKILL');
+              } catch {}
+            }
+          }, 2000);
+        } catch (err) {
+          logger.warn('API: Error killing local Node process', { runId, error: err.message });
+        }
+      }
+
+      logs.push({
+        type: 'info',
+        text: '\n[process killed by user]\n',
+        timestamp: Date.now()
+      });
+
+      record.exited = true;
+
+      try {
+        await fs.unlink(tmpFile);
+      } catch {}
+
+      activeNodeRuns.delete(runId);
+
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error('API: Local Node kill error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Failed to kill process' });
     }
   });
 

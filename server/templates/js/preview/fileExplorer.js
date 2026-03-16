@@ -93,6 +93,7 @@ window.PreviewFileExplorer = (function() {
       try {
       if (!files || files.length === 0) {
         fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+        isRendering = false;
         return;
       }
       
@@ -577,6 +578,87 @@ window.PreviewFileExplorer = (function() {
         deleteFile(path, isDir);
         contextMenu.style.display = 'none';
       });
+
+      // Compress submenu handlers (zip / 7z / tar.gz)
+      const compressMenu = document.getElementById('contextCompress');
+      const compressSubmenu = document.getElementById('contextCompressSubmenu');
+      const compressZip = document.getElementById('contextCompressZip');
+      const compress7z = document.getElementById('contextCompress7z');
+      const compressTarGz = document.getElementById('contextCompressTarGz');
+      const extractItem = document.getElementById('contextExtract');
+
+      if (compressMenu && compressSubmenu) {
+        // Show submenu when hovering over the Compress item
+        compressMenu.addEventListener('mouseenter', () => {
+          compressSubmenu.style.display = 'block';
+        });
+
+        compressMenu.addEventListener('mouseleave', (e) => {
+          if (!compressMenu.contains(e.relatedTarget)) {
+            compressSubmenu.style.display = 'none';
+          }
+        });
+
+        compressSubmenu.addEventListener('mouseleave', () => {
+          compressSubmenu.style.display = 'none';
+        });
+      }
+
+      function handleCompressClick(format) {
+        const path = contextMenu.dataset.path;
+        const isDir = contextMenu.dataset.isDirectory === 'true';
+
+        if (!path) {
+          alert('No file or folder selected to compress.');
+          return;
+        }
+
+        module.compressPath(path, format, isDir)
+          .catch(err => {
+            console.error('Error compressing:', err);
+            alert('Error compressing: ' + (err.message || err));
+          })
+          .finally(() => {
+            contextMenu.style.display = 'none';
+            if (compressSubmenu) {
+              compressSubmenu.style.display = 'none';
+            }
+          });
+      }
+
+      if (compressZip) {
+        compressZip.addEventListener('click', () => handleCompressClick('zip'));
+      }
+      if (compress7z) {
+        compress7z.addEventListener('click', () => handleCompressClick('7z'));
+      }
+      if (compressTarGz) {
+        compressTarGz.addEventListener('click', () => handleCompressClick('tar.gz'));
+      }
+
+      if (extractItem) {
+        extractItem.addEventListener('click', () => {
+          const path = contextMenu.dataset.path;
+          const isDir = contextMenu.dataset.isDirectory === 'true';
+
+          if (!path || isDir) {
+            alert('Select an archive file to extract.');
+            return;
+          }
+
+          module.extractArchive(path)
+            .catch(err => {
+              console.error('Error extracting:', err);
+              alert('Error extracting: ' + (err.message || err));
+            })
+            .finally(() => {
+              contextMenu.style.display = 'none';
+              if (compressSubmenu) {
+                compressSubmenu.style.display = 'none';
+              }
+            });
+        });
+      }
       
       fileTree.addEventListener('contextmenu', (e) => {
         if (e.target === fileTree || e.target.classList.contains('file-tree-loading')) {
@@ -598,6 +680,73 @@ window.PreviewFileExplorer = (function() {
       document.getElementById('contextRename').style.display = onlyCreate ? 'none' : 'block';
       document.getElementById('contextDelete').style.display = onlyCreate ? 'none' : 'block';
       document.querySelector('.context-menu-divider').style.display = onlyCreate ? 'none' : 'block';
+
+      // Hide compress submenu every time menu opens so it isn't stuck open
+      const compressSubmenu = document.getElementById('contextCompressSubmenu');
+      if (compressSubmenu) {
+        compressSubmenu.style.display = 'none';
+      }
+
+      // Only show Compress / Extract when a concrete file is selected
+      const compressMenu = document.getElementById('contextCompress');
+      const compressDivider = document.getElementById('contextCompressDivider');
+      const extractItem = document.getElementById('contextExtract');
+      const hasTarget = !!path && !onlyCreate;
+      const lowerPath = (path || '').toLowerCase();
+      const isArchive = lowerPath.endsWith('.zip') || lowerPath.endsWith('.7z') || lowerPath.endsWith('.tar.gz') || lowerPath.endsWith('.tgz');
+
+      if (compressMenu) {
+        compressMenu.style.display = hasTarget ? 'block' : 'none';
+      }
+      if (compressDivider) {
+        compressDivider.style.display = hasTarget ? 'block' : 'none';
+      }
+      if (extractItem) {
+        extractItem.style.display = hasTarget && isArchive ? 'block' : 'none';
+      }
+    },
+
+    async compressPath(path, format, isDirectory) {
+      try {
+        const response = await fetch('/__api__/files/compress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, format, isDirectory })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Compression failed');
+        }
+
+        const outputName = data.outputFile || '';
+        alert(`Compressed to ${outputName || 'archive'} successfully.`);
+      } catch (error) {
+        console.error('compressPath error:', error);
+        throw error;
+      }
+    },
+
+    async extractArchive(path) {
+      try {
+        const response = await fetch('/__api__/files/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Extraction failed');
+        }
+
+        alert('Archive extracted successfully.');
+      } catch (error) {
+        console.error('extractArchive error:', error);
+        throw error;
+      }
     },
 
     async createNewFile(customPrompt, getCurrentDir, loadFileTree, switchToFile) {
