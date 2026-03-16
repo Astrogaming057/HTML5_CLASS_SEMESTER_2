@@ -1,5 +1,7 @@
 /ide_editor_cache
-ai_instructions.md
+
+# remove IDE debugger files
+.cursor/
 
 # Dependencies - can be regenerated with npm install
 node_modules/
