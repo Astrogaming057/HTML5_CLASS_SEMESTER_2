@@ -6,10 +6,12 @@ const { setupFileServer } = require('./routes/fileServer');
 const { setupAPI, setWebSocketManager } = require('./routes/api');
 const { setupEditorRoutes } = require('./routes/editor');
 const { setupPreviewRoutes, setupPreviewContentRoutes, setupPreviewResourceRoutes } = require('./routes/preview');
+const { setupRemoteRoutes } = require('./routes/remote');
 const popoutsRouter = require('./routes/popouts');
 const { setupFileWatcher } = require('./watcher/fileWatcher');
 const WebSocketManager = require('./websocket/websocketHandler');
 const AutoLauncher = require('./browser/autoLauncher');
+const { RemoteClient } = require('./remote/client');
 const { setupStatusRoutes } = require('./templates/status/statusHandler');
 const logger = require('./utils/logger');
 const { cleanupCache } = require('./utils/cacheCleanup');
@@ -94,6 +96,11 @@ logger.info('Preview content routes configured');
 app.use('/__preview-resource__', setupPreviewResourceRoutes(config.BASE_DIR));
 logger.info('Preview resource routes configured');
 
+// Remote control routes (preview ↔ proxy)
+const { router: remoteRouter } = setupRemoteRoutes();
+app.use('/__remote__', remoteRouter);
+logger.info('Remote routes configured');
+
 app.use('/__popout__', popoutsRouter);
 logger.info('Popout routes configured');
 
@@ -141,6 +148,20 @@ server.listen(config.PORT, () => {
   global.__cleanupInterval = cleanupInterval;
   global.__initialCleanupTimeout = initialCleanupTimeout;
   
+  // Initialize remote proxy client (optional, controlled by env vars)
+  try {
+    const remoteToken = process.env.REMOTE_USER_TOKEN || null;
+    const remoteMachineId = process.env.REMOTE_MACHINE_ID || null;
+    const remoteClient = new RemoteClient({
+      userToken: remoteToken,
+      machineId: remoteMachineId,
+      baseDir: config.BASE_DIR,
+    });
+    remoteClient.connect();
+  } catch (error) {
+    logger.error('Failed to initialize remote client', error);
+  }
+
   // Notify Electron that server is ready (if running in app mode)
   if (serverMode === 'app' && process.send) {
     process.send({ type: 'server-ready', port: config.PORT });

@@ -3,6 +3,22 @@ window.PreviewUI = (function() {
   const MIN_PREVIEW_WIDTH = 200;
 
   return {
+    updateModeIndicator(previewSettings) {
+      try {
+        const modeIndicator = document.getElementById('modeIndicator');
+        if (!modeIndicator) return;
+
+        const isRemote = !!previewSettings.remoteEnabled;
+        const label = previewSettings.remoteLabel || (isRemote ? 'REMOTE' : 'LOCAL');
+
+        modeIndicator.textContent = label.toUpperCase();
+        modeIndicator.classList.remove('browser', 'app');
+        modeIndicator.classList.add(isRemote ? 'app' : 'browser');
+        modeIndicator.title = isRemote ? `Remote mode: ${label}` : 'Local mode';
+      } catch (e) {
+        console.error('Error updating mode indicator', e);
+      }
+    },
     toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState) {
       const isCollapsed = fileExplorerPanel.classList.contains('collapsed');
       console.log('toggleFileExplorer called, current state:', isCollapsed);

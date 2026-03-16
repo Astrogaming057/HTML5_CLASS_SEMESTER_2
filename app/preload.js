@@ -14,5 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setHardwareAcceleration: (enabled) => ipcRenderer.invoke('set-hardware-acceleration', enabled),
   getWorkingDirectory: () => ipcRenderer.invoke('get-working-directory'),
   selectWorkingDirectory: () => ipcRenderer.invoke('select-working-directory'),
-  restartApp: () => ipcRenderer.invoke('restart-app')
+  restartApp: () => ipcRenderer.invoke('restart-app'),
+  getRemoteConfig: () => ipcRenderer.invoke('get-remote-config'),
+  setRemoteConfig: (config) => ipcRenderer.invoke('set-remote-config', config)
 });
