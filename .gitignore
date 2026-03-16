@@ -1,8 +1,6 @@
-/ide_editor_cache
-
 # remove IDE debugger files
 .cursor/
-
+/ide_editor_cache
 # Dependencies - can be regenerated with npm install
 node_modules/
 /dist
