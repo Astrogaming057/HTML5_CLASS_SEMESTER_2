@@ -6,7 +6,8 @@ window.PreviewTerminal = (function() {
     client: { matches: [], index: -1, lastInput: '' },
     powershell: { matches: [], index: -1, lastInput: '' },
     log: { matches: [], index: -1, lastInput: '' },
-    commands: { matches: [], index: -1, lastInput: '' }
+    commands: { matches: [], index: -1, lastInput: '' },
+    ssh: { matches: [], index: -1, lastInput: '' }
   };
   
   // Get command suggestions from autocomplete files or use defaults
@@ -27,7 +28,8 @@ window.PreviewTerminal = (function() {
       client: ['mode', 'app-mode', 'browser-mode', 'console', 'window', 'document', 'localStorage', 'sessionStorage'],
       commands: ['help', 'ping', 'status', 'restart', 'reconnect', 'clear', 'exit'],
       powershell: ['Get-Process', 'Get-ChildItem', 'Get-Location', 'Set-Location', 'Clear-Host', 'Write-Host', 'Get-Help'],
-      log: ['console', 'window', 'document', 'localStorage', 'sessionStorage']
+      log: ['console', 'window', 'document', 'localStorage', 'sessionStorage'],
+      ssh: ['ls', 'pwd', 'whoami', 'cd', 'cat', 'top', 'htop', 'ps aux']
     };
     return defaults[terminalType] || [];
   }
@@ -440,6 +442,91 @@ window.PreviewTerminal = (function() {
             lineType: 'error'
           });
         });
+      } else if (tab === 'ssh') {
+        (async () => {
+          const sshOutput = outputEl;
+
+          function addSshLine(text, type) {
+            const lineEl = document.createElement('div');
+            lineEl.className = `terminal-line ${type || 'log'}`;
+            lineEl.textContent = text;
+            sshOutput.appendChild(lineEl);
+            sshOutput.scrollTop = sshOutput.scrollHeight;
+          }
+
+          const cfg = window.__previewSshConfig;
+          if (!cfg || !cfg.connected) {
+            addSshLine('Not connected. Use the SSH Connect form above first.', 'error');
+            return;
+          }
+
+          try {
+            addSshLine(`SSH ${cfg.username}@${cfg.host}:${cfg.port}$ ${command}`, 'log');
+
+            const res = await fetch('/__api__/ssh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                host: cfg.host,
+                port: cfg.port,
+                username: cfg.username,
+                password: cfg.password,
+                command
+              })
+            });
+            const data = await res.json().catch(() => null);
+
+            if (!data || !data.success) {
+              addSshLine(`Error: ${(data && data.error) || 'SSH command failed'}`, 'error');
+              syncChannel.postMessage({
+                type: 'terminal-output',
+                tab: 'ssh',
+                output: `Error: ${(data && data.error) || 'SSH command failed'}\n`,
+                append: true,
+                lineType: 'error'
+              });
+              return;
+            }
+
+            if (data.stdout) {
+              data.stdout.split('\n').forEach(line => {
+                if (line.trim()) {
+                  addSshLine(line, 'info');
+                  syncChannel.postMessage({
+                    type: 'terminal-output',
+                    tab: 'ssh',
+                    output: line + '\n',
+                    append: true,
+                    lineType: 'info'
+                  });
+                }
+              });
+            }
+            if (data.stderr) {
+              data.stderr.split('\n').forEach(line => {
+                if (line.trim()) {
+                  addSshLine(line, 'error');
+                  syncChannel.postMessage({
+                    type: 'terminal-output',
+                    tab: 'ssh',
+                    output: line + '\n',
+                    append: true,
+                    lineType: 'error'
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            addSshLine(`Network Error: ${err.message}`, 'error');
+            syncChannel.postMessage({
+              type: 'terminal-output',
+              tab: 'ssh',
+              output: `Network Error: ${err.message}\n`,
+              append: true,
+              lineType: 'error'
+            });
+          }
+        })();
       } else if (tab === 'log') {
         if (previewFrame && previewFrame.contentWindow) {
           try {
@@ -471,20 +558,36 @@ window.PreviewTerminal = (function() {
       const serverOutput = document.getElementById('terminalServerOutput');
       const powershellOutput = document.getElementById('terminalPowerShellOutput');
       const commandsOutput = document.getElementById('terminalCommandsOutput');
+      const sshInput = document.getElementById('terminalSshInput');
+      const sshOutput = document.getElementById('terminalSshOutput');
+      const sshHostInput = document.getElementById('terminalSshHost');
+      const sshPortInput = document.getElementById('terminalSshPort');
+      const sshUserInput = document.getElementById('terminalSshUser');
+      const sshPassInput = document.getElementById('terminalSshPassword');
+      const sshAuthTypeInput = document.getElementById('terminalSshAuthType');
+      const sshKeyInput = document.getElementById('terminalSshPrivateKey');
+      const sshKeyPassInput = document.getElementById('terminalSshPassphrase');
+      const sshPasswordRow = document.getElementById('terminalSshPasswordRow');
+      const sshKeyRow = document.getElementById('terminalSshKeyRow');
+      const sshConnectBtn = document.getElementById('terminalSshConnectBtn');
+      const sshDisconnectBtn = document.getElementById('terminalSshDisconnectBtn');
       
       const clientHistory = this.createCommandHistory('client');
       const powershellHistory = this.createCommandHistory('powershell');
       const logHistory = this.createCommandHistory('log');
       const commandsHistory = this.createCommandHistory('commands');
+      const sshHistory = this.createCommandHistory('ssh');
       
       let clientHistoryIndex = -1;
       let powershellHistoryIndex = -1;
       let logHistoryIndex = -1;
       let commandsHistoryIndex = -1;
+      let sshHistoryIndex = -1;
       let clientCurrentInput = '';
       let powershellCurrentInput = '';
       let logCurrentInput = '';
       let commandsCurrentInput = '';
+      let sshCurrentInput = '';
       
       if (clientInput) {
         clientInput.disabled = false;
@@ -493,6 +596,237 @@ window.PreviewTerminal = (function() {
       if (powershellInput) {
         powershellInput.disabled = false;
         powershellInput.style.pointerEvents = 'auto';
+      }
+
+      // SSH connection state & UI helpers
+      function getSshConfig() {
+        return window.__previewSshConfig || null;
+      }
+
+      function setSshConfig(cfg) {
+        if (cfg) {
+          window.__previewSshConfig = { ...cfg, connected: !!cfg.connected };
+        } else {
+          window.__previewSshConfig = null;
+        }
+        updateSshUI(true);
+      }
+
+      function updateSshUI(showStatusLine = false) {
+        const cfg = getSshConfig();
+        const connected = !!(cfg && cfg.connected);
+
+        if (sshInput) {
+          sshInput.disabled = !connected;
+          sshInput.style.pointerEvents = connected ? 'auto' : 'none';
+          if (!connected) {
+            sshInput.value = '';
+          }
+        }
+        if (sshConnectBtn) {
+          sshConnectBtn.disabled = connected;
+        }
+        if (sshDisconnectBtn) {
+          sshDisconnectBtn.disabled = !connected;
+        }
+
+        if (sshHostInput && sshPortInput && sshUserInput) {
+          if (connected && cfg) {
+            sshHostInput.value = cfg.host || '';
+            sshPortInput.value = cfg.port || 22;
+            sshUserInput.value = cfg.username || '';
+          }
+        }
+
+        if (sshAuthTypeInput && sshPasswordRow && sshKeyRow) {
+          const authType = (cfg && cfg.authType) || (sshAuthTypeInput.value || 'password');
+          sshAuthTypeInput.value = authType;
+          const isKey = authType === 'key';
+          sshPasswordRow.style.display = isKey ? 'none' : 'flex';
+          sshKeyRow.style.display = isKey ? 'flex' : 'none';
+        }
+
+        if (sshOutput && showStatusLine) {
+          const line = document.createElement('div');
+          line.className = `terminal-line ${connected ? 'info' : 'log'}`;
+          line.textContent = connected
+            ? `Connected to ${cfg.username}@${cfg.host}:${cfg.port}`
+            : 'Disconnected. Configure connection above and press Connect.';
+          sshOutput.appendChild(line);
+          sshOutput.scrollTop = sshOutput.scrollHeight;
+        }
+      }
+
+      if (sshInput && sshOutput) {
+        // Initial UI state (disconnected)
+        updateSshUI(true);
+
+        // Auth type toggle between password and key
+        if (sshAuthTypeInput && sshPasswordRow && sshKeyRow) {
+          sshAuthTypeInput.addEventListener('change', () => {
+            const isKey = sshAuthTypeInput.value === 'key';
+            sshPasswordRow.style.display = isKey ? 'none' : 'flex';
+            sshKeyRow.style.display = isKey ? 'flex' : 'none';
+          });
+        }
+
+        sshInput.addEventListener('input', () => {
+          const history = sshHistory.load();
+          updateAutocompleteHint(sshInput, 'ssh', history);
+        });
+
+        sshInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Tab') {
+            const history = sshHistory.load();
+            handleTabAutocomplete(sshInput, 'ssh', history, e);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const history = sshHistory.load();
+            if (history.length === 0) return;
+
+            if (sshHistoryIndex === -1) {
+              sshCurrentInput = sshInput.value;
+              sshHistoryIndex = history.length;
+            }
+
+            if (sshHistoryIndex > 0) {
+              sshHistoryIndex--;
+              sshInput.value = history[sshHistoryIndex];
+            }
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const history = sshHistory.load();
+
+            if (sshHistoryIndex === -1) return;
+
+            if (sshHistoryIndex < history.length - 1) {
+              sshHistoryIndex++;
+              sshInput.value = history[sshHistoryIndex];
+            } else {
+              sshHistoryIndex = -1;
+              sshInput.value = sshCurrentInput;
+            }
+          } else if (e.key === 'Escape') {
+            const hint = sshInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+          } else if (e.key === 'Enter') {
+            const hint = sshInput.parentElement?.querySelector('.terminal-autocomplete-hint');
+            if (hint) hint.style.display = 'none';
+
+            const cmd = sshInput.value.trim();
+            if (cmd) {
+              sshHistory.add(cmd);
+              sshHistoryIndex = -1;
+              sshCurrentInput = '';
+
+              // Delegate to generic handler so output + sync are centralized
+              window.PreviewTerminal.handleTerminalCommand('ssh', cmd, syncChannel, previewFrame);
+              sshInput.value = '';
+            }
+          }
+        });
+
+        if (sshConnectBtn) {
+          sshConnectBtn.addEventListener('click', async () => {
+            if (!sshHostInput || !sshUserInput || !sshAuthTypeInput) return;
+            const host = sshHostInput.value.trim();
+            const username = sshUserInput.value.trim();
+            const password = sshPassInput ? sshPassInput.value : '';
+            const port = sshPortInput && sshPortInput.value ? parseInt(sshPortInput.value, 10) || 22 : 22;
+            const authType = sshAuthTypeInput.value || 'password';
+            const privateKey = sshKeyInput ? sshKeyInput.value : '';
+            const passphrase = sshKeyPassInput ? sshKeyPassInput.value : '';
+
+            const isKey = authType === 'key';
+
+            if (!host || !username || (!isKey && !password) || (isKey && !privateKey.trim())) {
+              const line = document.createElement('div');
+              line.className = 'terminal-line error';
+              line.textContent = isKey
+                ? 'Please fill host, username and private key before connecting.'
+                : 'Please fill host, username and password before connecting.';
+              sshOutput.appendChild(line);
+              sshOutput.scrollTop = sshOutput.scrollHeight;
+              return;
+            }
+
+            // Show connecting status
+            const statusLine = document.createElement('div');
+            statusLine.className = 'terminal-line info';
+            statusLine.textContent = `Connecting to ${username}@${host}:${port}...`;
+            sshOutput.appendChild(statusLine);
+            sshOutput.scrollTop = sshOutput.scrollHeight;
+
+            sshConnectBtn.disabled = true;
+            try {
+              const body = {
+                host,
+                port,
+                username,
+                authType,
+                command: 'echo __ASTRO_SSH_OK__'
+              };
+
+              if (isKey) {
+                body.privateKey = privateKey;
+                if (passphrase) body.passphrase = passphrase;
+              } else {
+                body.password = password;
+              }
+
+              // Test connection with a simple command
+              const res = await fetch('/__api__/ssh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+              });
+              const data = await res.json().catch(() => null);
+
+              if (!data || !data.success) {
+                const errLine = document.createElement('div');
+                errLine.className = 'terminal-line error';
+                errLine.textContent = `Connection failed: ${(data && data.error) || 'Unable to connect'}`;
+                sshOutput.appendChild(errLine);
+                sshOutput.scrollTop = sshOutput.scrollHeight;
+                sshConnectBtn.disabled = false;
+                return;
+              }
+
+              // Connection OK
+              setSshConfig({
+                host,
+                port,
+                username,
+                password: isKey ? undefined : password,
+                privateKey: isKey ? privateKey : undefined,
+                passphrase: isKey ? passphrase : undefined,
+                authType: isKey ? 'key' : 'password',
+               connected: true
+              });
+            } catch (e) {
+              const errLine = document.createElement('div');
+              errLine.className = 'terminal-line error';
+              errLine.textContent = `Connection error: ${e.message}`;
+              sshOutput.appendChild(errLine);
+              sshOutput.scrollTop = sshOutput.scrollHeight;
+              sshConnectBtn.disabled = false;
+            }
+          });
+        }
+
+        if (sshDisconnectBtn) {
+          sshDisconnectBtn.addEventListener('click', () => {
+            const cfg = getSshConfig();
+            if (cfg && cfg.connected) {
+              const line = document.createElement('div');
+              line.className = 'terminal-line log';
+              line.textContent = `Disconnected from ${cfg.username}@${cfg.host}:${cfg.port}`;
+              sshOutput.appendChild(line);
+              sshOutput.scrollTop = sshOutput.scrollHeight;
+            }
+            setSshConfig(null);
+          });
+        }
       }
       
       tabs.forEach(tab => {

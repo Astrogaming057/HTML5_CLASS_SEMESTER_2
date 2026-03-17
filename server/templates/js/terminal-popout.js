@@ -130,7 +130,11 @@ function initCompilerPopout() {
   async function run() {
     clear();
     const runtime = runtimeSel && runtimeSel.value ? runtimeSel.value : (localStorage.getItem('lastCompilerRuntime') || 'sandbox');
-    const moduleType = localStorage.getItem('lastCompilerModuleType') || 'cjs';
+    const moduleTypeSel = document.getElementById('compilerModuleType');
+    const moduleType =
+      moduleTypeSel && moduleTypeSel.value
+        ? moduleTypeSel.value
+        : (localStorage.getItem('lastCompilerModuleType') || 'cjs');
     const filePath = localStorage.getItem('lastCompilerFilePath') || null;
 
     addLine(`Running… (runtime=${runtime}${runtime === 'sandbox' ? `, languageId=${Number(select.value)}` : ''})`, 'info');

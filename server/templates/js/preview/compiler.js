@@ -140,6 +140,7 @@ window.PreviewCompiler = (function () {
     const editor = getActiveEditor();
     const select = $('compilerLanguage');
     const runtimeSel = $('compilerRuntime');
+    const moduleTypeSel = $('compilerModuleType');
     const stdinEl = $('compilerStdin');
 
     if (!editor || !editor.getValue) {
@@ -156,17 +157,23 @@ window.PreviewCompiler = (function () {
     const runtime = runtimeSel && runtimeSel.value ? runtimeSel.value : 'sandbox';
     const filePath = getActiveFilePath();
 
-    // Best-effort: choose module type for local-node
-    let moduleType = 'cjs';
-    if (filePath && typeof filePath === 'string') {
-      const lower = filePath.toLowerCase();
-      if (lower.endsWith('.mjs')) moduleType = 'esm';
-      if (lower.endsWith('.cjs')) moduleType = 'cjs';
+    // Module type for local-node: prefer explicit selector, fall back to heuristics
+    let moduleType = moduleTypeSel && moduleTypeSel.value ? moduleTypeSel.value : 'cjs';
+    if (!moduleType || (moduleType !== 'cjs' && moduleType !== 'esm')) {
+      moduleType = 'cjs';
     }
-    if (moduleType !== 'esm') {
-      // Heuristic: if user is using ESM syntax, run as esm
-      if (/\bimport\s+.*from\s+['"][^'"]+['"]\s*;?/m.test(source) || /\bexport\s+(default\s+)?/m.test(source)) {
-        moduleType = 'esm';
+
+    // If selector is on "auto" in future, keep heuristic – for now honor user choice first
+    if (moduleTypeSel && !moduleTypeSel.value) {
+      if (filePath && typeof filePath === 'string') {
+        const lower = filePath.toLowerCase();
+        if (lower.endsWith('.mjs')) moduleType = 'esm';
+        if (lower.endsWith('.cjs')) moduleType = 'cjs';
+      }
+      if (moduleType !== 'esm') {
+        if (/\bimport\s+.*from\s+['"][^'"]+['"]\s*;?/m.test(source) || /\bexport\s+(default\s+)?/m.test(source)) {
+          moduleType = 'esm';
+        }
       }
     }
     try {

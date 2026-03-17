@@ -48,6 +48,7 @@
             <button class="terminal-tab" data-tab="server">Server</button>
             <button class="terminal-tab" data-tab="commands">Commands</button>
             <button class="terminal-tab" data-tab="powershell">PowerShell</button>
+            <button class="terminal-tab" data-tab="ssh">Remote SSH</button>
             <button class="terminal-tab" data-tab="compiler">Compiler</button>
             <button class="terminal-tab" data-tab="log">Log</button>
           </div>
@@ -81,6 +82,35 @@
               <input type="text" class="terminal-input" id="terminalPowerShellInput" placeholder="Type PowerShell commands...">
             </div>
           </div>
+          <div class="terminal-tab-content" id="terminalSsh">
+            <div class="terminal-ssh-connection" id="terminalSshConnection">
+              <div class="terminal-ssh-row">
+                <select id="terminalSshAuthType" class="terminal-input-field" style="max-width: 150px;">
+                  <option value="password" selected>Password</option>
+                  <option value="key">SSH Key</option>
+                </select>
+                <input type="text" id="terminalSshHost" class="terminal-input-field" placeholder="Host (e.g. my-server)">
+                <input type="number" id="terminalSshPort" class="terminal-input-field" placeholder="Port" value="22" min="1" max="65535">
+              </div>
+              <div class="terminal-ssh-row" id="terminalSshPasswordRow">
+                <input type="text" id="terminalSshUser" class="terminal-input-field" placeholder="Username">
+                <input type="password" id="terminalSshPassword" class="terminal-input-field" placeholder="Password">
+              </div>
+              <div class="terminal-ssh-row" id="terminalSshKeyRow" style="display: none; flex-direction: column;">
+                <textarea id="terminalSshPrivateKey" class="terminal-input-field" rows="4" placeholder="Paste your private key here (including BEGIN/END)..."></textarea>
+                <input type="password" id="terminalSshPassphrase" class="terminal-input-field" placeholder="Key passphrase (optional)">
+              </div>
+              <div class="terminal-ssh-row terminal-ssh-actions">
+                <button class="btn btn-primary" id="terminalSshConnectBtn">Connect</button>
+                <button class="btn btn-secondary" id="terminalSshDisconnectBtn" disabled>Disconnect</button>
+              </div>
+            </div>
+            <div class="terminal-output" id="terminalSshOutput"></div>
+            <div class="terminal-input-container">
+              <span class="terminal-prompt">SSH></span>
+              <input type="text" class="terminal-input" id="terminalSshInput" placeholder="Type remote SSH commands..." disabled>
+            </div>
+          </div>
           <div class="terminal-tab-content" id="terminalCompiler">
             <div class="compiler-toolbar">
               <div class="compiler-toolbar-left">
@@ -104,6 +134,11 @@
                   <option value="sandbox" selected>Sandbox (many languages)</option>
                   <option value="local-node">Local Node (imports/requires)</option>
                 </select>
+              <label class="compiler-label" for="compilerModuleType">Module</label>
+              <select id="compilerModuleType" class="compiler-select" title="Node module system">
+                <option value="cjs" selected>CommonJS (require)</option>
+                <option value="esm">ESM (import)</option>
+              </select>
                 <button id="compilerUseFileLang" class="btn btn-secondary compiler-small-btn" title="Pick language based on the currently open file">Use file language</button>
               </div>
               <div class="compiler-toolbar-right">
@@ -531,6 +566,10 @@
   <div class="context-menu-item" id="contextNewFolder">📁 New Folder</div>
   <div class="context-menu-divider"></div>
   <div class="context-menu-item" id="contextRename">✏️ Rename</div>
+  <div class="context-menu-item" id="contextCopyPath">📋 Copy Path</div>
+  <div class="context-menu-item" id="contextCopyRelativePath">📋 Copy Relative Path</div>
+  <div class="context-menu-item" id="contextMinifyInPlace">✨ Minify current file</div>
+  <div class="context-menu-item" id="contextMinifyToNew">✨ Minify to *-min file</div>
   <div class="context-menu-item" id="contextDelete">🗑️ Delete</div>
   <div class="context-menu-divider" id="contextCompressDivider"></div>
   <div class="context-menu-item context-menu-has-submenu" id="contextCompress">

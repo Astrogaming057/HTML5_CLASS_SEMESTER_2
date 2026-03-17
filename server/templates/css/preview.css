@@ -882,6 +882,47 @@ body.resizing .resizer-terminal {
   word-wrap: break-word;
 }
 
+/* Remote SSH connection overlay */
+.terminal-ssh-connection {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  z-index: 20;
+  backdrop-filter: blur(2px);
+}
+
+.terminal-ssh-row {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-ssh-actions {
+  justify-content: flex-end;
+}
+
+.terminal-input-field {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 6px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.terminal-input-field::placeholder {
+  color: var(--text-tertiary);
+}
+
 .terminal-output::-webkit-scrollbar {
   width: 8px;
 }

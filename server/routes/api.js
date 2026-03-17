@@ -7,6 +7,30 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
+const { Client: SshClient } = require('ssh2');
+
+// Optional minification libraries
+let terser = null;
+let CleanCSS = null;
+let htmlMinifier = null;
+try {
+  // eslint-disable-next-line global-require
+  terser = require('terser');
+} catch (_) {
+  logger.warn('Minify: terser not installed, JS minification disabled');
+}
+try {
+  // eslint-disable-next-line global-require
+  CleanCSS = require('clean-css');
+} catch (_) {
+  logger.warn('Minify: clean-css not installed, CSS minification disabled');
+}
+try {
+  // eslint-disable-next-line global-require
+  htmlMinifier = require('html-minifier-terser');
+} catch (_) {
+  logger.warn('Minify: html-minifier-terser not installed, HTML minification disabled');
+}
 
 let wsManager = null;
 
@@ -489,6 +513,222 @@ function setupAPI(baseDir) {
     } catch (error) {
       logger.error('API: Error executing terminal command', error);
       res.json({ success: false, error: error.message });
+    }
+  });
+
+  // Minify source code/content similar to VS Code MinifyAll
+  router.post('/minify', async (req, res) => {
+    try {
+      const { content, language, filePath } = req.body || {};
+      if (typeof content !== 'string' || !content.length) {
+        return res.json({ success: false, error: 'No content provided' });
+      }
+
+      const lowerLang = (language || '').toLowerCase();
+      const lowerPath = (filePath || '').toLowerCase();
+
+      const isHTML = lowerLang === 'html' || lowerPath.endsWith('.html') || lowerPath.endsWith('.htm');
+      const isCSS = lowerLang === 'css' || lowerPath.endsWith('.css');
+      const isJSON = lowerLang === 'json' || lowerPath.endsWith('.json');
+      const isJSONC = lowerLang === 'jsonc' || lowerPath.endsWith('.jsonc');
+      const isJS =
+        lowerLang === 'javascript' ||
+        lowerLang === 'js' ||
+        lowerPath.endsWith('.js') ||
+        lowerPath.endsWith('.mjs') ||
+        lowerPath.endsWith('.cjs');
+
+      let result = content;
+
+      if (isHTML) {
+        if (!htmlMinifier) {
+          return res.json({ success: false, error: 'HTML minifier not installed (html-minifier-terser)' });
+        }
+        result = await htmlMinifier.minify(content, {
+          collapseWhitespace: true,
+          removeComments: true,
+          removeRedundantAttributes: true,
+          removeEmptyAttributes: true,
+          removeOptionalTags: false,
+          minifyCSS: !!CleanCSS,
+          minifyJS: !!terser
+        });
+      } else if (isCSS) {
+        if (!CleanCSS) {
+          return res.json({ success: false, error: 'CSS minifier not installed (clean-css)' });
+        }
+        const out = new CleanCSS({
+          level: 2
+        }).minify(content);
+        if (out.errors && out.errors.length) {
+          throw new Error(out.errors[0]);
+        }
+        result = out.styles;
+      } else if (isJSON || isJSONC) {
+        let text = content;
+        if (isJSONC) {
+          // Strip // and /* */ comments
+          text = text.replace(/\/\/[^\n\r]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        }
+        const parsed = JSON.parse(text);
+        result = JSON.stringify(parsed);
+      } else if (isJS) {
+        if (!terser) {
+          return res.json({ success: false, error: 'JS minifier not installed (terser)' });
+        }
+        const out = await terser.minify(content, {
+          compress: true,
+          mangle: true
+        });
+        if (out.error) {
+          throw out.error;
+        }
+        result = out.code || '';
+      } else {
+        return res.json({ success: false, error: 'Unsupported language for minify' });
+      }
+
+      return res.json({
+        success: true,
+        minified: result,
+        originalLength: content.length,
+        minifiedLength: result.length
+      });
+    } catch (error) {
+      logger.error('API: Minify error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'Minify failed' });
+    }
+  });
+
+  // Execute a single SSH command on a remote host
+  router.post('/ssh', async (req, res) => {
+    try {
+      const {
+        host,
+        port = 22,
+        username,
+        password,
+        privateKey,
+        passphrase,
+        authType,
+        command
+      } = req.body || {};
+
+      if (!host || !username || !command) {
+        return res.json({ success: false, error: 'Missing host, username, or command' });
+      }
+
+      // Require at least one auth method
+      if (!password && !privateKey) {
+        return res.json({ success: false, error: 'Missing password or privateKey' });
+      }
+
+      const effectiveAuthType = authType === 'key' || privateKey ? 'key' : 'password';
+
+      logger.info('SSH: Executing remote command', {
+        host,
+        port,
+        username,
+        authType: effectiveAuthType,
+        hasPassphrase: !!passphrase,
+        command: String(command).substring(0, 200)
+      });
+
+      const stdoutChunks = [];
+      const stderrChunks = [];
+
+      const result = await new Promise((resolve, reject) => {
+        const conn = new SshClient();
+        let settled = false;
+
+        const timeout = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            try { conn.end(); } catch (_) {}
+            reject(new Error('SSH command timed out'));
+          }
+        }, 30000);
+
+        conn
+          .on('ready', () => {
+            conn.exec(command, (err, stream) => {
+              if (err) {
+                clearTimeout(timeout);
+                if (!settled) {
+                  settled = true;
+                  conn.end();
+                  return reject(err);
+                }
+                return;
+              }
+
+              stream.on('close', (code, signal) => {
+                clearTimeout(timeout);
+                if (!settled) {
+                  settled = true;
+                  conn.end();
+                  resolve({
+                    code,
+                    signal,
+                    stdout: Buffer.concat(stdoutChunks).toString('utf8'),
+                    stderr: Buffer.concat(stderrChunks).toString('utf8')
+                  });
+                }
+              });
+
+              stream.on('data', (data) => {
+                stdoutChunks.push(Buffer.isBuffer(data) ? data : Buffer.from(String(data)));
+              });
+
+              stream.stderr.on('data', (data) => {
+                stderrChunks.push(Buffer.isBuffer(data) ? data : Buffer.from(String(data)));
+              });
+            });
+          })
+          .on('error', (err) => {
+            clearTimeout(timeout);
+            if (!settled) {
+              settled = true;
+              reject(err);
+            }
+          })
+          .connect((() => {
+            const cfg = {
+              host,
+              port,
+              username,
+              readyTimeout: 15000
+            };
+
+            if (effectiveAuthType === 'key') {
+              cfg.privateKey = Buffer.from(privateKey, 'utf8');
+              if (passphrase) {
+                cfg.passphrase = passphrase;
+              }
+            } else {
+              cfg.password = password;
+            }
+
+            return cfg;
+          })());
+      });
+
+      logger.info('SSH: Command completed', {
+        host,
+        code: result.code,
+        signal: result.signal
+      });
+
+      return res.json({
+        success: true,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        code: result.code,
+        signal: result.signal
+      });
+    } catch (error) {
+      logger.error('API: SSH command error', { message: error.message, stack: error.stack });
+      return res.json({ success: false, error: error.message || 'SSH command failed' });
     }
   });
 

@@ -1,89 +1,94 @@
 {
-  "name": "htmlclass-server",
-  "version": "1.0.0",
-  "description": "Directory listing server with auto-refresh",
-  "main": "app/main.js",
-  "author": "Astrogaming057",
-  "scripts": {
-    "start": "node server/index.js",
-    "start:app": "electron app/main.js",
-    "app": "electron app/main.js",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:dir": "electron-builder --dir",
-    "dist": "electron-builder --publish=never"
-  },
-  "dependencies": {
-    "chokidar": "^3.5.3",
-    "express": "^4.18.2",
-    "mammoth": "^1.6.0",
-    "marked": "^11.1.1",
-    "mime-types": "^2.1.35",
-    "node-fetch": "^3.3.2",
-    "ws": "^8.14.2"
-  },
-  "devDependencies": {
-    "electron": "^28.3.3",
-    "electron-builder": "^24.13.3",
-    "electron-packager": "^17.1.2"
-  },
-  "build": {
-    "appId": "com.htmlclass.ide",
-    "productName": "Astro Code",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
+    "name": "astrocode-editor",
+    "version": "1.1.0",
+    "description": "Astro Code Editor",
+    "main": "app/main.js",
+    "author": "Astrogaming057",
+    "scripts": {
+        "start": "node server/index.js",
+        "start:app": "electron app/main.js",
+        "app": "electron app/main.js",
+        "build": "electron-builder",
+        "build:win": "electron-builder --win",
+        "build:dir": "electron-builder --dir",
+        "dist": "electron-builder --publish=never"
     },
-    "files": [
-      "app/**/*",
-      "server/**/*",
-      "projects/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "server/**/*",
-      "node_modules/**/*"
-    ],
-    "extraFiles": [
-      {
-        "from": "start-app.bat",
-        "to": "start-app.bat"
-      },
-      {
-        "from": "start-app.vbs",
-        "to": "start-app.vbs"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+    "dependencies": {
+        "chokidar": "^3.5.3",
+        "clean-css": "^5.3.3",
+        "express": "^4.18.2",
+        "html-minifier-terser": "^7.2.0",
+        "mammoth": "^1.6.0",
+        "marked": "^11.1.1",
+        "mime-types": "^2.1.35",
+        "node-fetch": "^3.3.2",
+        "ssh2": "^1.17.0",
+        "ssh2-sftp-client": "^12.1.0",
+        "terser": "^5.46.1",
+        "ws": "^8.14.2"
+    },
+    "devDependencies": {
+        "electron": "^28.3.3",
+        "electron-builder": "^24.13.3",
+        "electron-packager": "^17.1.2"
+    },
+    "build": {
+        "appId": "com.astrocode.editor",
+        "productName": "Astro Code",
+        "directories": {
+            "output": "dist",
+            "buildResources": "build"
         },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
+        "files": [
+            "app/**/*",
+            "server/**/*",
+            "projects/**/*",
+            "node_modules/**/*",
+            "package.json"
+        ],
+        "asarUnpack": [
+            "server/**/*",
+            "node_modules/**/*"
+        ],
+        "extraFiles": [
+            {
+                "from": "start-app.bat",
+                "to": "start-app.bat"
+            },
+            {
+                "from": "start-app.vbs",
+                "to": "start-app.vbs"
+            }
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "portable",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "build/icon.ico",
+            "sign": null,
+            "signingHashAlgorithms": []
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Astro Code",
+            "include": "build/installer.nsh"
+        },
+        "portable": {
+            "artifactName": "${productName}-${version}-portable.${ext}"
         }
-      ],
-      "icon": "build/icon.ico",
-      "sign": null,
-      "signingHashAlgorithms": []
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Astro Code",
-      "include": "build/installer.nsh"
-    },
-    "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}"
     }
-  }
 }

@@ -571,6 +571,131 @@ window.PreviewFileExplorer = (function() {
         renameFile(path, name, isDir);
         contextMenu.style.display = 'none';
       });
+
+      function copyToClipboard(text) {
+        if (!text) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(() => {
+            // Fallback below
+          });
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          try {
+            document.execCommand('copy');
+          } catch (e) {
+            console.error('Copy failed:', e);
+          }
+          document.body.removeChild(textarea);
+        }
+      }
+
+      const copyPathItem = document.getElementById('contextCopyPath');
+      if (copyPathItem) {
+        copyPathItem.addEventListener('click', () => {
+          const path = contextMenu.dataset.path || '';
+          if (path) {
+            // Use workspace-root-style path as-is
+            copyToClipboard(path);
+          }
+          contextMenu.style.display = 'none';
+        });
+      }
+
+      const copyRelItem = document.getElementById('contextCopyRelativePath');
+      if (copyRelItem) {
+        copyRelItem.addEventListener('click', () => {
+          const path = contextMenu.dataset.path || '';
+          if (path) {
+            // Relative path = trim leading slashes
+            const rel = path.replace(/^\/+/, '');
+            copyToClipboard(rel);
+          }
+          contextMenu.style.display = 'none';
+        });
+      }
+
+      const minifyItem = document.getElementById('contextMinifyToNew');
+      if (minifyItem) {
+        minifyItem.addEventListener('click', async () => {
+          const path = contextMenu.dataset.path || '';
+          const isDir = contextMenu.dataset.isDirectory === 'true';
+          if (!path || isDir) {
+            alert('Select a file to minify.');
+            contextMenu.style.display = 'none';
+            return;
+          }
+
+          try {
+            // Read file contents
+            const readRes = await fetch('/__api__/files?path=' + encodeURIComponent(path));
+            const readData = await readRes.json();
+            if (!readData.success || typeof readData.content !== 'string') {
+              alert('Unable to read file for minify.');
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            // Minify content
+            const minRes = await fetch('/__api__/minify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: readData.content,
+                filePath: path
+              })
+            });
+            const minData = await minRes.json().catch(() => null);
+            if (!minData || !minData.success) {
+              alert('Minify failed: ' + ((minData && minData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            // Build new file name with -min before extension
+            const slashIndex = path.lastIndexOf('/');
+            const dirPart = slashIndex !== -1 ? path.slice(0, slashIndex) : '';
+            const baseName = slashIndex !== -1 ? path.slice(slashIndex + 1) : path;
+            const dotIndex = baseName.lastIndexOf('.');
+            let newBase;
+            if (dotIndex > 0) {
+              newBase = baseName.slice(0, dotIndex) + '-min' + baseName.slice(dotIndex);
+            } else {
+              newBase = baseName + '-min';
+            }
+            const newPath = dirPart ? `${dirPart}/${newBase}` : newBase;
+
+            // Save new file
+            const saveRes = await fetch('/__api__/files', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: newPath,
+                content: minData.minified,
+                isDirectory: false
+              })
+            });
+            const saveData = await saveRes.json().catch(() => null);
+            if (!saveData || !saveData.success) {
+              alert('Failed to save minified file: ' + ((saveData && saveData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            alert(`Minified copy saved as ${newBase}`);
+          } catch (err) {
+            console.error('Minify-to-new error:', err);
+            alert('Error while minifying file: ' + (err.message || err));
+          } finally {
+            contextMenu.style.display = 'none';
+          }
+        });
+      }
       
       document.getElementById('contextDelete').addEventListener('click', () => {
         const path = contextMenu.dataset.path;
@@ -660,6 +785,144 @@ window.PreviewFileExplorer = (function() {
         });
       }
       
+      const minifyInPlaceItem = document.getElementById('contextMinifyInPlace');
+      const minifyToNewItem = document.getElementById('contextMinifyToNew');
+
+      if (minifyInPlaceItem) {
+        minifyInPlaceItem.addEventListener('click', async () => {
+          const path = contextMenu.dataset.path || '';
+          const isDir = contextMenu.dataset.isDirectory === 'true';
+          if (!path || isDir) {
+            alert('Select a file to minify.');
+            contextMenu.style.display = 'none';
+            return;
+          }
+
+          try {
+            const readRes = await fetch('/__api__/files?path=' + encodeURIComponent(path));
+            const readData = await readRes.json();
+            if (!readData.success || typeof readData.content !== 'string') {
+              alert('Unable to read file for minify.');
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            const minRes = await fetch('/__api__/minify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: readData.content,
+                filePath: path
+              })
+            });
+            const minData = await minRes.json().catch(() => null);
+            if (!minData || !minData.success) {
+              alert('Minify failed: ' + ((minData && minData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            const saveRes = await fetch('/__api__/files', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: path,
+                content: minData.minified
+              })
+            });
+            const saveData = await saveRes.json().catch(() => null);
+            if (!saveData || !saveData.success) {
+              alert('Failed to save minified file: ' + ((saveData && saveData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            alert('File minified in place.');
+          } catch (err) {
+            console.error('Minify-in-place error:', err);
+            alert('Error while minifying file: ' + (err.message || err));
+          } finally {
+            contextMenu.style.display = 'none';
+          }
+        });
+      }
+
+      if (minifyToNewItem) {
+        minifyToNewItem.addEventListener('click', async () => {
+          const path = contextMenu.dataset.path || '';
+          const isDir = contextMenu.dataset.isDirectory === 'true';
+          if (!path || isDir) {
+            alert('Select a file to minify.');
+            contextMenu.style.display = 'none';
+            return;
+          }
+
+          try {
+            // Read file contents
+            const readRes = await fetch('/__api__/files?path=' + encodeURIComponent(path));
+            const readData = await readRes.json();
+            if (!readData.success || typeof readData.content !== 'string') {
+              alert('Unable to read file for minify.');
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            // Minify content
+            const minRes = await fetch('/__api__/minify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: readData.content,
+                filePath: path
+              })
+            });
+            const minData = await minRes.json().catch(() => null);
+            if (!minData || !minData.success) {
+              alert('Minify failed: ' + ((minData && minData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            // Build new file name with -min before extension
+            const slashIndex = path.lastIndexOf('/');
+            const dirPart = slashIndex !== -1 ? path.slice(0, slashIndex) : '';
+            const baseName = slashIndex !== -1 ? path.slice(slashIndex + 1) : path;
+            const dotIndex = baseName.lastIndexOf('.');
+            let newBase;
+            if (dotIndex > 0) {
+              newBase = baseName.slice(0, dotIndex) + '-min' + baseName.slice(dotIndex);
+            } else {
+              newBase = baseName + '-min';
+            }
+            const newPath = dirPart ? `${dirPart}/${newBase}` : newBase;
+
+            // Save new file
+            const saveRes = await fetch('/__api__/files', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: newPath,
+                content: minData.minified,
+                isDirectory: false
+              })
+            });
+            const saveData = await saveRes.json().catch(() => null);
+            if (!saveData || !saveData.success) {
+              alert('Failed to save minified file: ' + ((saveData && saveData.error) || 'Unknown error'));
+              contextMenu.style.display = 'none';
+              return;
+            }
+
+            alert(`Minified copy saved as ${newBase}`);
+          } catch (err) {
+            console.error('Minify-to-new error:', err);
+            alert('Error while minifying file: ' + (err.message || err));
+          } finally {
+            contextMenu.style.display = 'none';
+          }
+        });
+      }
+
       fileTree.addEventListener('contextmenu', (e) => {
         if (e.target === fileTree || e.target.classList.contains('file-tree-loading')) {
           e.preventDefault();
@@ -681,6 +944,36 @@ window.PreviewFileExplorer = (function() {
       document.getElementById('contextDelete').style.display = onlyCreate ? 'none' : 'block';
       document.querySelector('.context-menu-divider').style.display = onlyCreate ? 'none' : 'block';
 
+      const copyPathItem = document.getElementById('contextCopyPath');
+      const copyRelItem = document.getElementById('contextCopyRelativePath');
+      const minifyInPlaceItem = document.getElementById('contextMinifyInPlace');
+      const minifyItem = document.getElementById('contextMinifyToNew');
+      const hasTarget = !!path && !onlyCreate;
+      if (copyPathItem) {
+        copyPathItem.style.display = hasTarget ? 'block' : 'none';
+      }
+      if (copyRelItem) {
+        copyRelItem.style.display = hasTarget ? 'block' : 'none';
+      }
+      const lower = (path || '').toLowerCase();
+      const canMinify =
+        hasTarget &&
+        (lower.endsWith('.html') ||
+         lower.endsWith('.htm') ||
+         lower.endsWith('.css') ||
+         lower.endsWith('.js') ||
+         lower.endsWith('.mjs') ||
+         lower.endsWith('.cjs') ||
+         lower.endsWith('.json') ||
+         lower.endsWith('.jsonc'));
+
+      if (minifyInPlaceItem) {
+        minifyInPlaceItem.style.display = canMinify ? 'block' : 'none';
+      }
+      if (minifyItem) {
+        minifyItem.style.display = canMinify ? 'block' : 'none';
+      }
+
       // Hide compress submenu every time menu opens so it isn't stuck open
       const compressSubmenu = document.getElementById('contextCompressSubmenu');
       if (compressSubmenu) {
@@ -691,7 +984,6 @@ window.PreviewFileExplorer = (function() {
       const compressMenu = document.getElementById('contextCompress');
       const compressDivider = document.getElementById('contextCompressDivider');
       const extractItem = document.getElementById('contextExtract');
-      const hasTarget = !!path && !onlyCreate;
       const lowerPath = (path || '').toLowerCase();
       const isArchive = lowerPath.endsWith('.zip') || lowerPath.endsWith('.7z') || lowerPath.endsWith('.tar.gz') || lowerPath.endsWith('.tgz');
 
