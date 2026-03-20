@@ -246,6 +246,9 @@ window.PreviewEvents = (function() {
 
     setupBeforeUnload(isDirty, ws, saveState) {
       window.addEventListener('beforeunload', (e) => {
+        if (window.__appClosing) {
+          return;
+        }
         if (isDirty && isDirty.current) {
           e.preventDefault();
           e.returnValue = '';

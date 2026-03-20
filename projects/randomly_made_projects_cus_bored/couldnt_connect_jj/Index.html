@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JurassiccJungle | System Offline</title>
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --card: #161b22;
+            --text: #c9d1d9;
+            --dim: #8b949e;
+            --accent: #ff4757;
+            --success: #2ed573;
+            --warning: #ffa502;
+            --border: #30363d;
+            --pinging: #58a6ff;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+
+        .container { max-width: 800px; width: 100%; text-align: center; }
+
+        .error-header {
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 { color: var(--accent); margin: 0; font-size: 2.2rem; letter-spacing: 1px; }
+        .status-msg { font-size: 1.1rem; color: var(--dim); margin-top: 10px; }
+
+        .dognostics {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 25px;
+            text-align: left;
+            font-family: 'Cascadia Code', 'Courier New', monospace;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+        }
+
+        .terminal-header {
+            color: var(--dim);
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .grid { display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size: 0.9rem; }
+
+        details.cat-details {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(33,38,45,1);
+        }
+
+        details.cat-details > summary {
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--pinging);
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            padding-bottom: 10px;
+        }
+
+        details.cat-details > summary::-webkit-details-marker { display: none; }
+
+        .cat-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            font-size: 0.9rem;
+            padding-bottom: 2px;
+        }
+
+        .category-label {
+            grid-column: 1 / -1;
+            margin-top: 20px;
+            color: var(--pinging);
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 4px;
+        }
+
+        .status { font-weight: bold; text-align: right; min-width: 140px; white-space: nowrap; }
+        .online { color: var(--success); }
+        .offline { color: var(--accent); }
+        .timeout { color: var(--warning); }
+        .checking { color: var(--pinging); animation: blink 1s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
+
+        .retry-button {
+            margin-top: 30px;
+            background: transparent;
+            border: 1px solid var(--dim);
+            color: var(--text);
+            padding: 12px 30px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .retry-button:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="error-header">
+            <h1>504 GATEWAY TIMEOUT</h1>
+            <p class="status-msg">The jungle is currently unreachable. Our rangers are on it.</p>
+        </div>
+
+        <div class="dognostics">
+            <div class="terminal-header">
+                <span id="diagHeaderText">SYSTEM DIAGNOSTICS ACTIVE</span>
+                <span id="scan-percent">0%</span>
+                <span id="run-summary"></span>
+            </div>
+            
+            <div id="status-grid"></div>
+        </div>
+
+        <button class="retry-button" id="btnRetry" type="button">RE-RUN DOGNOSTICS</button>
+    </div>
+
+<script>
+    const endpoints = [
+        // Core / Jurassicjungle endpoints
+        { host: "jurassicjungle.gg", cat: "Core Infrastructure", status: "TIMEOUT" },
+        { host: "gateway.jurassicjungle.gg", cat: "Core Infrastructure" },
+        { host: "connect.jurassicjungle.gg", cat: "Core Infrastructure" },
+        { host: "api.jurassicjungle.gg", cat: "Core Infrastructure" },
+        { host: "db.jurassicjungle.gg", cat: "Core Infrastructure" },
+        { host: "dev.jurassicjungle.gg", cat: "Core Infrastructure" },
+        { host: "proxy.jurassicjungle.gg", cat: "Core Infrastructure" },
+
+        // Asset delivery endpoints
+        { host: "cdn.jurassicjungle.gg", cat: "Asset Delivery" },
+        { host: "cdn2jurassicjungle.gg", cat: "Asset Delivery" },
+        { host: "cdn3.jurassicjungle.gg", cat: "Asset Delivery" },
+        { host: "cdn4.jurassicjungle.gg", cat: "Asset Delivery" },
+
+        // Game instances
+        { host: "tcp_.deathmatch.jurassicjungle.gg", cat: "Game Instances" },
+        { host: "tcp_.survival.jurassicjungle.gg", cat: "Game Instances" },
+        { host: "status.icy-sunset.jurassicjungle.gg", cat: "Data Centers [US]" },
+        { host: "status.frozen-river.jurassicjungle.gg", cat: "Data Centers [EU]" },
+
+        // AstroLounge upstream
+        { host: "jj.astroslounge.com", cat: "Upstream Partners" },
+        { host: "static.astroslounge.com", cat: "Upstream Partners" },
+        { host: "cdn.astroslounge.com", cat: "Upstream Partners" },
+        { host: "caches.astroslounge.com", cat: "Upstream Partners" },
+        { host: "cdn2.astroslounge.com", cat: "Upstream Partners" },
+        { host: "id.astroslounge.com", cat: "Upstream Partners" },
+        { host: "proxy.astroslounge.com", cat: "Upstream Partners" },
+        { host: "api.astroslounge.com", cat: "Upstream Partners" },
+        { host: "v3.astroslounge.com", cat: "Upstream Partners" }
+    ];
+
+    async function pingHost(host) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const start = performance.now();
+
+        try {
+            // 'no-cors' returns an opaque response; we only use it to verify connectivity.
+            await fetch(`https://${host}/`, {
+                method: 'GET',
+                mode: 'no-cors',
+                cache: 'no-store',
+                credentials: 'omit',
+                signal: controller.signal
+            });
+            return { status: 'ONLINE', ms: Math.round(performance.now() - start) };
+        } catch (e) {
+            return { status: 'OFFLINE', ms: Math.round(performance.now() - start) };
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async function runDognostics() {
+        const statusGrid = document.getElementById('status-grid');
+        const percent = document.getElementById('scan-percent');
+        const header = document.getElementById('diagHeaderText');
+        const runSummary = document.getElementById('run-summary');
+        const retryBtn = document.getElementById('btnRetry');
+
+        if (!statusGrid || !percent) return;
+        if (retryBtn) retryBtn.disabled = true;
+
+        statusGrid.innerHTML = '';
+        percent.innerText = '0%';
+        if (runSummary) runSummary.textContent = '';
+        if (header) header.textContent = 'RUNNING DOGNOSTICS...';
+
+        // Group endpoints by category (in order of first appearance).
+        const categories = [];
+        const catToHosts = new Map(); // cat -> endpoints[]
+        for (const item of endpoints) {
+            if (!catToHosts.has(item.cat)) {
+                catToHosts.set(item.cat, []);
+                categories.push(item.cat);
+            }
+            catToHosts.get(item.cat).push(item);
+        }
+
+        const catTotals = new Map(); // cat -> total count
+        for (const cat of categories) catTotals.set(cat, catToHosts.get(cat).length);
+
+        const catOnline = new Map(); // cat -> online count
+        const catSummaryEl = new Map(); // cat -> <span> for "x/y UP"
+        const rows = []; // { cat, item, rowStatus }
+
+        for (const cat of categories) {
+            const details = document.createElement('details');
+            details.className = 'cat-details';
+            details.open = false;
+
+            const summary = document.createElement('summary');
+            const catName = document.createElement('span');
+            catName.textContent = cat;
+
+            const catUp = document.createElement('span');
+            catUp.textContent = `0/${catTotals.get(cat)} UP`;
+            catSummaryEl.set(cat, catUp);
+
+            summary.appendChild(catName);
+            summary.appendChild(catUp);
+            details.appendChild(summary);
+
+            const catGrid = document.createElement('div');
+            catGrid.className = 'cat-grid';
+            details.appendChild(catGrid);
+
+            statusGrid.appendChild(details);
+
+            catOnline.set(cat, 0);
+
+            const hosts = catToHosts.get(cat);
+            for (const item of hosts) {
+                const rowHost = document.createElement('span');
+                rowHost.innerText = item.host;
+
+                const rowStatus = document.createElement('span');
+                // Optional "status" in the endpoints JSON can force a visible state without fetching.
+                // Allowed values: "ONLINE" | "OFFLINE"
+                if (item.status === 'ONLINE') {
+                    rowStatus.className = 'status online';
+                    rowStatus.innerText = 'ONLINE';
+                } else if (item.status === 'OFFLINE') {
+                    rowStatus.className = 'status offline';
+                    rowStatus.innerText = 'OFFLINE';
+                }
+                else if (item.status === 'TIMEOUT') {
+                    rowStatus.className = 'status timeout';
+                    rowStatus.innerText = 'TIMEOUT';
+                } else {
+                    rowStatus.className = 'status checking';
+                    rowStatus.innerText = 'CHECK STATUS';
+                }
+
+                catGrid.appendChild(rowHost);
+                catGrid.appendChild(rowStatus);
+                rows.push({ cat, item, rowStatus });
+            }
+        }
+
+        let completed = 0;
+        let online = 0;
+        let offline = 0;
+        const total = rows.length;
+        const concurrency = 4;
+        let idx = 0;
+
+        function setPercent(pct) {
+            percent.innerText = pct + '%';
+        }
+
+        async function worker() {
+            while (true) {
+                const i = idx++;
+                if (i >= total) return;
+
+                const { cat, item, rowStatus } = rows[i];
+                let result;
+                // If item.status is forced, don't fetch; just use the forced status.
+                if (item.status === 'ONLINE' || item.status === 'OFFLINE' || item.status === 'TIMEOUT') {
+                    result = { status: item.status, ms: null };
+                } else {
+                    result = await pingHost(item.host);
+                }
+
+                // Show response time only for ONLINE endpoints (OFFLINE/TIMEOUT stay clean).
+                if (result.status === 'ONLINE' && typeof result.ms === 'number') {
+                    rowStatus.innerText = `${result.status} ${result.ms}ms`;
+                } else {
+                    rowStatus.innerText = `${result.status}`;
+                }
+
+                rowStatus.className =
+                    result.status === 'ONLINE'
+                        ? 'status online'
+                        : (result.status === 'TIMEOUT' ? 'status timeout' : 'status offline');
+
+                if (result.status === 'ONLINE') {
+                    online++;
+                    catOnline.set(cat, catOnline.get(cat) + 1);
+                } else {
+                    offline++;
+                }
+
+                const upEl = catSummaryEl.get(cat);
+                if (upEl) upEl.textContent = `${catOnline.get(cat)}/${catTotals.get(cat)} UP`;
+
+                completed++;
+                const pct = total === 0 ? 100 : Math.round((completed / total) * 100);
+                setPercent(pct);
+            }
+        }
+
+        const workers = [];
+        for (let c = 0; c < concurrency; c++) workers.push(worker());
+        await Promise.all(workers);
+
+        if (header) header.textContent = 'COMPLETE';
+        if (runSummary) runSummary.textContent = `UP ${online}/${online + offline}`;
+        setPercent(100);
+
+        if (retryBtn) retryBtn.disabled = false;
+    }
+
+    document.getElementById('btnRetry').addEventListener('click', runDognostics);
+    window.onload = runDognostics;
+</script>
+</body>
+</html>

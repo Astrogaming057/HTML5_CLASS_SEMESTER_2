@@ -118,6 +118,17 @@ function setupAPI(baseDir) {
         return res.json({ success: true, files, isDirectory: true });
       }
 
+      if (req.query.binary === 'true' || req.query.encoding === 'base64') {
+        const buffer = await fs.readFile(resolvedPath);
+        logger.info('API: File read (binary)', { path: filePath, bytes: buffer.length });
+        return res.json({
+          success: true,
+          encoding: 'base64',
+          content: buffer.toString('base64'),
+          byteLength: buffer.length
+        });
+      }
+
       const content = await fs.readFile(resolvedPath, 'utf-8');
       logger.info('API: File read', { path: filePath });
       res.json({ success: true, content });
@@ -336,8 +347,14 @@ function setupAPI(baseDir) {
         return res.json({ success: false, error: 'Forbidden' });
       }
 
-      await fs.writeFile(resolvedPath, content, 'utf-8');
-      logger.info('API: File saved', { path: filePath, size: content.length });
+      if (req.body.isBinary && typeof content === 'string') {
+        const buffer = Buffer.from(content, 'base64');
+        await fs.writeFile(resolvedPath, buffer);
+        logger.info('API: Binary file saved', { path: filePath, bytes: buffer.length });
+      } else {
+        await fs.writeFile(resolvedPath, content, 'utf-8');
+        logger.info('API: File saved', { path: filePath, size: (content && content.length) || 0 });
+      }
       
       const editorDir = path.join(baseDir, 'ide_editor_cache');
       const editorPath = path.join(editorDir, filePath);

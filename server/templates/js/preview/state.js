@@ -89,7 +89,7 @@ window.PreviewState = (function() {
           const newDir = filePath.split('/').slice(0, -1).join('/') || '';
           if (newDir !== currentDir) {
             restoredCurrentDir = newDir;
-            loadFileTree(restoredCurrentDir);
+            loadFileTree(restoredCurrentDir, restoredFilePath);
           }
           loadFile(filePath);
         } else if (!forceLoad && state.filePath) {
@@ -100,7 +100,7 @@ window.PreviewState = (function() {
           const newDir = state.filePath.split('/').slice(0, -1).join('/') || '';
           if (newDir !== currentDir) {
             restoredCurrentDir = newDir;
-            loadFileTree(restoredCurrentDir);
+            loadFileTree(restoredCurrentDir, restoredFilePath);
           }
           loadFile(state.filePath);
           const newUrl = '/__preview__?file=' + encodeURIComponent(state.filePath);
@@ -258,12 +258,14 @@ window.PreviewState = (function() {
           }, 300);
         }
         
-        if (state.currentDir && state.currentDir !== restoredCurrentDir) {
-          console.log('Restoring directory:', state.currentDir);
-          restoredCurrentDir = state.currentDir;
-          const fileTree = document.getElementById('fileTree');
-          if (fileTree && fileTree.innerHTML !== '<div class="file-tree-loading">Loading...</div>') {
-            loadFileTree(restoredCurrentDir);
+        if (!(typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView)) {
+          if (state.currentDir && state.currentDir !== restoredCurrentDir) {
+            console.log('Restoring directory:', state.currentDir);
+            restoredCurrentDir = state.currentDir;
+            const fileTree = document.getElementById('fileTree');
+            if (fileTree && fileTree.innerHTML !== '<div class="file-tree-loading">Loading...</div>') {
+              loadFileTree(restoredCurrentDir, restoredFilePath);
+            }
           }
         }
         

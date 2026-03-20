@@ -14,5 +14,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setHardwareAcceleration: (enabled) => ipcRenderer.invoke('set-hardware-acceleration', enabled),
   getWorkingDirectory: () => ipcRenderer.invoke('get-working-directory'),
   selectWorkingDirectory: () => ipcRenderer.invoke('select-working-directory'),
-  restartApp: () => ipcRenderer.invoke('restart-app')
+  restartApp: () => ipcRenderer.invoke('restart-app'),
+  /** Main process asks renderer to run close checks before exiting */
+  onAppCloseRequest: (fn) => {
+    ipcRenderer.on('electron-app-close-request', (_event, payload) => {
+      try {
+        fn(payload);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  },
+  sendCloseReady: () => ipcRenderer.send('electron-close-ready'),
+  sendCloseAborted: () => ipcRenderer.send('electron-close-aborted'),
+  sendCloseProgress: (stage) => ipcRenderer.send('electron-close-progress', stage)
 });

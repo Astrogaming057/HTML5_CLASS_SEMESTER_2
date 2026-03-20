@@ -199,6 +199,79 @@ let serverProcess = null;
 const PORT = 3000;
 const APP_NAME = "Astro Code";
 
+/** When true, BrowserWindow `close` is allowed to proceed (no preventDefault). */
+let allowMainWindowClose = false;
+let closeHangTimer = null;
+/** Last progress line from renderer — shown if close watchdog fires. */
+let lastCloseProgress = 'idle';
+
+function clearMainWindowCloseHangTimer() {
+  if (closeHangTimer) {
+    clearTimeout(closeHangTimer);
+    closeHangTimer = null;
+  }
+}
+
+function scheduleMainWindowCloseHangWatchdog() {
+  clearMainWindowCloseHangTimer();
+  closeHangTimer = setTimeout(async () => {
+    const win = mainWindow;
+    if (!win || win.isDestroyed() || allowMainWindowClose) {
+      return;
+    }
+    try {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'warning',
+        title: 'Close is taking longer than expected',
+        message: 'Astro Code has not finished closing yet.',
+        detail:
+          `Latest step:\n• ${lastCloseProgress}\n\n` +
+          'Common causes: a confirmation dialog hidden behind this window, saving, WebSocket teardown, or the local server stopping.\n\n' +
+          'Wait longer gives the app more time. Force exit may lose unsaved work.',
+        buttons: ['Wait longer', 'Force exit'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
+      if (response === 1) {
+        allowMainWindowClose = true;
+        clearMainWindowCloseHangTimer();
+        stopServer();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.destroy();
+        }
+        app.quit();
+      } else {
+        scheduleMainWindowCloseHangWatchdog();
+      }
+    } catch (e) {
+      console.error('[Close] hang watchdog dialog failed', e);
+      scheduleMainWindowCloseHangWatchdog();
+    }
+  }, 6000);
+}
+
+function attachMainWindowCloseInterceptor(win) {
+  if (!win) return;
+  allowMainWindowClose = false;
+  win.on('close', (e) => {
+    if (allowMainWindowClose) {
+      return;
+    }
+    e.preventDefault();
+    lastCloseProgress = 'Waiting for editor process…';
+    clearMainWindowCloseHangTimer();
+    scheduleMainWindowCloseHangWatchdog();
+    try {
+      if (!win.isDestroyed()) {
+        win.webContents.send('electron-app-close-request', { ts: Date.now() });
+      }
+    } catch (err) {
+      console.error('[Close] failed to notify renderer', err);
+    }
+  });
+}
+
 // Kill existing processes
 function killExistingProcesses(callback) {
   console.log('Checking for existing processes...');
@@ -404,7 +477,11 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    allowMainWindowClose = false;
+    clearMainWindowCloseHangTimer();
   });
+
+  attachMainWindowCloseInterceptor(mainWindow);
 
   // Open DevTools in development
   if (process.env.NODE_ENV === 'development') {
@@ -742,6 +819,26 @@ ipcMain.handle('set-hardware-acceleration', async (event, enabled) => {
 ipcMain.handle('restart-app', async () => {
   restartApp();
   return { success: true };
+});
+
+ipcMain.on('electron-close-progress', (_event, stage) => {
+  lastCloseProgress = typeof stage === 'string' && stage ? stage : 'unknown';
+  console.log('[Close] progress:', lastCloseProgress);
+});
+
+ipcMain.on('electron-close-ready', () => {
+  lastCloseProgress = 'Renderer finished — closing…';
+  clearMainWindowCloseHangTimer();
+  allowMainWindowClose = true;
+  stopServer();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+  }
+});
+
+ipcMain.on('electron-close-aborted', () => {
+  lastCloseProgress = 'Close canceled in editor';
+  clearMainWindowCloseHangTimer();
 });
 
 ipcMain.handle('get-working-directory', () => {

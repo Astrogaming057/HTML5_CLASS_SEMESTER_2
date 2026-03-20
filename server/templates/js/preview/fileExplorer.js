@@ -2,6 +2,8 @@ window.PreviewFileExplorer = (function() {
   let isRendering = false;
   let renderTimeout = null;
   let renderFileTreeFn = null;
+  /** Normalized folder paths (no leading slash, e.g. projects/foo) left expanded in tree mode */
+  let treeExpandedPaths = new Set();
   
   const module = {
     setupFileExplorer(getCurrentDir, loadFileTree) {
@@ -9,7 +11,7 @@ window.PreviewFileExplorer = (function() {
       loadFileTree(currentDir || '/');
     },
 
-    loadFileTree(dir, fileTree, currentDirRef, updateBackButton, saveState, renderFileTree, fetchDirectoryListing) {
+    loadFileTree(dir, fileTree, currentDirRef, updateBackButton, saveState, renderFileTree, fetchDirectoryListing, expandTargetPath) {
       // Clear any pending render
       if (renderTimeout) {
         clearTimeout(renderTimeout);
@@ -18,8 +20,18 @@ window.PreviewFileExplorer = (function() {
       
       fileTree.innerHTML = '<div class="file-tree-loading">Loading...</div>';
       
-      const dirStr = typeof dir === 'function' ? dir() : (typeof dir === 'string' ? dir : String(dir || '/'));
-      currentDirRef.currentDir = dirStr;
+      const treeOn = PreviewSettings.getSettings().explorerTreeView === true;
+      let dirStr = typeof dir === 'function' ? dir() : (typeof dir === 'string' ? dir : String(dir || '/'));
+      
+      if (treeOn) {
+        dirStr = '/';
+        currentDirRef.currentDir = '/';
+        module.applyTreeExpandHints(expandTargetPath);
+      } else {
+        treeExpandedPaths.clear();
+        currentDirRef.currentDir = dirStr;
+      }
+      
       updateBackButton();
       saveState();
       
@@ -31,7 +43,7 @@ window.PreviewFileExplorer = (function() {
             try {
               renderFileTree(data.files, dirStr);
             } catch (error) {
-              console.error('Error calling renderFileTree:', error);
+              console.error('Error rendering file explorer:', error);
               fileTree.innerHTML = '<div class="file-tree-loading">Error rendering files</div>';
             }
           } else {
@@ -41,6 +53,403 @@ window.PreviewFileExplorer = (function() {
         .catch(() => {
           fetchDirectoryListing(dirStr);
         });
+    },
+
+    applyTreeExpandHints(expandTargetPath) {
+      const raw = expandTargetPath;
+      if (!raw || typeof raw !== 'string') return;
+      const norm = raw.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      if (!norm) return;
+      const segs = norm.split('/').filter(Boolean);
+      if (segs.length < 2) return;
+      segs.pop();
+      let acc = '';
+      for (const seg of segs) {
+        acc = acc ? acc + '/' + seg : seg;
+        treeExpandedPaths.add(acc);
+      }
+    },
+
+    prepareFileList(files) {
+      files = files.filter(file => !(file.name.toLowerCase() === 'ide_editor_cache' && file.isDirectory));
+      const fileMap = new Map();
+      files.forEach(file => {
+        const normalizedPath = file.path.replace(/\/+/g, '/');
+        if (!fileMap.has(normalizedPath)) {
+          fileMap.set(normalizedPath, { ...file, path: normalizedPath });
+        }
+      });
+      files = Array.from(fileMap.values());
+      files.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      return files;
+    },
+
+    async collectModifiedFiles(files) {
+      const modifiedFiles = new Set();
+      const checkPromises = files
+        .filter(file => !file.isDirectory)
+        .map(async (file) => {
+          try {
+            const cacheResponse = await fetch('/__api__/files/editor?path=' + encodeURIComponent(file.path));
+            const cacheData = await cacheResponse.json();
+            if (cacheData.success && cacheData.exists) {
+              const fileResponse = await fetch('/__api__/files?path=' + encodeURIComponent(file.path));
+              const fileData = await fileResponse.json();
+              if (fileData.success && cacheData.content !== fileData.content) {
+                modifiedFiles.add(file.path);
+              }
+            }
+          } catch (error) {
+            // Ignore
+          }
+        });
+      await Promise.all(checkPromises);
+      return modifiedFiles;
+    },
+
+    async loadTreeChildren(normPath, childrenWrap, ctx) {
+      childrenWrap.innerHTML = '<div class="file-tree-loading">Loading...</div>';
+      try {
+        const res = await fetch('/__api__/files?path=' + encodeURIComponent(normPath) + '&list=true');
+        const data = await res.json();
+        if (data.success && data.files && data.files.length > 0) {
+          childrenWrap.innerHTML = '';
+          await module.renderTreeLevel(data.files, childrenWrap, ctx);
+        } else if (data.success && data.files) {
+          childrenWrap.innerHTML = '';
+        } else {
+          childrenWrap.innerHTML = '<div class="file-tree-loading">Empty</div>';
+        }
+      } catch (e) {
+        console.error('Tree children load error:', e);
+        childrenWrap.innerHTML = '<div class="file-tree-loading">Error loading</div>';
+      }
+    },
+
+    async renderTreeLevel(files, container, ctx) {
+      const list = module.prepareFileList(files);
+      if (list.length === 0) return;
+      const modifiedFiles = await module.collectModifiedFiles(list);
+      const filePath = typeof ctx.getFilePath === 'function' ? ctx.getFilePath() : ctx.getFilePath;
+      for (const file of list) {
+        if (!file.isDirectory) {
+          module.appendTreeFileRow(container, file, filePath, modifiedFiles, ctx);
+        } else {
+          await module.appendTreeFolderBranch(container, file, filePath, modifiedFiles, ctx);
+        }
+      }
+    },
+
+    appendTreeFileRow(container, file, filePath, modifiedFiles, ctx) {
+      const item = document.createElement('div');
+      item.className = 'file-tree-item';
+      item.dataset.path = file.path;
+      item.dataset.isDirectory = 'false';
+      item.dataset.name = file.name;
+      
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
+      const normalizedFilepath = file.path.replace(/\/+/g, '/');
+      if (normalizedFilepath === normalizedCurrentPath) {
+        item.classList.add('active');
+      }
+      
+      const chevronSpacer = document.createElement('span');
+      chevronSpacer.className = 'file-tree-chevron file-tree-chevron-spacer';
+      chevronSpacer.setAttribute('aria-hidden', 'true');
+      
+      const icon = document.createElement('span');
+      if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon) {
+        PreviewFileIcons.applyToIcon(icon, file.name, false);
+      } else {
+        icon.className = 'file-tree-item-icon';
+        icon.textContent = '📄';
+      }
+      
+      const name = document.createElement('span');
+      name.className = 'file-tree-item-name';
+      name.textContent = file.name;
+      
+      item.appendChild(chevronSpacer);
+      item.appendChild(icon);
+      item.appendChild(name);
+      
+      if (modifiedFiles.has(file.path)) {
+        const modifiedIndicator = document.createElement('span');
+        modifiedIndicator.className = 'file-tree-modified';
+        modifiedIndicator.textContent = 'M';
+        modifiedIndicator.title = 'Modified (unsaved changes)';
+        item.appendChild(modifiedIndicator);
+      }
+      
+      item.setAttribute('draggable', 'true');
+      item.draggable = true;
+      let isDragging = false;
+      
+      item.addEventListener('dragstart', (e) => {
+        if (!e.dataTransfer) {
+          e.preventDefault();
+          return false;
+        }
+        isDragging = true;
+        e.dataTransfer.effectAllowed = 'move';
+        try {
+          e.dataTransfer.setData('text/plain', file.path);
+        } catch (err) {
+          e.preventDefault();
+          return false;
+        }
+        item.classList.add('dragging');
+        const parentDir = file.path.includes('/') ? file.path.split('/').slice(0, -1).join('/') : '/';
+        setTimeout(() => {
+          ctx.showParentFolderDropZone(parentDir);
+        }, 0);
+      });
+      
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        ctx.hideParentFolderDropZone();
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        setTimeout(() => {
+          isDragging = false;
+        }, 100);
+      });
+      
+      item.addEventListener('click', (e) => {
+        if (isDragging || item.classList.contains('dragging')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        e.stopPropagation();
+        ctx.switchToFile(file.path);
+      });
+      
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.showContextMenu(e, file.path, false, file.name);
+      });
+      
+      item.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        ctx.renameFile(file.path, file.name, false);
+      });
+      
+      container.appendChild(item);
+    },
+
+    async appendTreeFolderBranch(container, file, filePath, modifiedFiles, ctx) {
+      const norm = file.path.replace(/\/+/g, '/');
+      const expanded = treeExpandedPaths.has(norm);
+      
+      const branch = document.createElement('div');
+      branch.className = 'file-tree-branch' + (expanded ? ' expanded' : '');
+      
+      const row = document.createElement('div');
+      row.className = 'file-tree-item file-tree-folder';
+      row.dataset.path = file.path;
+      row.dataset.isDirectory = 'true';
+      row.dataset.name = file.name;
+      
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
+      const normalizedFilepath = norm;
+      if (normalizedFilepath === normalizedCurrentPath) {
+        row.classList.add('active');
+      }
+      
+      const chevron = document.createElement('span');
+      chevron.className = 'file-tree-chevron';
+      chevron.textContent = expanded ? '▼' : '▶';
+      
+      const icon = document.createElement('span');
+      if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon) {
+        PreviewFileIcons.applyToIcon(icon, file.name, true);
+      } else {
+        icon.className = 'file-tree-item-icon';
+      }
+      
+      const name = document.createElement('span');
+      name.className = 'file-tree-item-name';
+      name.textContent = file.name;
+      
+      row.appendChild(chevron);
+      row.appendChild(icon);
+      row.appendChild(name);
+      
+      row.setAttribute('draggable', 'true');
+      row.draggable = true;
+      let isDragging = false;
+      
+      const childrenWrap = document.createElement('div');
+      childrenWrap.className = 'file-tree-children';
+      
+      branch.appendChild(row);
+      branch.appendChild(childrenWrap);
+      
+      const toggle = async (ev) => {
+        if (ev) ev.stopPropagation();
+        const isOpen = treeExpandedPaths.has(norm);
+        if (isOpen) {
+          treeExpandedPaths.delete(norm);
+          branch.classList.remove('expanded');
+          chevron.textContent = '▶';
+          childrenWrap.innerHTML = '';
+        } else {
+          treeExpandedPaths.add(norm);
+          branch.classList.add('expanded');
+          chevron.textContent = '▼';
+          await module.loadTreeChildren(norm, childrenWrap, ctx);
+        }
+      };
+      
+      chevron.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggle(e);
+      });
+      
+      row.addEventListener('click', (e) => {
+        if (e.target === chevron) return;
+        if (isDragging || row.classList.contains('dragging')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        e.stopPropagation();
+        if (window.__previewSetExplorerDir) {
+          window.__previewSetExplorerDir(file.path);
+        }
+        toggle(null);
+      });
+      
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.showContextMenu(e, file.path, true, file.name);
+      });
+      
+      row.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        ctx.renameFile(file.path, file.name, true);
+      });
+      
+      row.addEventListener('dragstart', (e) => {
+        if (!e.dataTransfer) {
+          e.preventDefault();
+          return false;
+        }
+        isDragging = true;
+        e.dataTransfer.effectAllowed = 'move';
+        try {
+          e.dataTransfer.setData('text/plain', file.path);
+        } catch (err) {
+          e.preventDefault();
+          return false;
+        }
+        row.classList.add('dragging');
+        setTimeout(() => {
+          const parentDir = norm.includes('/') ? norm.split('/').slice(0, -1).join('/') : '/';
+          ctx.showParentFolderDropZone(parentDir === '' ? '/' : parentDir);
+        }, 0);
+      });
+      
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        ctx.hideParentFolderDropZone();
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        setTimeout(() => {
+          isDragging = false;
+        }, 100);
+      });
+      
+      row.addEventListener('dragover', (e) => {
+        const hasTextPlain = e.dataTransfer.types.includes('text/plain');
+        if (hasTextPlain) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+          row.classList.add('drag-over');
+        }
+      }, false);
+      
+      row.addEventListener('dragleave', (e) => {
+        if (!row.contains(e.relatedTarget)) {
+          e.preventDefault();
+          e.stopPropagation();
+          row.classList.remove('drag-over');
+        }
+      });
+      
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        const draggedFilePath = e.dataTransfer.getData('text/plain');
+        if (draggedFilePath && draggedFilePath.trim()) {
+          if (draggedFilePath !== file.path && !file.path.startsWith(draggedFilePath + '/')) {
+            ctx.moveFileToFolder(draggedFilePath, file.path);
+          }
+        } else {
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            ctx.handleFileDrop(files, file.path);
+          }
+        }
+      });
+      
+      container.appendChild(branch);
+      if (expanded) {
+        await module.loadTreeChildren(norm, childrenWrap, ctx);
+      }
+    },
+
+    async renderFileTreeTree(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone) {
+      if (isRendering) {
+        if (renderTimeout) {
+          clearTimeout(renderTimeout);
+        }
+        renderTimeout = setTimeout(() => {
+          if (renderFileTreeFn) {
+            renderFileTreeFn(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone);
+          }
+        }, 50);
+        return;
+      }
+      isRendering = true;
+      try {
+        if (!files || files.length === 0) {
+          fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+          isRendering = false;
+          return;
+        }
+        const ctx = {
+          getFilePath,
+          loadFileTree,
+          switchToFile,
+          showContextMenu,
+          renameFile,
+          moveFileToFolder,
+          handleFileDrop,
+          showParentFolderDropZone,
+          hideParentFolderDropZone
+        };
+        fileTree.innerHTML = '';
+        const list = module.prepareFileList(files);
+        await module.renderTreeLevel(list, fileTree, ctx);
+      } catch (error) {
+        console.error('Error rendering file tree:', error);
+        fileTree.innerHTML = '<div class="file-tree-loading">Error rendering files</div>';
+      }
+      isRendering = false;
     },
 
     fetchDirectoryListing(dir, fileTree, renderFileTree) {
@@ -157,9 +566,13 @@ window.PreviewFileExplorer = (function() {
         }
         
         const icon = document.createElement('span');
-        icon.className = 'file-tree-item-icon';
-        if (!file.isDirectory) {
-          icon.textContent = '📄';
+        if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon) {
+          PreviewFileIcons.applyToIcon(icon, file.name, !!file.isDirectory);
+        } else {
+          icon.className = 'file-tree-item-icon';
+          if (!file.isDirectory) {
+            icon.textContent = '📄';
+          }
         }
         
         const name = document.createElement('span');
@@ -549,21 +962,34 @@ window.PreviewFileExplorer = (function() {
       }
     },
 
-    setupContextMenu(contextMenu, fileTree, createNewFile, createNewFolder, renameFile, deleteFile, showContextMenu) {
+    setupContextMenu(contextMenu, fileTree, createNewFile, createNewFolder, renameFile, deleteFile, showContextMenu, openHexEditor) {
       document.addEventListener('click', () => {
         contextMenu.style.display = 'none';
       });
       
       document.getElementById('contextNewFile').addEventListener('click', () => {
-        createNewFile();
+        const dir = contextMenu.dataset.createTargetDir;
+        createNewFile(dir);
         contextMenu.style.display = 'none';
       });
       
       document.getElementById('contextNewFolder').addEventListener('click', () => {
-        createNewFolder();
+        const dir = contextMenu.dataset.createTargetDir;
+        createNewFolder(dir);
         contextMenu.style.display = 'none';
       });
       
+      const contextOpenHex = document.getElementById('contextOpenHex');
+      if (contextOpenHex && typeof openHexEditor === 'function') {
+        contextOpenHex.addEventListener('click', () => {
+          const p = contextMenu.dataset.path || '';
+          if (p) {
+            openHexEditor(p);
+          }
+          contextMenu.style.display = 'none';
+        });
+      }
+
       document.getElementById('contextRename').addEventListener('click', () => {
         const path = contextMenu.dataset.path;
         const name = contextMenu.dataset.name;
@@ -924,18 +1350,41 @@ window.PreviewFileExplorer = (function() {
       }
 
       fileTree.addEventListener('contextmenu', (e) => {
-        if (e.target === fileTree || e.target.classList.contains('file-tree-loading')) {
-          e.preventDefault();
-          showContextMenu(e, '', false, '', true);
+        if (e.target.closest('.file-tree-item')) {
+          return;
         }
+        e.preventDefault();
+        const branch = e.target.closest('.file-tree-branch');
+        if (branch) {
+          const row = branch.querySelector(':scope > .file-tree-item.file-tree-folder');
+          if (row && row.dataset.path) {
+            showContextMenu(e, row.dataset.path, true, row.dataset.name || '', false);
+            return;
+          }
+        }
+        showContextMenu(e, '', false, '', true);
       });
     },
 
-    showContextMenu(e, path, isDirectory, name, contextMenu, onlyCreate = false) {
+    showContextMenu(e, path, isDirectory, name, contextMenu, onlyCreate = false, getFallbackCreateDir) {
+      const normSeg = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+
+      let createTargetDir = '';
+      if (!path) {
+        createTargetDir = typeof getFallbackCreateDir === 'function' ? normSeg(getFallbackCreateDir()) : '';
+      } else if (isDirectory) {
+        createTargetDir = normSeg(path);
+      } else {
+        const np = normSeg(path);
+        const i = np.lastIndexOf('/');
+        createTargetDir = i === -1 ? '' : np.slice(0, i);
+      }
+
       contextMenu.dataset.path = path;
       contextMenu.dataset.name = name;
       contextMenu.dataset.isDirectory = isDirectory;
-      
+      contextMenu.dataset.createTargetDir = createTargetDir;
+
       contextMenu.style.display = 'block';
       contextMenu.style.left = e.pageX + 'px';
       contextMenu.style.top = e.pageY + 'px';
@@ -972,6 +1421,12 @@ window.PreviewFileExplorer = (function() {
       }
       if (minifyItem) {
         minifyItem.style.display = canMinify ? 'block' : 'none';
+      }
+
+      const openHexItem = document.getElementById('contextOpenHex');
+      if (openHexItem) {
+        const isDir = contextMenu.dataset.isDirectory === 'true';
+        openHexItem.style.display = hasTarget && !isDir ? 'block' : 'none';
       }
 
       // Hide compress submenu every time menu opens so it isn't stuck open
@@ -1041,11 +1496,15 @@ window.PreviewFileExplorer = (function() {
       }
     },
 
-    async createNewFile(customPrompt, getCurrentDir, loadFileTree, switchToFile) {
+    async createNewFile(customPrompt, getCurrentDir, loadFileTree, switchToFile, targetDirOverride) {
       const fileName = await customPrompt('Enter file name:');
       if (!fileName) return;
-      
-      const currentDir = getCurrentDir();
+
+      const normSeg = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+      const rawDir = (targetDirOverride !== undefined && targetDirOverride !== null)
+        ? String(targetDirOverride)
+        : getCurrentDir();
+      const currentDir = normSeg(rawDir);
       const newPath = currentDir ? currentDir + '/' + fileName : fileName;
       
       fetch('/__api__/files', {
@@ -1067,11 +1526,15 @@ window.PreviewFileExplorer = (function() {
       });
     },
 
-    async createNewFolder(customPrompt, getCurrentDir, loadFileTree) {
+    async createNewFolder(customPrompt, getCurrentDir, loadFileTree, targetDirOverride) {
       const folderName = await customPrompt('Enter folder name:');
       if (!folderName) return;
-      
-      const currentDir = getCurrentDir();
+
+      const normSeg = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+      const rawDir = (targetDirOverride !== undefined && targetDirOverride !== null)
+        ? String(targetDirOverride)
+        : getCurrentDir();
+      const currentDir = normSeg(rawDir);
       const newPath = currentDir ? currentDir + '/' + folderName : folderName;
       
       fetch('/__api__/files', {
@@ -1176,8 +1639,23 @@ window.PreviewFileExplorer = (function() {
     }
   };
   
-  // Store reference to renderFileTree for recursive calls
-  renderFileTreeFn = module.renderFileTree;
+  // Store reference for debounced re-render (flat vs tree)
+  renderFileTreeFn = function(
+    files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu,
+    renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone
+  ) {
+    if (PreviewSettings.getSettings().explorerTreeView) {
+      module.renderFileTreeTree(
+        files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu,
+        renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone
+      );
+    } else {
+      module.renderFileTree(
+        files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu,
+        renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone
+      );
+    }
+  };
   
   return module;
 })();

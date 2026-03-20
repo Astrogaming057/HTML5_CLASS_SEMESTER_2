@@ -27,6 +27,12 @@ window.PreviewEditorSetup = (function() {
         bracketPairColorization: {
           enabled: true
         },
+        // Code folding (collapse/expand functions, blocks) — chevrons in gutter
+        folding: true,
+        foldingStrategy: 'auto',
+        foldingHighlight: true,
+        showFoldingControls: 'always',
+        glyphMargin: true,
         // Enhanced autocomplete/IntelliSense
         suggestOnTriggerCharacters: true,
         quickSuggestions: {
@@ -45,7 +51,13 @@ window.PreviewEditorSetup = (function() {
         parameterHints: {
           enabled: true,
           cycle: true
-        }
+        },
+        // Cross-file definition preview on hover (see PreviewCrossModuleNavigation)
+        hover: {
+          enabled: true,
+          delay: 350,
+          sticky: true,
+        },
       });
 
       // Register HTML-specific completions
@@ -162,7 +174,9 @@ window.PreviewEditorSetup = (function() {
                 const switchToFile = window.__previewSwitchToFile || (() => {});
                 // Use setTimeout to ensure position is set before jumping
                 setTimeout(() => {
-                  window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile);
+                  Promise.resolve(
+                    window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile),
+                  ).catch((err) => console.warn('Go to definition:', err));
                 }, 10);
               }
             } catch (error) {
@@ -188,7 +202,9 @@ window.PreviewEditorSetup = (function() {
         if (window.PreviewEditorNavigation) {
           const getFilePath = typeof window.__previewFilePath === 'function' ? window.__previewFilePath : () => '';
           const switchToFile = window.__previewSwitchToFile || (() => {});
-          window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile);
+          Promise.resolve(
+            window.PreviewEditorNavigation.jumpToDefinition(editor, getFilePath, switchToFile),
+          ).catch((err) => console.warn('Go to definition:', err));
         }
       });
 

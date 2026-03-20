@@ -195,6 +195,17 @@ window.PreviewWebSocket = (function() {
     },
 
     handleFileSystemEvent(data, getCurrentDir, loadFileTree) {
+      if (typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView) {
+        if (refreshTimeout) {
+          clearTimeout(refreshTimeout);
+        }
+        refreshTimeout = setTimeout(() => {
+          loadFileTree('/');
+          refreshTimeout = null;
+        }, 100);
+        return;
+      }
+
       const normalizePath = (p) => {
         const pathStr = typeof p === 'function' ? p() : (typeof p === 'string' ? p : String(p || ''));
         const cleaned = pathStr.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');

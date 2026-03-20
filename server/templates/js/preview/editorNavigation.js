@@ -84,16 +84,10 @@ window.PreviewEditorNavigation = (function() {
     return references;
   }
 
-  function jumpToDefinition(editor, getFilePath, switchToFile) {
+  async function jumpToDefinition(editor, getFilePath, switchToFile) {
     const position = editor.getPosition();
     if (!position) {
       console.log('No cursor position');
-      return;
-    }
-
-    const symbol = findSymbolAtPosition(editor, position);
-    if (!symbol) {
-      console.log('No symbol found at cursor position');
       return;
     }
 
@@ -102,12 +96,33 @@ window.PreviewEditorNavigation = (function() {
       console.log('No editor model');
       return;
     }
-    
+
+    if (window.PreviewCrossModuleNavigation &&
+        typeof window.PreviewCrossModuleNavigation.tryCrossFileJump === 'function' &&
+        typeof switchToFile === 'function') {
+      try {
+        const handled = await window.PreviewCrossModuleNavigation.tryCrossFileJump(
+          editor,
+          getFilePath,
+          switchToFile,
+        );
+        if (handled) return;
+      } catch (e) {
+        console.warn('Cross-file go-to-definition:', e);
+      }
+    }
+
+    const symbol = findSymbolAtPosition(editor, position);
+    if (!symbol) {
+      console.log('No symbol found at cursor position');
+      return;
+    }
+
     const content = model.getValue();
-    
+
     // First, try to find definition in current file
     const definition = findDefinitionInFile(content, symbol.word, position.lineNumber, position.column);
-    
+
     if (definition) {
       try {
         editor.setPosition({ lineNumber: definition.line, column: definition.column });

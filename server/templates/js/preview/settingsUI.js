@@ -38,6 +38,7 @@ window.PreviewSettingsUI = (function() {
           const editorTabSize = document.getElementById('editorTabSize');
           const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
           const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+          const explorerTreeView = document.getElementById('explorerTreeView');
           const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
           const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
           
@@ -94,7 +95,8 @@ window.PreviewSettingsUI = (function() {
             editorLineNumbers: editorLineNumbers ? editorLineNumbers.checked : true,
             editorTabSize: editorTabSize ? parseInt(editorTabSize.value) : 4,
             defaultExplorerVisible: defaultExplorerVisible ? defaultExplorerVisible.checked : true,
-            defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false
+            defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false,
+            explorerTreeView: explorerTreeView ? explorerTreeView.checked : true
           });
           
           const pageThemeEl = document.getElementById('pageTheme');
@@ -108,6 +110,9 @@ window.PreviewSettingsUI = (function() {
             PreviewSettings.applyPreviewSettings(editor);
             // Apply theme to preview frame after settings are saved
             PreviewSettings.applyThemeToPreviewFrame();
+            if (typeof window.__previewReloadFileExplorer === 'function') {
+              window.__previewReloadFileExplorer();
+            }
             PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved';
@@ -119,6 +124,9 @@ window.PreviewSettingsUI = (function() {
           }).catch((error) => {
             console.error('Error applying theme:', error);
             PreviewSettings.applyPreviewSettings(editor);
+            if (typeof window.__previewReloadFileExplorer === 'function') {
+              window.__previewReloadFileExplorer();
+            }
             PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved (theme load failed)';
@@ -400,6 +408,7 @@ window.PreviewSettingsUI = (function() {
         const editorTabSize = document.getElementById('editorTabSize');
         const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+        const explorerTreeViewRestart = document.getElementById('explorerTreeView');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
         
         PreviewSettings.setSettings({
@@ -413,7 +422,8 @@ window.PreviewSettingsUI = (function() {
           editorLineNumbers: editorLineNumbers ? editorLineNumbers.checked : true,
           editorTabSize: editorTabSize ? parseInt(editorTabSize.value) : 4,
           defaultExplorerVisible: defaultExplorerVisible ? defaultExplorerVisible.checked : true,
-          defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false
+          defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false,
+          explorerTreeView: explorerTreeViewRestart ? explorerTreeViewRestart.checked : true
         });
         
         PreviewSettings.savePreviewSettings();

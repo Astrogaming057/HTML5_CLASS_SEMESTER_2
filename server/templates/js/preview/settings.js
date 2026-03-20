@@ -10,7 +10,8 @@ window.PreviewSettings = (function() {
     editorLineNumbers: true,
     editorTabSize: 4,
     defaultExplorerVisible: true,
-    defaultTerminalVisible: false
+    defaultTerminalVisible: false,
+    explorerTreeView: true
   };
 
   let originalTheme = null;
@@ -122,6 +123,7 @@ window.PreviewSettings = (function() {
         const editorTabSize = document.getElementById('editorTabSize');
         const defaultExplorerVisible = document.getElementById('defaultExplorerVisible');
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
+        const explorerTreeView = document.getElementById('explorerTreeView');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
         const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
         
@@ -141,6 +143,7 @@ window.PreviewSettings = (function() {
         if (editorTabSize) editorTabSize.value = previewSettings.editorTabSize;
         if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
         if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
+        if (explorerTreeView) explorerTreeView.checked = previewSettings.explorerTreeView === true;
       }
       
       // Always apply theme to preview frame (not just when settings panel is open)
@@ -284,7 +287,8 @@ window.PreviewSettings = (function() {
         editorLineNumbers: true,
         editorTabSize: 4,
         defaultExplorerVisible: true,
-        defaultTerminalVisible: false
+        defaultTerminalVisible: false,
+        explorerTreeView: true
       };
       this.savePreviewSettings();
     },

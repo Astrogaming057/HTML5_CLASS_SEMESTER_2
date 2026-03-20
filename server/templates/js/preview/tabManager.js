@@ -328,7 +328,11 @@ window.PreviewTabManager = (function() {
       activeTabPath = openTabs[newActiveIndex];
       const newTabInfo = tabData[activeTabPath];
       if (newTabInfo && newTabInfo.content !== undefined && setEditorContentCallback) {
-        setEditorContentCallback(newTabInfo.content, newTabInfo.originalContent || newTabInfo.content);
+        setEditorContentCallback(
+          newTabInfo.content,
+          newTabInfo.originalContent || newTabInfo.content,
+          activeTabPath,
+        );
         if (switchToFileCallback) {
           await switchToFileCallback(activeTabPath, true);
         }

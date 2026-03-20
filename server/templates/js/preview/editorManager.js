@@ -411,7 +411,11 @@ window.PreviewEditorManager = (function() {
               wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
               lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
               readOnly: true,
-              minimap: { enabled: false }
+              minimap: { enabled: false },
+              folding: true,
+              foldingStrategy: 'auto',
+              foldingHighlight: true,
+              showFoldingControls: 'always'
             });
             
             cacheEditorInstance.onDidChangeModelContent(() => {
@@ -431,7 +435,11 @@ window.PreviewEditorManager = (function() {
               wordWrap: previewSettings.editorWordWrap ? 'on' : 'off',
               lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
               readOnly: true,
-              minimap: { enabled: false }
+              minimap: { enabled: false },
+              folding: true,
+              foldingStrategy: 'auto',
+              foldingHighlight: true,
+              showFoldingControls: 'always'
             });
             
             liveEditorInstance.onDidChangeModelContent(() => {

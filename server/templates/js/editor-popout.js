@@ -91,7 +91,11 @@ require(['vs/editor/editor.main'], function() {
         automaticLayout: true,
         fontSize: 14,
         minimap: { enabled: true },
-        wordWrap: 'on'
+        wordWrap: 'on',
+        folding: true,
+        foldingStrategy: 'auto',
+        foldingHighlight: true,
+        showFoldingControls: 'always'
       });
       
              channel.addEventListener('message', (event) => {
@@ -197,7 +201,10 @@ require(['vs/editor/editor.main'], function() {
         language: 'plaintext',
         theme: 'vs-dark',
         automaticLayout: true,
-        readOnly: true
+        readOnly: true,
+        folding: true,
+        foldingStrategy: 'auto',
+        showFoldingControls: 'always'
       });
     });
 });

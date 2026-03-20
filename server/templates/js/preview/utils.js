@@ -8,11 +8,51 @@ window.PreviewUtils = {
   },
 
   getLanguage(filePath) {
-    const ext = filePath.split('.').pop().toLowerCase();
-    if (ext === 'html' || ext === 'htm') {
-      return 'html';
-    }
-    return 'html';
+    if (!filePath || typeof filePath !== 'string') return 'plaintext';
+    const base = filePath.split('/').pop().split('\\').pop() || '';
+    const lower = base.toLowerCase();
+    if (lower === 'dockerfile') return 'dockerfile';
+
+    const ext = base.includes('.') ? base.split('.').pop().toLowerCase() : '';
+    const languages = {
+      js: 'javascript',
+      mjs: 'javascript',
+      cjs: 'javascript',
+      jsx: 'javascriptreact',
+      ts: 'typescript',
+      tsx: 'typescriptreact',
+      html: 'html',
+      htm: 'html',
+      css: 'css',
+      scss: 'scss',
+      sass: 'sass',
+      less: 'less',
+      json: 'json',
+      md: 'markdown',
+      py: 'python',
+      java: 'java',
+      c: 'c',
+      cpp: 'cpp',
+      h: 'c',
+      hpp: 'cpp',
+      php: 'php',
+      rb: 'ruby',
+      go: 'go',
+      rs: 'rust',
+      swift: 'swift',
+      kt: 'kotlin',
+      sh: 'shell',
+      bash: 'shell',
+      bat: 'bat',
+      ps1: 'powershell',
+      xml: 'xml',
+      yaml: 'yaml',
+      yml: 'yaml',
+      sql: 'sql',
+      vue: 'html',
+      txt: 'plaintext',
+    };
+    return languages[ext] || 'plaintext';
   },
 
   customPrompt(title, defaultValue = '') {
@@ -133,6 +173,58 @@ window.PreviewUtils = {
           handleCancel();
         }
       };
+    });
+  },
+
+  /**
+   * Simple OK-only dialog (Electron webviews often block window.alert).
+   */
+  customAlert(message) {
+    return new Promise((resolve) => {
+      const dialog = document.getElementById('customConfirmDialog');
+      const messageEl = document.getElementById('customConfirmMessage');
+      const okBtn = document.getElementById('customConfirmOk');
+      const discardBtn = document.getElementById('customConfirmDiscard');
+      const cancelBtn = document.getElementById('customConfirmCancel');
+      const closeBtn = document.getElementById('customConfirmClose');
+      if (!dialog || !messageEl || !okBtn || !cancelBtn) {
+        console.error(message);
+        resolve();
+        return;
+      }
+
+      const prevCancelDisplay = cancelBtn.style.display;
+      const prevDiscardDisplay = discardBtn ? discardBtn.style.display : '';
+      messageEl.textContent = message;
+      dialog.style.display = 'flex';
+      cancelBtn.style.display = 'none';
+      if (discardBtn) discardBtn.style.display = 'none';
+
+      const cleanup = () => {
+        dialog.style.display = 'none';
+        cancelBtn.style.display = prevCancelDisplay;
+        if (discardBtn) discardBtn.style.display = prevDiscardDisplay;
+        okBtn.onclick = null;
+        closeBtn.onclick = null;
+        dialog.onclick = null;
+        dialog.onkeydown = null;
+        resolve();
+      };
+
+      okBtn.onclick = cleanup;
+      closeBtn.onclick = cleanup;
+      dialog.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          e.preventDefault();
+          cleanup();
+        }
+      };
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          cleanup();
+        }
+      };
+      okBtn.focus();
     });
   },
 

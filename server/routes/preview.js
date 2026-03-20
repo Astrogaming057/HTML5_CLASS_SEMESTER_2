@@ -76,6 +76,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'compiler.js'),
         'utf-8'
       );
+      const fileIconsJs = await fs.readFile(
+        path.join(previewModulesDir, 'fileIcons.js'),
+        'utf-8'
+      );
       const fileExplorerJs = await fs.readFile(
         path.join(previewModulesDir, 'fileExplorer.js'),
         'utf-8'
@@ -88,8 +92,16 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'syncChannel.js'),
         'utf-8'
       );
+      const crossModuleNavigationJs = await fs.readFile(
+        path.join(previewModulesDir, 'crossModuleNavigation.js'),
+        'utf-8'
+      );
       const editorSetupJs = await fs.readFile(
         path.join(previewModulesDir, 'editorSetup.js'),
+        'utf-8'
+      );
+      const hexEditorJs = await fs.readFile(
+        path.join(previewModulesDir, 'hexEditor.js'),
         'utf-8'
       );
       const terminalUIJs = await fs.readFile(
@@ -102,6 +114,10 @@ async function loadPreviewTemplates() {
       );
       const eventsJs = await fs.readFile(
         path.join(previewModulesDir, 'events.js'),
+        'utf-8'
+      );
+      const electronCloseJs = await fs.readFile(
+        path.join(previewModulesDir, 'electronClose.js'),
         'utf-8'
       );
       const fileSearchJs = await fs.readFile(
@@ -205,22 +221,30 @@ async function loadPreviewTemplates() {
         terminalJs,
         '// Compiler',
         compilerJs,
+        '// File icons',
+        fileIconsJs,
         '// File Explorer',
         fileExplorerJs,
         '// Resizers',
         resizersJs,
         '// Sync Channel',
         syncChannelJs,
+        '// Cross-module navigation (go to definition, import completions)',
+        crossModuleNavigationJs,
         '// Editor Navigation',
         editorNavigationJs,
         '// Editor Setup',
         editorSetupJs,
+        '// Hex Editor',
+        hexEditorJs,
         '// Terminal UI',
         terminalUIJs,
         '// Settings UI',
         settingsUIJs,
         '// Events',
         eventsJs,
+        '// Electron close handshake',
+        electronCloseJs,
         '// File Search',
         fileSearchJs,
         '// Global Search',

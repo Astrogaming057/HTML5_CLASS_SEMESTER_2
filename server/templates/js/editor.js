@@ -103,6 +103,10 @@ require(['vs/editor/editor.main'], function() {
     bracketPairColorization: {
       enabled: true
     },
+    folding: true,
+    foldingStrategy: 'auto',
+    foldingHighlight: true,
+    showFoldingControls: 'always',
     suggestOnTriggerCharacters: true,
     quickSuggestions: true,
     acceptSuggestionOnEnter: 'on',
@@ -574,7 +578,10 @@ require(['vs/editor/editor.main'], function() {
           theme: 'vs-dark',
           readOnly: true,
           fontSize: 12,
-          minimap: { enabled: false }
+          minimap: { enabled: false },
+          folding: true,
+          foldingStrategy: 'auto',
+          showFoldingControls: 'always'
         });
       } else {
         mergeCurrentEditor.setValue(currentContent);
@@ -587,7 +594,10 @@ require(['vs/editor/editor.main'], function() {
           theme: 'vs-dark',
           readOnly: true,
           fontSize: 12,
-          minimap: { enabled: false }
+          minimap: { enabled: false },
+          folding: true,
+          foldingStrategy: 'auto',
+          showFoldingControls: 'always'
         });
       } else {
         mergeExternalEditor.setValue(externalContent);
@@ -600,7 +610,10 @@ require(['vs/editor/editor.main'], function() {
           theme: 'vs-dark',
           readOnly: false,
           fontSize: 12,
-          minimap: { enabled: false }
+          minimap: { enabled: false },
+          folding: true,
+          foldingStrategy: 'auto',
+          showFoldingControls: 'always'
         });
       } else {
         mergeResultEditor.setValue(currentContent);

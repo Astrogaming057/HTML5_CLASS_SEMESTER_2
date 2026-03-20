@@ -228,7 +228,14 @@ window.PreviewUI = (function() {
       return false;
     },
 
-    updateBackButton(backBtn, currentDir) {
+    updateBackButton(backBtn, currentDir, explorerTreeView) {
+      if (!backBtn) return;
+      if (explorerTreeView) {
+        backBtn.disabled = true;
+        backBtn.title = 'Back (disabled in Tree view — expand folders in the tree)';
+        return;
+      }
+      backBtn.title = 'Go Back';
       backBtn.disabled = !currentDir || currentDir === '/';
     },
 

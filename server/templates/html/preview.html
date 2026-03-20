@@ -177,7 +177,10 @@
         </div>
       </div>
       <div class="editor-tabs-container" id="editorTabsContainer"></div>
-      <div id="editor"></div>
+      <div class="editor-monaco-hex-stack" id="editorMonacoHexStack">
+        <div id="editor"></div>
+        <div id="hexEditorMount" class="hex-editor-mount" style="display: none;" aria-label="Hex editor"></div>
+      </div>
       <div id="browserView" class="browser-view" style="display: none;">
         <div class="browser-tabs-container" id="browserTabsContainer">
           <button id="browserNewTabBtn" class="browser-new-tab-btn" title="New Tab">+</button>
@@ -565,6 +568,7 @@
   <div class="context-menu-item" id="contextNewFile">📄 New File</div>
   <div class="context-menu-item" id="contextNewFolder">📁 New Folder</div>
   <div class="context-menu-divider"></div>
+  <div class="context-menu-item" id="contextOpenHex">🔢 Open in Hex Editor</div>
   <div class="context-menu-item" id="contextRename">✏️ Rename</div>
   <div class="context-menu-item" id="contextCopyPath">📋 Copy Path</div>
   <div class="context-menu-item" id="contextCopyRelativePath">📋 Copy Relative Path</div>
@@ -849,6 +853,16 @@ You can copy any theme file and modify it, or create your own!"></textarea>
             <span class="toggle-slider"></span>
             <span class="toggle-label">Show file explorer by default</span>
           </label>
+        </div>
+        
+        <div class="setting-group">
+          <label class="setting-label">Explorer Tree View</label>
+          <label class="setting-toggle">
+            <input type="checkbox" id="explorerTreeView" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show folders in an expandable tree (nested, like VS Code) instead of one folder at a time</span>
+          </label>
+          <p class="setting-description">Disabled: navigate with ← Back into a single folder. Enabled: expand/collapse folders in place with ▶ ▼.</p>
         </div>
         
         <div class="setting-group">
