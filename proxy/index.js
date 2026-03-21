@@ -5,9 +5,32 @@ const auth = require('./lib/auth');
 const store = require('./lib/store');
 const tunnel = require('./lib/tunnel');
 
+const PROXY_DEBUG =
+  process.env.PROXY_DEBUG === '1' ||
+  process.env.HTMLCLASS_PROXY_DEBUG === 'true';
+
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+
+if (PROXY_DEBUG) {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      process.stdout.write(
+        `[proxy] ${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${Date.now() - start}ms\n`
+      );
+    });
+    next();
+  });
+}
+
+app.get('/api/remote/status', (req, res) => {
+  res.json({
+    ok: true,
+    proxyDebug: PROXY_DEBUG
+  });
+});
 
 function authMiddleware(req, res, next) {
   const token = auth.bearerFromAuthHeader(req.headers.authorization);
@@ -126,5 +149,7 @@ tunnel.attachTunnelWs(server, proxy);
 
 const PORT = Number(process.env.PORT) || 3030;
 server.listen(PORT, () => {
-  process.stdout.write(`HTMLCLASS proxy listening on http://0.0.0.0:${PORT}\n`);
+  process.stdout.write(
+    `HTMLCLASS proxy listening on http://0.0.0.0:${PORT}${PROXY_DEBUG ? ' (PROXY_DEBUG: verbose / status exposure)' : ''}\n`
+  );
 });

@@ -117,6 +117,22 @@ window.PreviewRemoteAuthApi = (function () {
     sess.setTargetDeviceId(null);
   }
 
+  async function fetchProxyRemoteStatus() {
+    try {
+      const res = await fetch(proxyUrl(cfg.PATHS.remoteStatus), {
+        method: 'GET',
+        cache: 'no-cache'
+      });
+      if (!res.ok) {
+        return { proxyDebug: false };
+      }
+      const data = await parseJson(res);
+      return { proxyDebug: !!data.proxyDebug };
+    } catch (e) {
+      return { proxyDebug: false };
+    }
+  }
+
   return {
     login,
     register,
@@ -124,6 +140,7 @@ window.PreviewRemoteAuthApi = (function () {
     registerDevice,
     fetchMe,
     logout,
-    proxyUrl
+    proxyUrl,
+    fetchProxyRemoteStatus
   };
 })();

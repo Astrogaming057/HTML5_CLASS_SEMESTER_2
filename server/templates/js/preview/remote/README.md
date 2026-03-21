@@ -4,6 +4,8 @@ The preview UI calls a proxy at `PreviewRemoteConfig.PROXY_BASE` (default `http:
 
 A reference server implementation lives in the repo at **`/proxy`** (see `proxy/README.md`).
 
+**Debug:** `GET /api/remote/status` returns `{ proxyDebug: true }` when the proxy is started with `PROXY_DEBUG=1` (see `start-proxy-debug.bat`). The Remote Explorer dropdown shows a warning when the proxy or local server is in debug mode.
+
 ## HTTP API (JSON)
 
 | Method | Path | Body / notes |

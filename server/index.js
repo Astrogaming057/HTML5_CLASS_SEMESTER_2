@@ -31,9 +31,31 @@ global.__SERVER_MODE = serverMode;
 const app = express();
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+if (config.DEBUG) {
+  global.__HTMLCLASS_DEBUG__ = true;
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      logger.http(req.method, req.originalUrl || req.url, res.statusCode, Date.now() - start);
+    });
+    next();
+  });
+  process.on('uncaughtException', (err) => {
+    logger.error('uncaughtException', err);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error('unhandledRejection', err);
+  });
+  logger.info('HTMLCLASS_DEBUG: verbose HTTP logging and process error hooks enabled');
+} else {
+  global.__HTMLCLASS_DEBUG__ = false;
+}
+
 const server = http.createServer(app);
 
-logger.info(`Initializing server (${serverMode} mode)...`, { port: config.PORT, baseDir: config.BASE_DIR, mode: serverMode });
+logger.info(`Initializing server (${serverMode} mode)...`, { port: config.PORT, baseDir: config.BASE_DIR, mode: serverMode, debug: !!config.DEBUG });
 
 const wsManager = new WebSocketManager();
 const serverCommands = new ServerCommands(wsManager, server, config.BASE_DIR);

@@ -45,6 +45,13 @@ window.PreviewRemoteExplorer = (function () {
     if (title) title.textContent = authModeLogin ? 'Sign in' : 'Create account';
     if (hint) {
       hint.textContent = 'Connect to ' + (window.PreviewRemoteConfig.PROXY_BASE || 'proxy');
+      hint.classList.remove('remote-auth-hint-warn');
+      auth.fetchProxyRemoteStatus().then(function (st) {
+        if (st.proxyDebug && hint) {
+          hint.textContent += ' — Warning: proxy is in debug mode (logs may be exposed).';
+          hint.classList.add('remote-auth-hint-warn');
+        }
+      }).catch(function () {});
     }
     if (err) {
       err.textContent = '';
@@ -108,7 +115,7 @@ window.PreviewRemoteExplorer = (function () {
           }
           hideAuthModal();
           await refreshDevices();
-          renderDropdown();
+          await renderDropdown();
         } catch (e) {
           setAuthError(e.message || 'Request failed');
         }
@@ -147,19 +154,19 @@ window.PreviewRemoteExplorer = (function () {
     if (dropdownEl) dropdownEl.setAttribute('hidden', '');
   }
 
-  function showDropdown() {
+  async function showDropdown() {
     const d = ensureDropdown();
     if (!d) return;
-    renderDropdown();
+    await renderDropdown();
     positionDropdown();
     d.removeAttribute('hidden');
   }
 
-  function toggleDropdown() {
+  async function toggleDropdown() {
     if (dropdownEl && !dropdownEl.hasAttribute('hidden')) {
       hideDropdown();
     } else {
-      showDropdown();
+      await showDropdown();
     }
   }
 
@@ -183,14 +190,40 @@ window.PreviewRemoteExplorer = (function () {
     }
   }
 
-  function renderDropdown() {
+  async function renderDropdown() {
     const d = ensureDropdown();
     if (!d) return;
+    let proxyDebug = false;
+    let serverDebug = false;
+    try {
+      const [proxySt, modeRes] = await Promise.all([
+        auth.fetchProxyRemoteStatus(),
+        fetch('/__api__/mode', { cache: 'no-cache' })
+          .then(function (r) { return r.ok ? r.json() : {}; })
+          .catch(function () { return {}; })
+      ]);
+      proxyDebug = !!(proxySt && proxySt.proxyDebug);
+      serverDebug = !!modeRes.debug;
+    } catch (e) {
+      proxyDebug = false;
+      serverDebug = false;
+    }
     const loggedIn = !!sess.getToken();
     const registered = !!sess.getRegisteredLocalDeviceId() ||
       (devicesCache && devicesCache.some(deviceIsThisPc));
     let html = '';
     html += '<div class="remote-dd-title">Remote Explorer</div>';
+    if (proxyDebug || serverDebug) {
+      html += '<div class="remote-dd-debug-warn" role="alert">';
+      if (proxyDebug) {
+        html += '<div class="remote-dd-debug-line">Proxy is in debug mode.</div>';
+      }
+      if (serverDebug) {
+        html += '<div class="remote-dd-debug-line">HTMLCLASS server is in debug mode.</div>';
+      }
+      html += '<div class="remote-dd-debug-sub">Verbose logs may be exposed. Do not use for production secrets.</div>';
+      html += '</div>';
+    }
     html += '<button type="button" class="remote-dd-item" data-action="local">Use Local</button>';
     html += '<span class="remote-dd-desc">Files and tools on this machine</span>';
     if (loggedIn) {
@@ -297,7 +330,7 @@ window.PreviewRemoteExplorer = (function () {
         return;
       }
       await refreshDevices();
-      toggleDropdown();
+      await toggleDropdown();
     });
   }
 

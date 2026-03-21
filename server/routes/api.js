@@ -7,6 +7,7 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
+const appConfig = require('../config');
 const { Client: SshClient } = require('ssh2');
 
 // Optional minification libraries
@@ -78,7 +79,8 @@ function setupAPI(baseDir) {
       success: true, 
       mode: mode,
       isAppMode: mode === 'app',
-      isBrowserMode: mode === 'browser'
+      isBrowserMode: mode === 'browser',
+      debug: !!appConfig.DEBUG
     });
   });
 
