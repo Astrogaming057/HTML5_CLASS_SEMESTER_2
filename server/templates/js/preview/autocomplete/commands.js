@@ -2,6 +2,8 @@
 window.CommandsAutocomplete = [
   // Basic commands
   'help', 'ping', 'status', 'restart', 'reconnect', 'clear', 'exit', 'quit',
+  // Testing (fatal — dev only)
+  'crash.server', 'crash.client',
   
   // File operations
   'ls', 'list', 'dir', 'cd', 'pwd', 'mkdir', 'rmdir', 'rm', 'del', 'delete',

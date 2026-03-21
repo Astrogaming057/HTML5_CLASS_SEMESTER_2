@@ -1,0 +1,146 @@
+.remote-auth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(3px);
+}
+
+.remote-auth-modal[hidden] {
+  display: none !important;
+}
+
+.remote-auth-dialog {
+  width: 100%;
+  max-width: 380px;
+  padding: 22px 24px;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.remote-auth-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.remote-auth-hint {
+  margin: 0 0 14px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.remote-auth-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.remote-auth-error {
+  color: #f44336;
+  font-size: 12px;
+  margin: 0 0 10px 0;
+}
+
+.remote-auth-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.remote-auth-switch {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent-primary, #c2185b);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.remote-explorer-dropdown {
+  min-width: 240px;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: 8px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.remote-explorer-dropdown[hidden] {
+  display: none !important;
+}
+
+.remote-dd-title {
+  padding: 4px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.remote-dd-section {
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.remote-dd-desc {
+  display: block;
+  padding: 0 14px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.remote-dd-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.remote-dd-item:hover {
+  background: var(--bg-hover);
+}
+
+.remote-dd-device {
+  font-weight: 500;
+}
+
+.remote-dd-empty {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.remote-dd-logout {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JurassicJungle | System Offline</title>
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --text: #c9d1d9;
+            --dim: #8b949e;
+            --accent: #ff4757;
+            --border: #30363d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 640px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .error-header {
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+        }
+
+        h1 {
+            color: var(--accent);
+            margin: 0;
+            font-size: clamp(1.6rem, 4vw, 2.2rem);
+            letter-spacing: 1px;
+        }
+
+        .status-msg {
+            font-size: 1.1rem;
+            color: var(--dim);
+            margin: 14px 0 0;
+            line-height: 1.55;
+        }
+
+        .sub {
+            margin-top: 18px;
+            font-size: 0.95rem;
+            color: var(--dim);
+            line-height: 1.5;
+        }
+
+        .retry-button {
+            margin-top: 32px;
+            background: transparent;
+            border: 1px solid var(--dim);
+            color: var(--text);
+            padding: 12px 30px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: 0.2s;
+        }
+
+        .retry-button:hover {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+        }
+
+        .retry-button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="error-header">
+            <h1>504 GATEWAY TIMEOUT</h1>
+            <p class="status-msg">The jungle is currently unreachable. Our rangers are on it.</p>
+        </div>
+        <p class="sub">If this page doesn’t go away after a few minutes, try refreshing or check your connection.</p>
+        <button class="retry-button" type="button" onclick="location.reload()">REFRESH PAGE</button>
+    </main>
+</body>
+</html>

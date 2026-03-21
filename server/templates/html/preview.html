@@ -32,6 +32,7 @@
         <button id="backBtn" class="back-btn" title="Go Back">←</button>
         <span>📁 Files</span>
         <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
+        <button id="remoteExplorerBtn" class="toggle-btn" title="Remote Explorer">🌐</button>
         <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
       </div>
       <div class="file-tree" id="fileTree">
@@ -179,6 +180,16 @@
       <div class="editor-tabs-container" id="editorTabsContainer"></div>
       <div class="editor-monaco-hex-stack" id="editorMonacoHexStack">
         <div id="editor"></div>
+        <div id="binaryEditPrompt" class="binary-edit-prompt" hidden aria-hidden="true">
+          <div class="binary-edit-prompt-card" role="dialog" aria-labelledby="binaryEditPromptTitle">
+            <p id="binaryEditPromptTitle" class="binary-edit-prompt-title">Binary file</p>
+            <p class="binary-edit-prompt-message">This file cannot be edited as text. Open it in the hex editor?</p>
+            <div class="binary-edit-prompt-actions">
+              <button type="button" class="binary-edit-prompt-btn primary" id="binaryEditPromptOpenHex">Open in hex editor</button>
+              <button type="button" class="binary-edit-prompt-btn secondary" id="binaryEditPromptDismiss">Not now</button>
+            </div>
+          </div>
+        </div>
         <div id="hexEditorMount" class="hex-editor-mount" style="display: none;" aria-label="Hex editor"></div>
       </div>
       <div id="browserView" class="browser-view" style="display: none;">

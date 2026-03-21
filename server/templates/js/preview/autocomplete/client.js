@@ -1,5 +1,7 @@
 // Autocomplete suggestions for Client terminal (JavaScript context)
 window.ClientAutocomplete = [
+  // Testing (fatal — dev only)
+  'crash.client',
   // Mode commands
   'mode', 'app-mode', 'browser-mode',
   

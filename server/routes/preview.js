@@ -26,10 +26,39 @@ async function loadPreviewTemplates() {
       path.join(templatesDir, 'css', 'preview.css'),
       'utf-8'
     );
-    
+    try {
+      const remoteExplorerCss = await fs.readFile(
+        path.join(templatesDir, 'css', 'remoteExplorer.css'),
+        'utf-8'
+      );
+      cssContent += '\n' + remoteExplorerCss;
+    } catch (e) {
+      logger.info('remoteExplorer.css not loaded: ' + (e && e.message));
+    }
+
     try {
       const utilsJs = await fs.readFile(
         path.join(previewModulesDir, 'utils.js'),
+        'utf-8'
+      );
+      const remoteConfigJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteConfig.js'),
+        'utf-8'
+      );
+      const remoteSessionJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteSession.js'),
+        'utf-8'
+      );
+      const remoteAuthApiJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteAuthApi.js'),
+        'utf-8'
+      );
+      const remoteTransportJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteTransport.js'),
+        'utf-8'
+      );
+      const remoteExplorerUIJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteExplorerUI.js'),
         'utf-8'
       );
       const settingsJs = await fs.readFile(
@@ -199,6 +228,12 @@ async function loadPreviewTemplates() {
         logAutocompleteJs,
         '// Utils',
         utilsJs,
+        '// Remote Explorer',
+        remoteConfigJs,
+        remoteSessionJs,
+        remoteAuthApiJs,
+        remoteTransportJs,
+        remoteExplorerUIJs,
         '// Settings',
         settingsJs,
         '// Popouts',

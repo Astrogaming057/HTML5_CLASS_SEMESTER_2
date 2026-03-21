@@ -1,0 +1,20 @@
+{
+  "archives": [
+    {
+      "id": "backend_isle_bot",
+      "label": "backend isle bot"
+    },
+    {
+      "id": "farewell.jurassicjungle.gg",
+      "label": "farewell.jurassicjungle.gg"
+    },
+    {
+      "id": "render_api",
+      "label": "render api"
+    },
+    {
+      "id": "web_server",
+      "label": "web server"
+    }
+  ]
+}

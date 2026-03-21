@@ -3,8 +3,13 @@ window.PreviewWebSocket = (function() {
   
   return {
     setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = protocol + '//' + window.location.host;
+      let wsUrl;
+      if (window.PreviewRemoteTransport && typeof window.PreviewRemoteTransport.getWebSocketUrl === 'function') {
+        wsUrl = window.PreviewRemoteTransport.getWebSocketUrl();
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = protocol + '//' + window.location.host;
+      }
       const ws = new WebSocket(wsUrl);
       
       const serverOutput = document.getElementById('terminalServerOutput');

@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jurassic Jungle Source Code Archive</title>
+  <style>
+    :root {
+      --bg: #0c1118;
+      --panel: #141a24;
+      --border: #243044;
+      --text: #e6edf3;
+      --muted: #8b9cb3;
+      --accent: #58a6ff;
+      --dim: rgba(88, 166, 255, 0.12);
+      --sel: rgba(88, 166, 255, 0.18);
+    }
+    * { box-sizing: border-box; }
+    html {
+      color-scheme: dark;
+      height: 100%;
+    }
+    body {
+      height: 100%;
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      font-size: 14px;
+      overflow: hidden;
+    }
+    code { font-size: 0.9em; background: var(--dim); padding: 0.1em 0.35em; border-radius: 4px; }
+    .top {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+    .top h1 { margin: 0; font-size: 1rem; font-weight: 600; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-left: auto;
+    }
+    .toolbar label.archive-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .toolbar select {
+      min-width: 10rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.85rem;
+    }
+    .toolbar input {
+      min-width: 11rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.85rem;
+    }
+    .toolbar span { font-size: 0.78rem; color: var(--muted); }
+
+    .viewer {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .viewer-bar {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem 1rem;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(20, 26, 36, 0.35);
+    }
+    .viewer-bar .pane-head {
+      margin: 0;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .viewer-bar .path {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      word-break: break-all;
+      text-align: right;
+      flex: 1;
+      min-width: 12rem;
+    }
+    .viewer-bar .path strong { color: var(--text); font-weight: 500; }
+
+    .scroll-y {
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) var(--bg);
+    }
+    .scroll-y::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .scroll-y::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    .scroll-y::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 6px;
+      border: 2px solid var(--bg);
+    }
+    .scroll-y::-webkit-scrollbar-corner {
+      background: var(--bg);
+    }
+
+    .tree-wrap {
+      flex: 1;
+      min-height: 0;
+      padding: 0.5rem 1rem 1rem;
+    }
+    .tree {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      outline: none;
+    }
+    .tree:focus-visible {
+      outline: 1px solid var(--border);
+      outline-offset: 2px;
+    }
+    .tree details { margin-left: 0.85rem; }
+    .tree summary {
+      cursor: pointer;
+      list-style: none;
+      color: var(--accent);
+      padding: 0.08rem 0;
+      user-select: none;
+    }
+    .tree summary::-webkit-details-marker { display: none; }
+    .tree summary::before { content: "▸ "; color: var(--muted); font-size: 0.75em; }
+    .tree details[open] > summary::before { content: "▾ "; }
+    .tree .file {
+      margin-left: 1.35rem;
+      color: var(--muted);
+      padding: 0.12rem 0.25rem;
+      margin-bottom: 0.02rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .tree .file:hover { color: var(--text); }
+    .tree .file.selected {
+      color: var(--text);
+      background: var(--sel);
+    }
+    .empty { color: var(--muted); font-size: 0.85rem; }
+
+    .file-menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.55);
+      border: none;
+      padding: 0;
+      cursor: default;
+    }
+    .file-menu-backdrop[hidden] {
+      display: none;
+    }
+
+    .file-menu {
+      position: fixed;
+      z-index: 1001;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(720px, calc(100vw - 1.5rem));
+      max-height: min(85vh, calc(100% - 5rem));
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+    .file-menu[hidden] {
+      display: none;
+    }
+    .file-menu-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .file-menu-head h2 {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .file-menu-head .menu-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .file-menu-head button.icon {
+      font: inherit;
+      font-size: 1.25rem;
+      line-height: 1;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.15rem 0.35rem;
+      border-radius: 6px;
+    }
+    .file-menu-head button.icon:hover {
+      color: var(--text);
+      background: var(--dim);
+    }
+    .file-menu-head button.linkish {
+      font: inherit;
+      font-size: 0.72rem;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .file-menu-head button.linkish:hover {
+      color: var(--text);
+    }
+
+    .file-menu-path {
+      padding: 0.5rem 0.85rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      word-break: break-all;
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+
+    .file-menu-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .preview-gate {
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      overflow-y: auto;
+    }
+    .preview-gate h3 {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .preview-gate label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+    .preview-gate input[type="text"],
+    .preview-gate input[type="password"] {
+      padding: 0.4rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .preview-gate button.primary {
+      margin-top: 0.15rem;
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: var(--dim);
+      color: var(--accent);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .preview-gate button.primary:hover {
+      background: rgba(88, 166, 255, 0.22);
+    }
+    .preview-gate .hint {
+      margin: 0;
+      font-size: 0.76rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .preview-gate .err {
+      font-size: 0.76rem;
+      color: #f85149;
+      min-height: 1.1em;
+    }
+
+    .preview-content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+    }
+    .preview-content[hidden] {
+      display: none !important;
+    }
+
+    /* VS Code–style preview */
+    .vscode-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #2b2b2b;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #1e1e1e;
+    }
+    .vscode-tabbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.5rem 0.35rem 0.65rem;
+      background: #252526;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 0.78rem;
+      min-height: 2rem;
+    }
+    .vscode-tab-icon {
+      opacity: 0.85;
+      font-size: 0.9rem;
+    }
+    .vscode-tab-title {
+      flex: 1;
+      min-width: 0;
+      color: #cccccc;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.76rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .vscode-tab-extra {
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      color: #858585;
+    }
+    .vscode-tab-extra a {
+      color: #3794ff;
+      text-decoration: none;
+    }
+    .vscode-tab-extra a:hover {
+      text-decoration: underline;
+    }
+    .vscode-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: #1e1e1e;
+    }
+    .vscode-text-editor {
+      flex: 1;
+      min-height: 12rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      overflow: hidden;
+    }
+    .vscode-text-editor[hidden] {
+      display: none !important;
+    }
+    .vscode-gutter {
+      margin: 0;
+      padding: 8px 6px 8px 10px;
+      background: #1e1e1e;
+      border-right: 1px solid #2b2b2b;
+      color: #858585;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: right;
+      white-space: pre;
+      user-select: none;
+      overflow: auto;
+      min-width: 2.5rem;
+    }
+    .preview-pre {
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+      padding: 8px 12px 12px 8px;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre;
+      overflow-wrap: normal;
+      overflow-x: auto;
+      color: #d4d4d4;
+      background: #1e1e1e;
+      border: none;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #424242 #1e1e1e;
+    }
+    .preview-pre::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .preview-pre::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+    .preview-pre::-webkit-scrollbar-thumb {
+      background: #424242;
+      border-radius: 5px;
+    }
+    .preview-pre.is-redacted {
+      color: #f85149 !important;
+      font-weight: 600;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>🦖 Jurassic Jungle Source Code Archive</h1>
+    <div class="toolbar">
+      <label class="archive-label" for="archivePick">Archive</label>
+      <select id="archivePick" aria-label="Choose archive bundle"></select>
+      <input type="search" id="filter" placeholder="Filter path…" autocomplete="off" aria-label="Filter tree" />
+      <span id="meta"></span>
+    </div>
+  </header>
+
+  <main class="viewer" id="viewer">
+    <div class="viewer-bar">
+      <p class="pane-head" id="paneHead">File tree</p>
+      <p class="path"><strong>Selected:</strong> <span id="sel">—</span></p>
+    </div>
+    <div class="tree-wrap scroll-y">
+      <div id="tree" class="tree" tabindex="0" role="tree" aria-label="Inferred project files"></div>
+    </div>
+  </main>
+
+  <button type="button" class="file-menu-backdrop" id="fileMenuBackdrop" hidden aria-label="Close file menu"></button>
+  <div
+    class="file-menu"
+    id="fileMenu"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="fileMenuTitle"
+    hidden
+    tabindex="-1"
+  >
+    <div class="file-menu-head">
+      <h2 id="fileMenuTitle">Preview</h2>
+      <div class="menu-actions">
+        <button type="button" class="linkish" id="previewSignOut" hidden>Sign out</button>
+        <button type="button" class="icon" id="fileMenuClose" aria-label="Close">×</button>
+      </div>
+    </div>
+    <div class="file-menu-path" id="fileMenuPath"></div>
+    <div class="file-menu-body">
+      <div class="preview-gate" id="previewGate">
+        <h3>This file is protected.</h3>
+        <label>Username
+          <input type="text" id="previewUser" autocomplete="username" />
+        </label>
+        <label>Password
+          <input type="password" id="previewPass" autocomplete="current-password" />
+        </label>
+        <div class="err" id="previewErr" aria-live="polite"></div>
+        <button type="button" class="primary" id="previewUnlock">Unlock</button>
+      </div>
+      <div class="preview-content" id="previewContent" hidden>
+        <div class="vscode-panel" id="vscodePanel">
+          <div class="vscode-tabbar">
+            <span class="vscode-tab-icon" aria-hidden="true">▣</span>
+            <span class="vscode-tab-title" id="vscodeTabTitle">—</span>
+            <span class="vscode-tab-extra" id="vscodeTabExtra"></span>
+          </div>
+          <div class="vscode-body">
+            <div class="vscode-text-editor" id="vscodeTextEditor">
+              <div class="vscode-gutter" id="vscodeGutter" aria-hidden="true"></div>
+              <pre class="preview-pre scroll-y" id="previewPre"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+    
+      var PREVIEW_AUTH_URL = "/api/login";
+
+      var PREVIEW_CONTENT_URL_PATTERN = "/preview-content/{file}?t={timestamp}";
+      var AUTH_TOKEN_KEY = "qvb3407gh239hoeieauvho9q37g4fo3478gt3q07hfggf324p098ghhrqe8hguvq3098y45g0t83ugbgpq3er809gh023gbo34ugb09o7g";
+
+      /**
+       * Per-archive preview overrides.
+       * noautha: skip login for this bundle.
+       * sourceFromArchive: fetch raw file text from archives/<id>/… and show in the code editor (not a page iframe).
+       * mirrorOrigin: optional "Open in browser" link to the live site for the same path.
+       */
+      var ARCHIVE_PREVIEW_CONFIG = {
+        "farewell.jurassicjungle.gg": {
+          noautha: true,
+          sourceFromArchive: true,
+          mirrorOrigin: "https://farewell.jurassicjungle.gg",
+        },
+      };
+
+      var FALLBACK_ARCHIVES = [
+        { id: "backend_isle_bot", label: "backend isle bot" },
+        { id: "farewell.jurassicjungle.gg", label: "farewell.jurassicjungle.gg" },
+        { id: "render_api", label: "render api" },
+        { id: "web_server", label: "web server" },
+      ];
+
+      var treeEl = document.getElementById("tree");
+      var filterEl = document.getElementById("filter");
+      var metaEl = document.getElementById("meta");
+      var selEl = document.getElementById("sel");
+      var paneHead = document.getElementById("paneHead");
+      var archivePick = document.getElementById("archivePick");
+      var fileMenuBackdrop = document.getElementById("fileMenuBackdrop");
+      var fileMenu = document.getElementById("fileMenu");
+      var fileMenuPath = document.getElementById("fileMenuPath");
+      var fileMenuClose = document.getElementById("fileMenuClose");
+      var previewGate = document.getElementById("previewGate");
+      var previewContent = document.getElementById("previewContent");
+      var previewPre = document.getElementById("previewPre");
+      var vscodeTabTitle = document.getElementById("vscodeTabTitle");
+      var vscodeTabExtra = document.getElementById("vscodeTabExtra");
+      var vscodeGutter = document.getElementById("vscodeGutter");
+      var vscodeTextEditor = document.getElementById("vscodeTextEditor");
+      var previewErr = document.getElementById("previewErr");
+      var previewUnlock = document.getElementById("previewUnlock");
+      var previewUser = document.getElementById("previewUser");
+      var previewPass = document.getElementById("previewPass");
+      var previewSignOut = document.getElementById("previewSignOut");
+
+      var allPaths = [];
+      var sourceNote = "";
+      var currentArchiveId = "";
+      var selectedPath = "";
+      var selectedFileEl = null;
+      var menuOpen = false;
+
+      var params = new URLSearchParams(location.search);
+      var serverParam = params.get("server");
+
+      function sanitizeServerName(name) {
+        return String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+      }
+
+      function getAuthToken() {
+        try {
+          return sessionStorage.getItem(AUTH_TOKEN_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function isPreviewAuthed() {
+        var t = getAuthToken();
+        return t !== null && t !== "";
+      }
+
+      function clearAuthToken() {
+        try {
+          sessionStorage.removeItem(AUTH_TOKEN_KEY);
+        } catch (e) {}
+      }
+
+      function buildPreviewContentUrl(path) {
+        var enc = encodeURIComponent(path);
+        return PREVIEW_CONTENT_URL_PATTERN.replace(/\{file\}/g, enc).replace(/\{timestamp\}/g, Date.now());
+      }
+
+      function getArchivePreviewCfg(id) {
+        return ARCHIVE_PREVIEW_CONFIG[id] || null;
+      }
+
+      function archiveNoAutha(id) {
+        var c = getArchivePreviewCfg(id);
+        return !!(c && (c.noautha === true || c.noAuth === true));
+      }
+
+      function tabBasename(path) {
+        if (!path) return "—";
+        var parts = path.replace(/\\/g, "/").split("/");
+        for (var i = parts.length - 1; i >= 0; i--) {
+          if (parts[i]) return parts[i];
+        }
+        return path;
+      }
+
+      function setTabBar(path, openInBrowserUrl) {
+        if (vscodeTabTitle) {
+          vscodeTabTitle.textContent = tabBasename(path) || "—";
+          vscodeTabTitle.title = path || "";
+        }
+        if (vscodeTabExtra) {
+          vscodeTabExtra.replaceChildren();
+          if (openInBrowserUrl) {
+            var a = document.createElement("a");
+            a.href = openInBrowserUrl;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = "Open in browser";
+            vscodeTabExtra.appendChild(a);
+          }
+        }
+      }
+
+      function setTabLoading(path) {
+        if (vscodeTabTitle) {
+          vscodeTabTitle.textContent = tabBasename(path) || "—";
+          vscodeTabTitle.title = path || "";
+        }
+        if (vscodeTabExtra) {
+          vscodeTabExtra.textContent = "Loading…";
+        }
+      }
+
+      function fillEditorText(text) {
+        var t = text == null ? "" : String(text);
+        var lines = t.split(/\n/);
+        var gutterLines = [];
+        for (var i = 1; i <= lines.length; i++) gutterLines.push(String(i));
+        if (vscodeGutter) vscodeGutter.textContent = gutterLines.join("\n");
+        if (previewPre) previewPre.textContent = t;
+        if (vscodeTextEditor) vscodeTextEditor.hidden = false;
+        if (previewPre) previewPre.hidden = false;
+      }
+
+      function buildArchiveRelativePath(archiveId, filePath) {
+        var segs = [archiveId].concat(
+          String(filePath)
+            .replace(/\\/g, "/")
+            .split("/")
+            .filter(Boolean)
+        );
+        return "archives/" + segs.map(encodeURIComponent).join("/");
+      }
+
+      function mirrorPageUrl(cfg, filePath) {
+        var o = cfg && cfg.mirrorOrigin;
+        if (!o) return null;
+        o = String(o).replace(/\/$/, "");
+        var parts = String(filePath).split("/").filter(Boolean);
+        return o + "/" + parts.map(encodeURIComponent).join("/");
+      }
+
+      /** Local archives/… first; if missing or file:// blocked, try mirrorOrigin (CORS). */
+      function fetchArchiveWithMirrorFallback(rel, mirrorUrl) {
+        function asText(r) {
+          return r.text().then(function (t) {
+            return { r: r, t: t };
+          });
+        }
+        return fetch(rel)
+          .then(asText)
+          .then(function (x) {
+            if (x.r.ok) return x;
+            if (!mirrorUrl) return x;
+            return fetch(mirrorUrl, { mode: "cors", credentials: "omit" }).then(
+              asText
+            );
+          })
+          .catch(function () {
+            if (!mirrorUrl) return Promise.reject(new Error("local fetch failed"));
+            return fetch(mirrorUrl, { mode: "cors", credentials: "omit" }).then(
+              asText
+            );
+          });
+      }
+
+      function loadArchiveSourceFile(apCfg) {
+        var rel = buildArchiveRelativePath(currentArchiveId, selectedPath);
+        var mirrorUrl = mirrorPageUrl(apCfg, selectedPath);
+        var bin =
+          /\.(mp3|png|jpg|jpeg|gif|webp|ico|pdf|zip|woff2?|mp4|webm|ogg)$/i.test(
+            selectedPath
+          );
+        if (bin) {
+          setTabBar(selectedPath, mirrorUrl);
+          fillEditorText(
+            "[Binary / media file — not shown as text.]\n\nRelative path: " + rel
+          );
+          return;
+        }
+        setTabLoading(selectedPath);
+        fillEditorText("");
+        fetchArchiveWithMirrorFallback(rel, mirrorUrl)
+          .then(function (x) {
+            if (!x.r.ok) {
+              setTabBar(
+                selectedPath + " (" + x.r.status + ")",
+                mirrorUrl
+              );
+              fillEditorText(
+                "Could not load " +
+                  rel +
+                  (mirrorUrl ? " or " + mirrorUrl : "") +
+                  "\n\nHTTP " +
+                  x.r.status +
+                  "\n\n" +
+                  (x.t || "") +
+                  "\n\nTo save all files under archives/… offline, run:\n" +
+                  "  node scripts/mirror-farewell-site.mjs"
+              );
+              return;
+            }
+            setTabBar(selectedPath, mirrorUrl);
+            fillEditorText(x.t);
+          })
+          .catch(function (err) {
+            setTabBar(selectedPath, mirrorUrl);
+            fillEditorText(
+              "Fetch failed for " +
+                rel +
+                (mirrorUrl ? " and " + mirrorUrl : "") +
+                "\n\n" +
+                (err && err.message ? err.message : String(err)) +
+                "\n\nRun: node scripts/mirror-farewell-site.mjs (from archive_jj) " +
+                "to download files, or open index.html via a local http server."
+            );
+          });
+      }
+
+      function isRedactedPath(path) {
+        return typeof path === "string" && path.indexOf("[REDACTED]") !== -1;
+      }
+
+      function loadPreviewContent() {
+        if (!selectedPath) {
+          setTabBar("—", null);
+          fillEditorText("");
+          return;
+        }
+        if (isRedactedPath(selectedPath)) {
+          return;
+        }
+        var apCfg = getArchivePreviewCfg(currentArchiveId);
+        if (
+          apCfg &&
+          (apCfg.noautha === true || apCfg.noAuth === true) &&
+          apCfg.sourceFromArchive === true
+        ) {
+          loadArchiveSourceFile(apCfg);
+          return;
+        }
+        var url = buildPreviewContentUrl(selectedPath);
+        if (!url) {
+          setTabBar(selectedPath, null);
+          fillEditorText(
+            "Set PREVIEW_CONTENT_URL_PATTERN in index.html to fetch previews."
+          );
+          return;
+        }
+        setTabLoading(selectedPath);
+        fillEditorText("");
+        var headers = { Accept: "text/plain, application/json;q=0.9, */*;q=0.8" };
+        var tok = getAuthToken();
+        if (tok) headers["Authorization"] = "Bearer " + tok;
+        fetch(url, { method: "GET", headers: headers, credentials: "same-origin" })
+          .then(function (r) {
+            return r.text().then(function (t) {
+              return { r: r, t: t };
+            });
+          })
+          .then(function (x) {
+            if (!x.r.ok) {
+              setTabBar(selectedPath + " (" + x.r.status + ")", null);
+              fillEditorText(
+                "Preview request failed (" + x.r.status + ")\n\n" + (x.t || "")
+              );
+              return;
+            }
+            setTabBar(selectedPath, null);
+            var body = x.t;
+            try {
+              var j = JSON.parse(x.t);
+              if (j && typeof j.content === "string") {
+                body = j.content;
+              } else if (j && typeof j.text === "string") {
+                body = j.text;
+              }
+            } catch (e) {}
+            fillEditorText(body);
+          })
+          .catch(function (err) {
+            setTabBar(selectedPath, null);
+            fillEditorText(
+              "Preview request failed\n\n" +
+                (err && err.message ? err.message : String(err))
+            );
+          });
+      }
+
+      function syncMenuBody() {
+        previewPre.classList.remove("is-redacted");
+        if (selectedPath && isRedactedPath(selectedPath)) {
+          previewGate.style.display = "none";
+          previewContent.hidden = false;
+          previewSignOut.hidden = true;
+          setTabBar(selectedPath, null);
+          fillEditorText(
+            "This content has been redacted for security reasons.\n\n" +
+              "Original paths and filenames in this zone are not published in this archive."
+          );
+          previewPre.classList.add("is-redacted");
+          return;
+        }
+        if (
+          archiveNoAutha(currentArchiveId) &&
+          selectedPath &&
+          !isRedactedPath(selectedPath)
+        ) {
+          previewGate.style.display = "none";
+          previewContent.hidden = false;
+          previewSignOut.hidden = true;
+          loadPreviewContent();
+          return;
+        }
+        var ok = isPreviewAuthed();
+        previewGate.style.display = ok ? "none" : "flex";
+        previewContent.hidden = !ok;
+        previewSignOut.hidden = !ok;
+        if (ok && selectedPath) {
+          loadPreviewContent();
+        } else if (ok) {
+          setTabBar("—", null);
+          fillEditorText("");
+        }
+      }
+
+      function closeFileMenu() {
+        menuOpen = false;
+        fileMenuBackdrop.hidden = true;
+        fileMenu.hidden = true;
+        previewErr.textContent = "";
+      }
+
+      function openFileMenu() {
+        if (!selectedPath) return;
+        menuOpen = true;
+        fileMenuPath.textContent = selectedPath;
+        fileMenuBackdrop.hidden = false;
+        fileMenu.hidden = false;
+        syncMenuBody();
+        if (selectedPath && isRedactedPath(selectedPath)) {
+          fileMenu.focus();
+          return;
+        }
+        if (archiveNoAutha(currentArchiveId) && selectedPath) {
+          fileMenu.focus();
+          return;
+        }
+        if (!isPreviewAuthed()) {
+          previewUser.focus();
+        } else {
+          fileMenu.focus();
+        }
+      }
+
+      function setSelectedPath(path, fileEl) {
+        selectedPath = path || "";
+        selEl.textContent = selectedPath || "—";
+        if (selectedFileEl && selectedFileEl !== fileEl) {
+          selectedFileEl.classList.remove("selected");
+        }
+        selectedFileEl = fileEl || null;
+        if (selectedFileEl) selectedFileEl.classList.add("selected");
+        if (menuOpen && selectedPath) {
+          fileMenuPath.textContent = selectedPath;
+          syncMenuBody();
+        }
+      }
+
+      function applyFromManifest(data, sourceLabel) {
+        allPaths = (data.entries || [])
+          .filter(function (e) {
+            return e.type === "file";
+          })
+          .map(function (e) {
+            return e.path;
+          });
+        sourceNote = sourceLabel;
+        closeFileMenu();
+        setSelectedPath("", null);
+        render();
+      }
+
+      function sortedTreeKeys(obj) {
+        var dirs = [];
+        var files = [];
+        Object.keys(obj).forEach(function (name) {
+          if (obj[name] === null) files.push(name);
+          else dirs.push(name);
+        });
+        function cmp(a, b) {
+          return a.localeCompare(b, undefined, { sensitivity: "base" });
+        }
+        dirs.sort(cmp);
+        files.sort(cmp);
+        return dirs.concat(files);
+      }
+
+      function buildNode(obj, prefix) {
+        var frag = document.createDocumentFragment();
+        sortedTreeKeys(obj).forEach(function (name) {
+          var v = obj[name];
+          if (v === null) {
+            var fullPath = prefix + name;
+            var line = document.createElement("div");
+            line.className = "file";
+            line.dataset.path = fullPath;
+            line.textContent = name;
+            line.title = fullPath;
+            line.addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              setSelectedPath(fullPath, line);
+              openFileMenu();
+            });
+            frag.appendChild(line);
+          } else {
+            var det = document.createElement("details");
+            det.open = false;
+            var sum = document.createElement("summary");
+            sum.textContent = name + "/";
+            det.appendChild(sum);
+            var inner = document.createElement("div");
+            inner.appendChild(buildNode(v, prefix + name + "/"));
+            det.appendChild(inner);
+            frag.appendChild(det);
+          }
+        });
+        return frag;
+      }
+
+      function pathsToTree(paths) {
+        var root = {};
+        paths.forEach(function (p) {
+          var parts = p.split("/").filter(Boolean);
+          var cur = root;
+          parts.forEach(function (part, i) {
+            var last = i === parts.length - 1;
+            if (!cur[part]) cur[part] = last ? null : {};
+            if (!last && cur[part] !== null) cur = cur[part];
+          });
+        });
+        return root;
+      }
+
+      function restoreSelectionHighlight() {
+        if (!selectedPath) return;
+        var nodes = treeEl.querySelectorAll(".file");
+        for (var i = 0; i < nodes.length; i++) {
+          if (nodes[i].dataset.path === selectedPath) {
+            nodes[i].classList.add("selected");
+            selectedFileEl = nodes[i];
+            return;
+          }
+        }
+        selectedFileEl = null;
+      }
+
+      function render() {
+        var q = (filterEl.value || "").trim().toLowerCase();
+        var list = q
+          ? allPaths.filter(function (p) {
+              return p.toLowerCase().indexOf(q) !== -1;
+            })
+          : allPaths;
+        metaEl.textContent =
+          list.length +
+          " / " +
+          allPaths.length +
+          " files" +
+          (sourceNote ? " · " + sourceNote : "");
+        treeEl.innerHTML = "";
+        if (list.length === 0) {
+          treeEl.innerHTML = '<p class="empty">No matches.</p>';
+          return;
+        }
+        treeEl.appendChild(buildNode(pathsToTree(list), ""));
+        if (selectedPath && list.indexOf(selectedPath) === -1) {
+          setSelectedPath("", null);
+        } else {
+          restoreSelectionHighlight();
+        }
+      }
+
+      function fallbackPaths() {
+        return [
+          "jurassicjungle.gg/v4/app/shell.html",
+          "jurassicjungle.gg/api/v4/jj/authenticated.js",
+          "gateway.jurassicjungle.gg/api/v4/jj/proxy.js",
+          "static.astroslounge.com/v4/app/dashboard.html",
+          "cdn.astroslounge.com/probe",
+          "api.astroslounge.com/api/v4/jj/router.js",
+          "v3.astroslounge.com/api/auth/steam/index.js",
+        ];
+      }
+
+      function setUrlArchive(id) {
+        try {
+          var u = new URL(location.href);
+          u.searchParams.delete("server");
+          if (id) u.searchParams.set("archive", id);
+          else u.searchParams.delete("archive");
+          history.replaceState({}, "", u.pathname + u.search + u.hash);
+        } catch (e) {}
+      }
+
+      function setUrlServer(name) {
+        try {
+          var u = new URL(location.href);
+          u.searchParams.delete("archive");
+          u.searchParams.set("server", name);
+          history.replaceState({}, "", u.pathname + u.search + u.hash);
+        } catch (e) {}
+      }
+
+      function loadArchiveInlineScript(id, label) {
+        var prev = window.__JJ_ARCHIVE__;
+        window.__JJ_ARCHIVE__ = undefined;
+        var base = "archives/" + encodeURIComponent(id) + "/";
+        var s = document.createElement("script");
+        s.src = base + "manifest-inline.js";
+        s.onload = function () {
+          if (
+            window.__JJ_ARCHIVE__ &&
+            window.__JJ_ARCHIVE__.entries &&
+            window.__JJ_ARCHIVE__.entries.length
+          ) {
+            currentArchiveId = id;
+            archivePick.value = id;
+            paneHead.textContent = "File tree — " + (label || id);
+            applyFromManifest(window.__JJ_ARCHIVE__, base + "manifest-inline.js");
+            setUrlArchive(id);
+          } else {
+            window.__JJ_ARCHIVE__ = prev;
+            showFallback("No entries in " + base + "manifest-inline.js");
+          }
+        };
+        s.onerror = function () {
+          window.__JJ_ARCHIVE__ = prev;
+          showFallback("Could not load " + base + "manifest-inline.js");
+        };
+        document.head.appendChild(s);
+      }
+
+      function loadArchiveManifest(id, label) {
+        var base = "archives/" + encodeURIComponent(id) + "/";
+        var url = base + "manifest.json";
+        fetch(url)
+          .then(function (r) {
+            if (!r.ok) throw new Error("manifest");
+            return r.json();
+          })
+          .then(function (data) {
+            currentArchiveId = id;
+            archivePick.value = id;
+            paneHead.textContent = "File tree — " + (label || id);
+            applyFromManifest(data, url);
+            setUrlArchive(id);
+          })
+          .catch(function () {
+            loadArchiveInlineScript(id, label);
+          });
+      }
+
+      function loadDataJson(serverName) {
+        var base = "data/" + sanitizeServerName(serverName);
+        var jsonUrl = base + ".json";
+        fetch(jsonUrl)
+          .then(function (r) {
+            if (!r.ok) throw new Error("no json");
+            return r.json();
+          })
+          .then(function (data) {
+            paneHead.textContent = "File tree — data:" + sanitizeServerName(serverName);
+            applyFromManifest(data, jsonUrl + " (?server)");
+            setUrlServer(serverName);
+          })
+          .catch(function () {
+            showFallback("No data for ?server=" + encodeURIComponent(serverName));
+          });
+      }
+
+      function showFallback(msg) {
+        sourceNote = msg || "fallback";
+        allPaths = fallbackPaths();
+        render();
+      }
+
+      function loadArchiveList() {
+        return fetch("archives/index.json")
+          .then(function (r) {
+            if (!r.ok) throw new Error("no index");
+            return r.json();
+          })
+          .then(function (j) {
+            return j.archives && j.archives.length ? j.archives : FALLBACK_ARCHIVES;
+          })
+          .catch(function () {
+            return FALLBACK_ARCHIVES;
+          });
+      }
+
+      function pickArchiveFromParams(archives) {
+        var wanted = params.get("archive");
+        if (wanted && archives.some(function (a) { return a.id === wanted; })) {
+          return wanted;
+        }
+        if (archives[0]) return archives[0].id;
+        return "";
+      }
+
+      function tryUnlock() {
+        previewErr.textContent = "";
+        var u = (previewUser.value || "").trim();
+        var p = previewPass.value || "";
+
+        previewUnlock.disabled = true;
+        fetch(PREVIEW_AUTH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p }),
+        })
+          .then(function (r) {
+            return r.text().then(function (t) {
+              var j = {};
+              try {
+                j = t ? JSON.parse(t) : {};
+              } catch (e) {}
+              return { status: r.status, body: j };
+            });
+          })
+          .then(function (x) {
+            if (x.status >= 200 && x.status < 300 && x.body && x.body.ok) {
+              var token =
+                x.body.token ||
+                x.body.access_token ||
+                "authenticated";
+              try {
+                sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+              } catch (e) {}
+              previewPass.value = "";
+              syncMenuBody();
+              return;
+            }
+            if (x.status >= 200 && x.status < 300 && x.body && !x.body.ok) {
+              previewErr.textContent =
+                (x.body && x.body.error) || "Authentication failed.";
+              return;
+            }
+            if (x.status === 401 || x.status === 403) {
+              previewErr.textContent =
+                (x.body && x.body.error) || "Wrong password.";
+              return;
+            }
+            previewErr.textContent =
+              (x.body && x.body.error) || "Authentication failed.";
+          })
+          .catch(function () {
+            previewErr.textContent = "Could not reach auth server.";
+          })
+          .finally(function () {
+            previewUnlock.disabled = false;
+          });
+      }
+
+      previewUnlock.addEventListener("click", tryUnlock);
+      previewUser.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") tryUnlock();
+      });
+      previewPass.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") tryUnlock();
+      });
+      previewSignOut.addEventListener("click", function () {
+        clearAuthToken();
+        previewErr.textContent = "";
+        syncMenuBody();
+      });
+
+      fileMenuClose.addEventListener("click", closeFileMenu);
+      fileMenuBackdrop.addEventListener("click", closeFileMenu);
+      fileMenu.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && menuOpen) {
+          closeFileMenu();
+        }
+      });
+
+      previewPre.addEventListener("scroll", function () {
+        if (vscodeGutter) vscodeGutter.scrollTop = previewPre.scrollTop;
+      });
+      vscodeGutter.addEventListener("scroll", function () {
+        previewPre.scrollTop = vscodeGutter.scrollTop;
+      });
+
+      function init() {
+        loadArchiveList().then(function (archives) {
+          archivePick.innerHTML = "";
+          archives.forEach(function (a) {
+            var opt = document.createElement("option");
+            opt.value = a.id;
+            opt.textContent = a.label || a.id;
+            archivePick.appendChild(opt);
+          });
+
+          if (serverParam) {
+            archivePick.disabled = true;
+            loadDataJson(serverParam);
+            filterEl.addEventListener("input", render);
+            return;
+          }
+
+          archivePick.disabled = false;
+          var id = pickArchiveFromParams(archives);
+          var meta = archives.filter(function (a) { return a.id === id; })[0];
+          if (!id) {
+            showFallback("No archives — add folders under archives/ and run build-archives-index");
+            filterEl.addEventListener("input", render);
+            return;
+          }
+
+          loadArchiveManifest(id, meta && meta.label);
+
+          archivePick.addEventListener("change", function () {
+            var nid = archivePick.value;
+            var m = archives.filter(function (a) { return a.id === nid; })[0];
+            loadArchiveManifest(nid, m && m.label);
+          });
+
+          filterEl.addEventListener("input", render);
+        });
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

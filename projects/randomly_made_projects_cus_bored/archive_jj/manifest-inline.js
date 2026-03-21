@@ -1,0 +1,1 @@
+window.__JJ_ARCHIVE__={"site":"archive_jj","serverRoot":"C:\\Users\\Astro\\Desktop\\HTMLCLASS\\projects\\randomly_made_projects_cus_bored\\archive_jj","generated":"2026-03-21T00:37:29.722Z","description":"scan-folder.mjs (drop-in)","fileCount":1,"dirCount":1,"entries":[{"type":"file","path":"index.html"},{"type":"dir","path":"scripts/"}]};

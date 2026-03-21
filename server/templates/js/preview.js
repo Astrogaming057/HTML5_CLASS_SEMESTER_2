@@ -42,6 +42,12 @@ require(['vs/editor/editor.main'], function() {
   const fileName = document.getElementById('fileName');
   const modeIndicator = document.getElementById('modeIndicator');
   previewFrame = document.getElementById('previewFrame');
+  if (window.PreviewRemoteExplorer && typeof window.PreviewRemoteExplorer.init === 'function') {
+    window.PreviewRemoteExplorer.init();
+  }
+  if (window.PreviewRemoteExplorer && previewFrame && typeof window.PreviewRemoteExplorer.attachPreviewFrame === 'function') {
+    window.PreviewRemoteExplorer.attachPreviewFrame(previewFrame);
+  }
   fileTree = document.getElementById('fileTree');
   const imagePreview = document.getElementById('imagePreview');
   const previewImage = document.getElementById('previewImage');
@@ -59,7 +65,11 @@ require(['vs/editor/editor.main'], function() {
   const pinPreviewBtn = document.getElementById('pinPreviewBtn');
   const previewPinned = { current: false };
   const previewPinnedPath = { current: null };
-  
+  /** When true, preview panel was collapsed for hex / binary; restoreOpen = user had it expanded. */
+  const previewForcedHiddenRef = { active: false, restoreOpen: false };
+  /** True while openHexEditorForPath is switching file + opening hex (skip auto-restore in loadFile). */
+  let openHexEditorPending = false;
+
   const filePathRef = { current: filePath };
   const currentDirRef = { currentDir: '' };
   const isRestoringStateRef = { current: true };
@@ -695,17 +705,36 @@ require(['vs/editor/editor.main'], function() {
     
     const clientMode = window.__CLIENT_MODE || (window.electronAPI && window.electronAPI.isElectron ? 'app' : 'browser');
     
-    // Fetch server mode for tooltip
+    // Fetch server mode for tooltip (also feeds backend-crash dialog via PreviewPingMonitor)
     fetch('/__api__/mode')
-      .then(res => res.json())
-      .then(data => {
-        const clientModeText = clientMode === 'app' ? 'App (Electron)' : 'Browser';
-        const serverModeText = data.mode === 'app' ? 'App' : 'Browser';
+      .then((res) => {
+        if (!res.ok) {
+          if (window.PreviewPingMonitor && typeof PreviewPingMonitor.notifyModeCheckResult === 'function') {
+            PreviewPingMonitor.notifyModeCheckResult(false, {
+              message: 'HTTP ' + res.status + ' ' + (res.statusText || ''),
+              stack: ''
+            });
+          }
+          throw new Error('MODE_HTTP_' + res.status);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (window.PreviewPingMonitor && typeof PreviewPingMonitor.notifyModeCheckResult === 'function') {
+          PreviewPingMonitor.notifyModeCheckResult(true);
+        }
         modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
         modeIndicator.className = `mode-indicator ${clientMode}`;
         modeIndicator.title = `Click to view mode information`;
       })
-      .catch(err => {
+      .catch((err) => {
+        const alreadyNotified = err && typeof err.message === 'string' && err.message.indexOf('MODE_HTTP_') === 0;
+        if (!alreadyNotified && window.PreviewPingMonitor && typeof PreviewPingMonitor.notifyModeCheckResult === 'function') {
+          PreviewPingMonitor.notifyModeCheckResult(false, {
+            message: err && err.message ? err.message : String(err),
+            stack: err && err.stack ? err.stack : ''
+          });
+        }
         modeIndicator.textContent = clientMode === 'app' ? 'APP' : 'BROWSER';
         modeIndicator.className = `mode-indicator ${clientMode}`;
         modeIndicator.title = `Click to view mode information`;
@@ -858,6 +887,32 @@ require(['vs/editor/editor.main'], function() {
     PreviewFileExplorer.uploadFile(file, targetDir, status, isDirty, loadFileTree, () => currentDirRef.currentDir);
   }
   
+  function hideBinaryFilePrompt() {
+    const el = document.getElementById('binaryEditPrompt');
+    if (!el) return;
+    el.setAttribute('hidden', '');
+    el.setAttribute('aria-hidden', 'true');
+  }
+
+  function showBinaryFilePrompt(filePath) {
+    const el = document.getElementById('binaryEditPrompt');
+    if (!el) return;
+    el.removeAttribute('hidden');
+    el.setAttribute('aria-hidden', 'false');
+    const openBtn = document.getElementById('binaryEditPromptOpenHex');
+    const dismissBtn = document.getElementById('binaryEditPromptDismiss');
+    if (openBtn) {
+      openBtn.onclick = () => {
+        openHexEditorForPath(filePath);
+      };
+    }
+    if (dismissBtn) {
+      dismissBtn.onclick = () => {
+        hideBinaryFilePrompt();
+      };
+    }
+  }
+
   async function openHexEditorForPath(hexPath) {
     if (!window.PreviewHexEditor || typeof PreviewHexEditor.open !== 'function') {
       return;
@@ -866,29 +921,43 @@ require(['vs/editor/editor.main'], function() {
     const mount = document.getElementById('hexEditorMount');
     if (!editorEl || !mount) return;
 
-    if (hexPath !== filePathRef.current) {
-      await switchToFileInternal(hexPath);
-      if (filePathRef.current !== hexPath) {
-        return;
-      }
-    }
-
-    const ok = await PreviewHexEditor.open(hexPath, {
-      monacoHost: editorEl,
-      mount: mount,
-      onDirty: (d) => {
-        isDirty.current = d;
-        updateStatus();
-        const p = filePathRef.current;
-        if (p) {
-          PreviewTabManager.updateTabDirtyState(p, d, originalContent.current);
+    hideBinaryFilePrompt();
+    openHexEditorPending = true;
+    beginPreviewForcedHidden();
+    try {
+      if (hexPath !== filePathRef.current) {
+        await switchToFileInternal(hexPath);
+        if (filePathRef.current !== hexPath) {
+          endPreviewForcedHidden();
+          return;
         }
-      },
-      reloadTextEditor: () => loadFile(filePathRef.current, true)
-    });
-    if (ok) {
-      status.textContent = 'Hex editor';
-      status.className = 'status';
+      }
+
+      const ok = await PreviewHexEditor.open(hexPath, {
+        monacoHost: editorEl,
+        mount: mount,
+        onDirty: (d) => {
+          isDirty.current = d;
+          updateStatus();
+          const p = filePathRef.current;
+          if (p) {
+            PreviewTabManager.updateTabDirtyState(p, d, originalContent.current);
+          }
+        },
+        reloadTextEditor: () => loadFile(filePathRef.current, true)
+      });
+      if (ok) {
+        status.textContent = 'Hex editor';
+        status.className = 'status';
+      } else {
+        endPreviewForcedHidden();
+        const p = filePathRef.current;
+        if (p && PreviewEditorManager.isBinaryNoPreviewPath(p)) {
+          showBinaryFilePrompt(p);
+        }
+      }
+    } finally {
+      openHexEditorPending = false;
     }
   }
 
@@ -1098,6 +1167,39 @@ require(['vs/editor/editor.main'], function() {
   function updatePreviewVisibility() {
     PreviewUI.updatePreviewVisibility(previewPanel, editorPanel, resizerEditor);
   }
+
+  function beginPreviewForcedHidden() {
+    if (!previewPanel) return;
+    if (PreviewPopouts.isPreviewPoppedOut()) return;
+    if (!previewForcedHiddenRef.active) {
+      previewForcedHiddenRef.restoreOpen = !previewPanel.classList.contains('collapsed');
+      previewForcedHiddenRef.active = true;
+    }
+    if (!previewPanel.classList.contains('collapsed')) {
+      previewPanel.classList.add('collapsed');
+      if (togglePreview) togglePreview.textContent = '▶';
+      updatePreviewVisibility();
+      saveState();
+    }
+  }
+
+  function endPreviewForcedHidden() {
+    if (!previewForcedHiddenRef.active) return;
+    previewForcedHiddenRef.active = false;
+    if (!previewPanel) return;
+    if (PreviewPopouts.isPreviewPoppedOut()) return;
+    if (previewForcedHiddenRef.restoreOpen) {
+      previewPanel.classList.remove('collapsed');
+      if (togglePreview) togglePreview.textContent = '◀';
+      updatePreviewVisibility();
+      refreshPreview();
+      saveState();
+    }
+    previewForcedHiddenRef.restoreOpen = false;
+  }
+
+  window.__previewBeginForcedPanel = beginPreviewForcedHidden;
+  window.__previewEndForcedPanel = endPreviewForcedHidden;
   
   function updateTerminalVisibility() {
     PreviewTerminalUI.updateTerminalVisibility(terminalPanel, toggleTerminal, resizerTerminal, terminalReopenBar);
@@ -1247,7 +1349,8 @@ require(['vs/editor/editor.main'], function() {
       skipCache ? null : ((cached, live, filePath) => customCacheDialog(cached, live, filePath)),
       showImagePreview, showHtmlPreview, interceptPreviewLinks,
       setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange, skipCache,
-      () => previewPinned.current
+      () => previewPinned.current,
+      { showBinaryPrompt: showBinaryFilePrompt, hideBinaryPrompt: hideBinaryFilePrompt }
     );
     if (result) {
       if (result.originalContent !== undefined) {
@@ -1265,6 +1368,14 @@ require(['vs/editor/editor.main'], function() {
     if (isPreviewPoppedOut) {
       PreviewPopouts.enforcePreviewCollapsed(previewPanel);
       updatePreviewVisibility();
+    }
+
+    if (
+      !openHexEditorPending &&
+      !PreviewEditorManager.isBinaryNoPreviewPath(path) &&
+      (!window.PreviewHexEditor || !PreviewHexEditor.isActive())
+    ) {
+      endPreviewForcedHidden();
     }
   }
   
@@ -1643,14 +1754,17 @@ require(['vs/editor/editor.main'], function() {
               monaco.editor.setModelLanguage(targetModel, detectedLanguage);
             }
             editor.setModel(targetModel);
+            PreviewEditorManager.applyEditorReadOnlyForPath(editor, filePath);
           } else {
             editor.setValue(content);
+            PreviewEditorManager.applyEditorReadOnlyForPath(editor, filePath);
           }
         } else {
           // Clear file path and name when no file is open
           filePathRef.current = '';
           fileName.textContent = '';
           editor.setValue(content);
+          editor.updateOptions({ readOnly: false });
         }
         if (originalContent !== undefined) {
           originalContent.current = originalContent;

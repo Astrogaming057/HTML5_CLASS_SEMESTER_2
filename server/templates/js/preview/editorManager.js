@@ -3,7 +3,62 @@ window.PreviewEditorManager = (function() {
   let liveEditorInstance = null;
   let isApplyingExternalChange = false;
 
+  const VIEW_ONLY_IMAGE_PLACEHOLDER = '// Image file - cannot be edited as text';
+  const VIEW_ONLY_DOCUMENT_PLACEHOLDER =
+    '// Document file - not editable as text. Use the Preview panel to view it.';
+  const VIEW_ONLY_BINARY_PLACEHOLDER =
+    '// Binary / archive: preview panel hidden. Use Hex editor from the file context menu, or open a text/HTML file.';
+
+  const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+  const DOCUMENT_EXTENSIONS = [
+    '.doc', '.docx', '.rtf', '.odt',
+    '.pdf',
+    '.ppt', '.pptx', '.odp',
+    '.xls', '.xlsx', '.ods',
+  ];
+
+  function isImagePath(path) {
+    const lower = (path || '').toLowerCase();
+    return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  }
+
+  function isDocumentPath(path) {
+    const lower = (path || '').toLowerCase();
+    return DOCUMENT_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  }
+
+  function pathIsViewOnly(path) {
+    return isImagePath(path) || isDocumentPath(path);
+  }
+
+  /** Executables / archives — hide preview; not useful as UTF-8 text. */
+  const BINARY_NO_PREVIEW_EXTENSIONS = [
+    '.exe', '.dll', '.msi', '.com', '.sys',
+    '.app', '.dmg', '.deb', '.rpm',
+    '.zip', '.7z', '.rar', '.tar', '.gz', '.tgz', '.bz2', '.xz',
+    '.wasm', '.so', '.dylib', '.apk', '.ipa',
+    '.bin',
+  ];
+
+  function pathIsBinaryNoPreview(path) {
+    const lower = (path || '').toLowerCase();
+    return BINARY_NO_PREVIEW_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  }
+
   return {
+    isViewOnlyPath(path) {
+      return pathIsViewOnly(path);
+    },
+
+    isBinaryNoPreviewPath(path) {
+      return pathIsBinaryNoPreview(path);
+    },
+
+    applyEditorReadOnlyForPath(editor, path) {
+      if (!editor) return;
+      editor.updateOptions({ readOnly: pathIsViewOnly(path) || pathIsBinaryNoPreview(path) });
+    },
+
     updateActiveFileTreeItem(path, fileTree) {
       const allItems = fileTree.querySelectorAll('.file-tree-item');
       allItems.forEach(item => {
@@ -86,29 +141,31 @@ window.PreviewEditorManager = (function() {
       }
     },
 
-    async loadFile(path, status, editor, previewFrame, previewSettings, fileTree, getLanguage, customCacheDialog, showImagePreview, showHtmlPreview, interceptPreviewLinks, setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange, skipCache, isPreviewPinned) {
+    async loadFile(path, status, editor, previewFrame, previewSettings, fileTree, getLanguage, customCacheDialog, showImagePreview, showHtmlPreview, interceptPreviewLinks, setupPreviewLogInterception, updateStatus, originalContent, isDirty, isApplyingExternalChange, skipCache, isPreviewPinned, binaryUiHandlers) {
       status.textContent = 'Loading...';
       status.className = 'status';
+
+      if (binaryUiHandlers && typeof binaryUiHandlers.hideBinaryPrompt === 'function') {
+        binaryUiHandlers.hideBinaryPrompt();
+      }
       
-      const lowerPath = path.toLowerCase();
-      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
-      const isImage = imageExtensions.some(ext => lowerPath.endsWith(ext));
-      const documentExtensions = [
-        '.doc', '.docx', '.rtf', '.odt',
-        '.pdf',
-        '.ppt', '.pptx', '.odp',
-        '.xls', '.xlsx', '.ods'
-      ];
-      const isDocument = documentExtensions.some(ext => lowerPath.endsWith(ext));
+      const isImage = isImagePath(path);
+      const isDocument = isDocumentPath(path);
       
       if (isImage) {
         showImagePreview(path);
         status.textContent = 'Ready';
         status.className = 'status';
-        editor.setValue('// Image file - cannot be edited as text');
-        originalContent.current = '';
+        // Must match editor buffer: originalContent '' made getValue() !== originalContent → always "Modified"
+        isApplyingExternalChange.current = true;
+        editor.updateOptions({ readOnly: true });
+        originalContent.current = VIEW_ONLY_IMAGE_PLACEHOLDER;
         isDirty.current = false;
-        updateStatus();
+        editor.setValue(VIEW_ONLY_IMAGE_PLACEHOLDER);
+        setTimeout(() => {
+          isApplyingExternalChange.current = false;
+          updateStatus();
+        }, 100);
         return { originalContent: originalContent.current, isDirty: isDirty.current };
       }
 
@@ -116,10 +173,11 @@ window.PreviewEditorManager = (function() {
         // For document-like files, don't attempt to load as text into the editor.
         status.textContent = 'Ready';
         status.className = 'status';
-        editor.setValue('// Document file - not editable as text. Use the Preview panel to view it.');
-        originalContent.current = '';
+        isApplyingExternalChange.current = true;
+        editor.updateOptions({ readOnly: true });
+        originalContent.current = VIEW_ONLY_DOCUMENT_PLACEHOLDER;
         isDirty.current = false;
-        updateStatus();
+        editor.setValue(VIEW_ONLY_DOCUMENT_PLACEHOLDER);
 
         const isPreviewPoppedOut = PreviewPopouts.isPreviewPoppedOut();
         const pinned = typeof isPreviewPinned === 'function' ? isPreviewPinned() : false;
@@ -146,6 +204,37 @@ window.PreviewEditorManager = (function() {
           }
         }
 
+        setTimeout(() => {
+          isApplyingExternalChange.current = false;
+          updateStatus();
+        }, 100);
+        return { originalContent: originalContent.current, isDirty: isDirty.current };
+      }
+
+      if (pathIsBinaryNoPreview(path)) {
+        status.textContent = 'Ready';
+        status.className = 'status';
+        isApplyingExternalChange.current = true;
+        editor.updateOptions({ readOnly: true });
+        isDirty.current = false;
+        const usePrompt = binaryUiHandlers && typeof binaryUiHandlers.showBinaryPrompt === 'function';
+        if (usePrompt) {
+          originalContent.current = '';
+          editor.setValue('');
+        } else {
+          originalContent.current = VIEW_ONLY_BINARY_PLACEHOLDER;
+          editor.setValue(VIEW_ONLY_BINARY_PLACEHOLDER);
+        }
+        setTimeout(() => {
+          isApplyingExternalChange.current = false;
+          updateStatus();
+        }, 100);
+        if (usePrompt) {
+          binaryUiHandlers.showBinaryPrompt(path);
+        }
+        if (typeof window.__previewBeginForcedPanel === 'function') {
+          window.__previewBeginForcedPanel();
+        }
         return { originalContent: originalContent.current, isDirty: isDirty.current };
       }
       
@@ -196,6 +285,7 @@ window.PreviewEditorManager = (function() {
         originalContent.current = fileData.content;
         isDirty.current = false;
         
+        editor.updateOptions({ readOnly: false });
         isApplyingExternalChange.current = true;
         
         const normalizedPath = path.replace(/^\/+/, '');
@@ -261,6 +351,12 @@ window.PreviewEditorManager = (function() {
 
     saveFile(editor, getFilePath, status, ws, originalContent, isDirty, updateStatus, saveToEditorTimeout) {
       const filePath = typeof getFilePath === 'function' ? getFilePath() : getFilePath;
+
+      if (pathIsBinaryNoPreview(filePath)) {
+        status.textContent = 'Binary file — use Hex editor to edit';
+        status.className = 'status';
+        return Promise.resolve({ originalContent: originalContent.current, isDirty: isDirty.current });
+      }
       
       if (!editor || !editor.getModel()) {
         console.error('Editor or model not available');

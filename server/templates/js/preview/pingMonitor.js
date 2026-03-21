@@ -3,6 +3,127 @@ window.PreviewPingMonitor = (function() {
   let pingInterval = null;
   const MAX_PING_HISTORY = 60; // Store last 60 pings (3 minutes at 3s intervals)
   const PING_INTERVAL = 3000; // Ping every 3 seconds
+
+  /** After mode check stays failed for this long, show crash dialog (once until recovery). */
+  const BACKEND_CRASH_DELAY_MS = 10000;
+
+  let backendCrashTimer = null;
+  let backendCrashDialogShown = false;
+  let lastCrashDetail = null;
+
+  function buildBugReportText(detail) {
+    const client = typeof window !== 'undefined' && window.__CLIENT_MODE ? window.__CLIENT_MODE : 'unknown';
+    const msg = detail && detail.message ? detail.message : 'Mode check failed';
+    const stack = detail && detail.stack ? detail.stack : '';
+    return [
+      'HTMLCLASS preview — backend mode check failed',
+      'Time: ' + new Date().toISOString(),
+      'Client mode: ' + client,
+      'Endpoint: GET /__api__/mode',
+      '',
+      'Error:',
+      msg,
+      '',
+      'Stack (browser / fetch, if available):',
+      stack || '(No JS stack. If the Node server crashed, copy the stack from the terminal or Electron main process logs.)'
+    ].join('\n');
+  }
+
+  function hideBackendCrashDialog() {
+    const overlay = document.getElementById('backendCrashOverlay');
+    if (!overlay) return;
+    overlay.setAttribute('hidden', '');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function ensureBackendCrashDialog() {
+    let overlay = document.getElementById('backendCrashOverlay');
+    if (overlay) return overlay;
+
+    overlay = document.createElement('div');
+    overlay.id = 'backendCrashOverlay';
+    overlay.className = 'backend-crash-overlay';
+    overlay.setAttribute('hidden', '');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML =
+      '<div class="backend-crash-dialog" role="dialog" aria-modal="true" aria-labelledby="backendCrashTitle">' +
+      '<h2 id="backendCrashTitle" class="backend-crash-title">Uh oh :(</h2>' +
+      '<p class="backend-crash-body">Something went wrong. It looks like the backend has crashed. Please restart the app. ' +
+      'If this continues to happen, please file a bug report and include the details below (crash stack / diagnostics).</p>' +
+      '<label class="backend-crash-label" for="backendCrashStack">Details for bug reports</label>' +
+      '<pre class="backend-crash-stack" id="backendCrashStack" readonly tabindex="0"></pre>' +
+      '<div class="backend-crash-actions">' +
+      '<button type="button" class="btn btn-secondary" id="backendCrashCopy">Copy details</button>' +
+      '<button type="button" class="btn btn-primary" id="backendCrashDismiss">OK</button>' +
+      '</div></div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) hideBackendCrashDialog();
+    });
+
+    const pre = document.getElementById('backendCrashStack');
+    const copyBtn = document.getElementById('backendCrashCopy');
+    const dismissBtn = document.getElementById('backendCrashDismiss');
+
+    copyBtn.addEventListener('click', function () {
+      const text = pre ? pre.textContent : '';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function () {});
+      }
+    });
+
+    dismissBtn.addEventListener('click', hideBackendCrashDialog);
+
+    overlay.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') hideBackendCrashDialog();
+    });
+
+    return overlay;
+  }
+
+  function showBackendCrashDialog(detail) {
+    const overlay = ensureBackendCrashDialog();
+    const pre = document.getElementById('backendCrashStack');
+    if (pre) {
+      pre.textContent = buildBugReportText(detail);
+    }
+    overlay.removeAttribute('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    const dismissBtn = document.getElementById('backendCrashDismiss');
+    if (dismissBtn) dismissBtn.focus();
+  }
+
+  function clearBackendCrashTimer() {
+    if (backendCrashTimer) {
+      clearTimeout(backendCrashTimer);
+      backendCrashTimer = null;
+    }
+  }
+
+  /**
+   * Call when any GET /__api__/mode check completes.
+   * @param {boolean} ok
+   * @param {{ message?: string, stack?: string } | null} detail
+   */
+  function notifyModeCheckResult(ok, detail) {
+    if (ok) {
+      clearBackendCrashTimer();
+      backendCrashDialogShown = false;
+      lastCrashDetail = null;
+      hideBackendCrashDialog();
+      return;
+    }
+    lastCrashDetail = detail || { message: 'Mode check failed', stack: '' };
+    if (backendCrashDialogShown) return;
+    if (backendCrashTimer) return;
+    backendCrashTimer = setTimeout(function () {
+      backendCrashTimer = null;
+      backendCrashDialogShown = true;
+      showBackendCrashDialog(lastCrashDetail);
+    }, BACKEND_CRASH_DELAY_MS);
+  }
   
   async function measurePing() {
     const startTime = performance.now();
@@ -25,11 +146,16 @@ window.PreviewPingMonitor = (function() {
           ping: ping,
           success: true
         });
+        notifyModeCheckResult(true);
       } else {
         pingHistory.push({
           time: Date.now(),
           ping: null,
           success: false
+        });
+        notifyModeCheckResult(false, {
+          message: 'HTTP ' + response.status + ' ' + (response.statusText || ''),
+          stack: ''
         });
       }
     } catch (error) {
@@ -38,6 +164,10 @@ window.PreviewPingMonitor = (function() {
         time: Date.now(),
         ping: null,
         success: false
+      });
+      notifyModeCheckResult(false, {
+        message: error && error.message ? error.message : String(error),
+        stack: error && error.stack ? error.stack : ''
       });
     }
     
@@ -213,7 +343,10 @@ window.PreviewPingMonitor = (function() {
     
     getHistory() {
       return [...pingHistory];
-    }
+    },
+
+    /** Exposed for other /__api__/mode callers (e.g. mode indicator) */
+    notifyModeCheckResult: notifyModeCheckResult
   };
   
   return module;

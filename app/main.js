@@ -704,6 +704,11 @@ function startServer() {
 
   serverProcess.on('close', (code) => {
     console.log(`[Server] Process exited with code ${code}`);
+    // crash.server test command uses exit 42 — do not auto-restart (otherwise it looks like nothing happened)
+    if (code === 42) {
+      console.log('[Server] Exit code 42 (crash.server test): not auto-restarting.');
+      return;
+    }
     if (code !== 0 && code !== null) {
       // Server crashed, try to restart after a delay
       setTimeout(() => {

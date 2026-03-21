@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jurassic Jungle by Astro's Lounge has been discontinued.">
+    <title>JurassicJungle | Discontinued · v19</title>
+    <style>
+        *{box-sizing:border-box} body{margin:0;min-height:100vh;color:#e8eef7;font-family:Segoe UI,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+        .aurora{position:fixed;inset:0;z-index:-1;background:linear-gradient(125deg,#0f172a,#1e1b4b,#312e81,#0c4a6e,#0f172a);background-size:400% 400%;animation:shift 18s ease-in-out infinite}
+        @keyframes shift{0%,100%{background-position:0% 40%}50%{background-position:100% 60%}}
+        @media (prefers-reduced-motion:reduce){.aurora{animation:none;background-position:50% 50%}}
+        .wrap{max-width:520px;width:100%;text-align:center;padding:36px 28px;border-radius:18px;background:rgba(8,12,24,.55);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
+        .eyebrow{margin:0;font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;opacity:.75}
+        h1{margin:12px 0 0;font-size:clamp(1.6rem,4vw,2.1rem);font-weight:700}
+        .brand{margin:16px 0 0;font-size:1.1rem;font-weight:700;color:#a5b4fc}
+        .byline{margin:6px 0 0;font-size:.9rem;opacity:.8}
+        .msg{margin:20px 0 0;font-size:1rem;line-height:1.55}
+        .links{margin-top:24px;display:flex;flex-direction:column;gap:11px}
+        .links a{display:block;padding:13px 16px;border-radius:12px;border:1px solid rgba(165,180,252,.35);color:#e0e7ff;text-decoration:none;font-weight:600;transition:.15s;background:rgba(255,255,255,.04)}
+        .links a:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.35)}
+        .host{display:block;margin-top:5px;font-size:.8rem;opacity:.65;font-family:ui-monospace,monospace}
+    </style>
+</head>
+<body>
+    <div class="aurora" aria-hidden="true"></div>
+    <main class="wrap">
+        <p class="eyebrow">Notice</p>
+        <h1>Service discontinued</h1>
+        <p class="brand">Jurassic Jungle</p>
+        <p class="byline">by Astro's Lounge — gaming community</p>
+        <p class="msg">This service has been discontinued.</p>
+        <nav class="links" aria-label="Related sites">
+            <a href="https://farewell.jurassicjungle.gg/" rel="noopener noreferrer">Farewell<span class="host">farewell.jurassicjungle.gg</span></a>
+            <a href="https://archive.jurassicjungle.gg/" rel="noopener noreferrer">Archive<span class="host">archive.jurassicjungle.gg</span></a>
+        </nav>
+    </main>
+</body>
+</html>

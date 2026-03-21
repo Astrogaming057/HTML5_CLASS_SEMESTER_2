@@ -26,7 +26,7 @@ window.PreviewTerminal = (function() {
     // Fallback to defaults if autocomplete files not loaded
     const defaults = {
       client: ['mode', 'app-mode', 'browser-mode', 'console', 'window', 'document', 'localStorage', 'sessionStorage'],
-      commands: ['help', 'ping', 'status', 'restart', 'reconnect', 'clear', 'exit'],
+      commands: ['help', 'ping', 'status', 'restart', 'reconnect', 'clear', 'exit', 'crash.server', 'crash.client'],
       powershell: ['Get-Process', 'Get-ChildItem', 'Get-Location', 'Set-Location', 'Clear-Host', 'Write-Host', 'Get-Help'],
       log: ['console', 'window', 'document', 'localStorage', 'sessionStorage'],
       ssh: ['ls', 'pwd', 'whoami', 'cd', 'cat', 'top', 'htop', 'ps aux']
@@ -279,6 +279,21 @@ window.PreviewTerminal = (function() {
       }
       
       if (tab === 'client') {
+        const trimmedClient = command.trim();
+        if (trimmedClient === 'crash.client') {
+          outputEl.textContent += `> ${command}\nIntentional uncaught error (test)…\n`;
+          outputEl.scrollTop = outputEl.scrollHeight;
+          syncChannel.postMessage({
+            type: 'terminal-output',
+            tab: tab,
+            output: outputEl.textContent,
+            append: false,
+          });
+          setTimeout(() => {
+            throw new Error('crash.client (intentional test)');
+          }, 0);
+          return;
+        }
         // Handle special client commands
         if (command.trim() === 'mode' || command.trim() === 'app-mode' || command.trim() === 'browser-mode') {
           const clientMode = window.__CLIENT_MODE || (window.electronAPI && window.electronAPI.isElectron ? 'app' : 'browser');
@@ -972,6 +987,19 @@ window.PreviewTerminal = (function() {
               clientCurrentInput = '';
               
               addLogToTerminal(`> ${command}`, 'log');
+              if (command === 'crash.client') {
+                addLogToTerminal('Intentional uncaught error (test) — check console / devtools', 'error');
+                clientInput.value = '';
+                syncChannel.postMessage({
+                  type: 'terminal-command',
+                  tab: 'client',
+                  command: command,
+                });
+                setTimeout(() => {
+                  throw new Error('crash.client (intentional test)');
+                }, 0);
+                return;
+              }
               try {
                 const result = eval(command);
                 if (result !== undefined) {
@@ -1271,6 +1299,19 @@ window.PreviewTerminal = (function() {
               line.textContent = `$> ${command}`;
               commandsOutput.appendChild(line);
               commandsOutput.scrollTop = commandsOutput.scrollHeight;
+
+              if (command === 'crash.client') {
+                const errLine = document.createElement('div');
+                errLine.className = 'terminal-line error';
+                errLine.textContent = 'Intentional uncaught error in page (test) — see console';
+                commandsOutput.appendChild(errLine);
+                commandsOutput.scrollTop = commandsOutput.scrollHeight;
+                commandsInput.value = '';
+                setTimeout(() => {
+                  throw new Error('crash.client (intentional test)');
+                }, 0);
+                return;
+              }
               
               // Send command to server via WebSocket
               const ws = wsRef && wsRef.current ? wsRef.current : (wsRef && wsRef.ws ? wsRef.ws : null);

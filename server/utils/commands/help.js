@@ -19,7 +19,8 @@ module.exports = {
       'Cache Management',
       'Server Management',
       'Development & Debug',
-      'Utilities'
+      'Utilities',
+      'Testing'
     ];
     
     for (const category of categoryOrder) {

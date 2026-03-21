@@ -1,0 +1,51 @@
+{
+  "site": "farewell.jurassicjungle.gg",
+  "serverRoot": "[mirrored]",
+  "generated": "2026-03-21T02:28:34.994Z",
+  "description": "Offline mirror: node scripts/mirror-farewell-site.mjs (from archive_jj)",
+  "mirrorSource": "https://farewell.jurassicjungle.gg",
+  "fileCount": 8,
+  "dirCount": 2,
+  "entries": [
+    {
+      "type": "file",
+      "path": "index.html"
+    },
+    {
+      "type": "file",
+      "path": "index.live.html"
+    },
+    {
+      "type": "file",
+      "path": "manifest-inline.js"
+    },
+    {
+      "type": "file",
+      "path": "manifest.json"
+    },
+    {
+      "type": "dir",
+      "path": "music/"
+    },
+    {
+      "type": "file",
+      "path": "music/vapor-my-rapz.mp3"
+    },
+    {
+      "type": "file",
+      "path": "script-min.js"
+    },
+    {
+      "type": "file",
+      "path": "styles-min.css"
+    },
+    {
+      "type": "dir",
+      "path": "utils/"
+    },
+    {
+      "type": "file",
+      "path": "utils/templates-min.js"
+    }
+  ]
+}

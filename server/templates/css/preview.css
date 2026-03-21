@@ -2757,6 +2757,79 @@ body.resizing .resizer {
   min-height: 0;
 }
 
+/* Inline prompt when opening archives / binaries (editor panel only, not global overlay) */
+.binary-edit-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-primary);
+}
+
+.binary-edit-prompt[hidden] {
+  display: none !important;
+}
+
+.binary-edit-prompt-card {
+  max-width: 420px;
+  width: 100%;
+  padding: 20px 22px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary, var(--bg-hover));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.binary-edit-prompt-title {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.binary-edit-prompt-message {
+  margin: 0 0 18px 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.binary-edit-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.binary-edit-prompt-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.binary-edit-prompt-btn.primary {
+  border-color: transparent;
+  background: var(--accent-primary, #c2185b);
+  color: #fff;
+}
+
+.binary-edit-prompt-btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+.binary-edit-prompt-btn.secondary:hover {
+  background: var(--bg-hover);
+}
+
 .hex-editor-mount {
   flex: 1;
   display: flex;
@@ -3234,6 +3307,78 @@ body.resizing .resizer {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(4px);
+}
+
+/* Backend crashed — GET /__api__/mode failed for 10s (see pingMonitor.js) */
+.backend-crash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.backend-crash-overlay[hidden] {
+  display: none !important;
+}
+
+.backend-crash-dialog {
+  max-width: 520px;
+  width: 100%;
+  padding: 22px 24px;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+}
+
+.backend-crash-title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.backend-crash-body {
+  margin: 0 0 14px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.backend-crash-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.backend-crash-stack {
+  max-height: 200px;
+  overflow: auto;
+  margin: 0 0 16px 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.backend-crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .restart-content {

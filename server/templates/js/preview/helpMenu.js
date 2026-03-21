@@ -165,6 +165,10 @@ window.PreviewHelpMenu = (function() {
                 <p>View modified files, stage changes, and commit. Click the Git button (📦) in the file explorer header.</p>
               </div>
               <div class="help-feature-item">
+                <strong>Remote Explorer</strong>
+                <p>Sign in via the configured proxy, register this PC, and open another machine’s project. While connected, APIs and preview use the proxy tunnel (🌐 next to Git).</p>
+              </div>
+              <div class="help-feature-item">
                 <strong>Live Preview</strong>
                 <p>See your changes instantly in the preview. CSS and JS files are automatically loaded from cache for HTML pages.</p>
               </div>
