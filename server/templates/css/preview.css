@@ -5230,10 +5230,13 @@ body.resizing .resizer {
   user-select: none;
 }
 
+/* Above .resizer (z-index: 100) and terminal chrome; below modals (.settings-panel ~10000) */
 .editor-status-bar.preview-page-status-bar {
+  position: relative;
   width: 100%;
   box-sizing: border-box;
-  z-index: 5;
+  z-index: 5000;
+  isolation: isolate;
 }
 
 .editor-status-bar-left {
@@ -5257,27 +5260,15 @@ body.resizing .resizer {
   align-items: center;
 }
 
-.remote-viewers-widget {
-  display: inline-flex;
+.remote-viewers-mount {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  line-height: 20px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  user-select: none;
 }
 
-.remote-viewers-icon {
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0.9;
-}
-
-#remoteViewerCount {
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 1ch;
+.remote-viewers-widget {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .editor-status-sep-tight {
@@ -5289,7 +5280,7 @@ body.resizing .resizer {
   position: fixed;
   bottom: 40px;
   right: 16px;
-  z-index: 9999;
+  z-index: 12000;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5447,11 +5438,15 @@ body.resizing .resizer {
   color: #fff;
 }
 
+/* Shared with client-sessions + remote viewers — must paint above resizers / terminal */
+.status-bar-menu-popover {
+  z-index: 100000 !important;
+}
+
 .editor-status-notifications-popover {
   position: absolute;
   bottom: calc(100% + 6px);
   right: 0;
-  z-index: 2500;
   width: min(320px, 92vw);
   max-height: 40vh;
   overflow: auto;
@@ -5567,7 +5562,6 @@ body.resizing .resizer {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 2000;
   min-width: 280px;
   max-width: min(420px, 92vw);
   max-height: 50vh;

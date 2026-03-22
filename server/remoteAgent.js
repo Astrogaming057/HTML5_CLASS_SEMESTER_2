@@ -17,6 +17,9 @@ const streams = new Map();
 /** Last known count of reverse-tunnel remote browsers (from proxy). */
 let remoteTunnelViewerCount = 0;
 
+/** Snapshot of tunnel WS sessions (ip, account, UA, …) from proxy. */
+let remoteTunnelSessions = [];
+
 /** Broadcast preview WebSocket messages (set from index.js). */
 let previewBroadcaster = null;
 
@@ -24,13 +27,28 @@ function setPreviewBroadcaster(fn) {
   previewBroadcaster = typeof fn === 'function' ? fn : null;
 }
 
-function broadcastRemoteViewersToPreview(count, previous) {
+function normalizeSessions(sessions) {
+  if (!Array.isArray(sessions)) return [];
+  return sessions.map(function (s) {
+    return {
+      streamId: s.streamId != null ? String(s.streamId) : '',
+      ip: s.ip != null ? String(s.ip) : '',
+      userAgent: s.userAgent != null ? String(s.userAgent) : '',
+      account: s.account != null ? String(s.account) : '',
+      connectedAt: Number(s.connectedAt) || 0
+    };
+  });
+}
+
+function broadcastRemoteViewersToPreview(count, previous, sessions) {
   remoteTunnelViewerCount = Math.max(0, Number(count) || 0);
+  remoteTunnelSessions = normalizeSessions(sessions);
   if (typeof previewBroadcaster === 'function') {
     previewBroadcaster({
       type: 'remoteViewersUpdate',
       count: remoteTunnelViewerCount,
-      previous: Number(previous) || 0
+      previous: Number(previous) || 0,
+      sessions: remoteTunnelSessions
     });
   }
 }
@@ -245,7 +263,8 @@ function onProxyMessage(data, proxyWs, localBase, localPort) {
       msg.previous !== undefined && msg.previous !== null
         ? Math.max(0, Number(msg.previous) || 0)
         : remoteTunnelViewerCount;
-    broadcastRemoteViewersToPreview(n, prev);
+    const sessions = Array.isArray(msg.sessions) ? msg.sessions : [];
+    broadcastRemoteViewersToPreview(n, prev, sessions);
     return;
   }
   if (msg.type === 'http_req') {
@@ -393,9 +412,10 @@ function startRemoteAgent(opts) {
       clearStreams();
       const prevViewers = remoteTunnelViewerCount;
       if (prevViewers > 0) {
-        broadcastRemoteViewersToPreview(0, prevViewers);
+        broadcastRemoteViewersToPreview(0, prevViewers, []);
       } else {
         remoteTunnelViewerCount = 0;
+        remoteTunnelSessions = [];
       }
       const r = String(reason || '');
       setAgentState({
@@ -523,6 +543,10 @@ function getRemoteTunnelViewerCount() {
   return remoteTunnelViewerCount;
 }
 
+function getRemoteTunnelViewerSessions() {
+  return remoteTunnelSessions.slice();
+}
+
 module.exports = {
   startRemoteAgent,
   startFromEnv,
@@ -530,5 +554,6 @@ module.exports = {
   buildAgentWsUrl,
   getAgentStatus,
   setPreviewBroadcaster,
-  getRemoteTunnelViewerCount
+  getRemoteTunnelViewerCount,
+  getRemoteTunnelViewerSessions
 };

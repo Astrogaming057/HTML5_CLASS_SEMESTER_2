@@ -129,7 +129,11 @@ function handleTunnelUpgrade(req, socket, head, proxy) {
     socket.destroy();
     return true;
   }
-  if (reverseTunnel.handleUpgradeReverse(device.id, req, socket, head)) {
+  if (
+    reverseTunnel.handleUpgradeReverse(device.id, req, socket, head, {
+      username: payload.username || ''
+    })
+  ) {
     return true;
   }
   const target = normalizeBaseUrl(device.baseUrl);

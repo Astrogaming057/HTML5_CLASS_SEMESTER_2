@@ -294,6 +294,17 @@ window.PreviewStatusBar = (function () {
     }
   }
 
+  function closeAllPopoversExcept(exceptPopoverEl) {
+    ['clientSessionsPopover', 'remoteViewersPopover', 'statusNotificationsPopover'].forEach(
+      function (id) {
+        const el = document.getElementById(id);
+        if (el && el !== exceptPopoverEl) {
+          el.setAttribute('hidden', '');
+        }
+      }
+    );
+  }
+
   function setupNotificationsUi() {
     const btn = document.getElementById('statusNotificationsBtn');
     const pop = document.getElementById('statusNotificationsPopover');
@@ -303,6 +314,7 @@ window.PreviewStatusBar = (function () {
       e.stopPropagation();
       const open = pop.hasAttribute('hidden');
       if (open) {
+        closeAllPopoversExcept(pop);
         pop.removeAttribute('hidden');
         renderNotificationsList();
       } else {
@@ -373,6 +385,7 @@ window.PreviewStatusBar = (function () {
     init: init,
     refresh: refresh,
     recordClientEvent: recordClientEvent,
-    showStatusToast: showStatusToast
+    showStatusToast: showStatusToast,
+    closeAllPopoversExcept: closeAllPopoversExcept
   };
 })();

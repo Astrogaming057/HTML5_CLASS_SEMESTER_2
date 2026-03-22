@@ -597,17 +597,14 @@
       </button>
     </div>
     <div class="editor-status-bar-right">
-      <div class="remote-viewers-widget" id="remoteViewersWidget" title="Remote viewers via tunnel">
-        <span class="remote-viewers-icon" aria-hidden="true">🌐</span>
-        <span id="remoteViewerCount">0</span>
-      </div>
+      <div id="remoteViewersMount" class="remote-viewers-mount"></div>
       <span class="editor-status-sep editor-status-sep-tight" aria-hidden="true"></span>
       <div id="clientSessionsMount" class="client-sessions-mount"></div>
       <div class="editor-status-notifications-wrap">
         <button type="button" class="editor-status-item editor-status-btn editor-status-notif-btn" id="statusNotificationsBtn" title="Notifications" aria-label="Notifications">
           🔔<span class="editor-status-notif-badge" id="statusNotifBadge" hidden>0</span>
         </button>
-        <div class="editor-status-notifications-popover" id="statusNotificationsPopover" hidden role="dialog" aria-label="Notifications">
+        <div class="editor-status-notifications-popover status-bar-menu-popover" id="statusNotificationsPopover" hidden role="dialog" aria-label="Notifications">
           <div class="editor-status-notifications-header">Notifications</div>
           <ul class="editor-status-notifications-list" id="statusNotificationsList"></ul>
           <p class="editor-status-notifications-empty" id="statusNotificationsEmpty">No notifications yet.</p>

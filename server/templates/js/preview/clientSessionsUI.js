@@ -73,7 +73,7 @@ window.PreviewClientSessions = (function () {
       '<span class="client-sessions-icon" aria-hidden="true">👥</span>' +
       '<span class="client-sessions-count" id="clientSessionsCount">0</span>' +
       '</button>' +
-      '<div class="client-sessions-popover" id="clientSessionsPopover" hidden>' +
+      '<div class="client-sessions-popover status-bar-menu-popover" id="clientSessionsPopover" hidden>' +
       '<div class="client-sessions-popover-title">Connected to this server</div>' +
       '<p class="client-sessions-popover-hint">Live sync / preview WebSockets (same project).</p>' +
       '<ul class="client-sessions-list" id="clientSessionsList"></ul>' +
@@ -102,6 +102,9 @@ window.PreviewClientSessions = (function () {
       if (!popoverEl) return;
       const open = popoverEl.hasAttribute('hidden');
       if (open) {
+        if (window.PreviewStatusBar && typeof window.PreviewStatusBar.closeAllPopoversExcept === 'function') {
+          window.PreviewStatusBar.closeAllPopoversExcept(popoverEl);
+        }
         popoverEl.removeAttribute('hidden');
       } else {
         popoverEl.setAttribute('hidden', '');

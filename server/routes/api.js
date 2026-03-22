@@ -120,7 +120,11 @@ function setupAPI(baseDir) {
         typeof remoteAgentModule.getRemoteTunnelViewerCount === 'function'
           ? remoteAgentModule.getRemoteTunnelViewerCount()
           : 0;
-      res.json({ success: true, count });
+      const sessions =
+        typeof remoteAgentModule.getRemoteTunnelViewerSessions === 'function'
+          ? remoteAgentModule.getRemoteTunnelViewerSessions()
+          : [];
+      res.json({ success: true, count, sessions });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message || 'Server error' });
     }

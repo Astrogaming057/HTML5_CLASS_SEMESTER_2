@@ -6,10 +6,43 @@ const dbg = require('./debug');
 const deviceSockets = new Map();
 /** http request id -> { res, timer } */
 const pendingHttp = new Map();
-/** streamId -> { clientWs, deviceId } (browser <-> proxy WS, piped through agent) */
+/** streamId -> { clientWs, deviceId, ip, userAgent, account, connectedAt } */
 const pendingWsStreams = new Map();
 /** Last broadcast remote viewer count per device (for previous/count payloads) */
 const viewerCountByDevice = new Map();
+
+function normalizeClientIp(req) {
+  if (!req) return '';
+  const h = req.headers || {};
+  const xff = h['x-forwarded-for'];
+  if (xff) {
+    const first = String(xff).split(',')[0].trim();
+    if (first) return first;
+  }
+  if (h['x-real-ip']) return String(h['x-real-ip']).trim();
+  const sock = req.socket || req.connection;
+  const ra = sock && sock.remoteAddress;
+  if (!ra) return '';
+  return String(ra).replace(/^::ffff:/, '');
+}
+
+function buildSessionsSnapshot(deviceId) {
+  const out = [];
+  for (const [streamId, entry] of pendingWsStreams.entries()) {
+    if (entry.deviceId !== deviceId) continue;
+    out.push({
+      streamId: String(streamId).slice(0, 12),
+      ip: entry.ip || '',
+      userAgent: entry.userAgent || '',
+      account: entry.account || '',
+      connectedAt: entry.connectedAt || Date.now()
+    });
+  }
+  out.sort(function (a, b) {
+    return (a.connectedAt || 0) - (b.connectedAt || 0);
+  });
+  return out;
+}
 
 function computedTunnelViewerCount(deviceId) {
   let n = 0;
@@ -28,7 +61,12 @@ function broadcastViewerCount(deviceId) {
   const old = viewerCountByDevice.has(deviceId) ? viewerCountByDevice.get(deviceId) : 0;
   const n = computedTunnelViewerCount(deviceId);
   viewerCountByDevice.set(deviceId, n);
-  sendJson(ws, { type: 'remote_viewers', count: n, previous: old });
+  sendJson(ws, {
+    type: 'remote_viewers',
+    count: n,
+    previous: old,
+    sessions: buildSessionsSnapshot(deviceId)
+  });
 }
 
 function sendJson(ws, obj) {
@@ -212,19 +250,39 @@ function tryHttpForward(deviceId, req, res) {
 
 /**
  * Handle browser WebSocket upgrade via reverse agent. Returns false if no agent.
+ * @param {object} [viewerContext] - { username } from JWT (proxy account viewing this device)
  */
-function handleUpgradeReverse(deviceId, req, socket, head) {
+function handleUpgradeReverse(deviceId, req, socket, head, viewerContext) {
   const ws = deviceSockets.get(deviceId);
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     return false;
   }
+
+  const ctx = viewerContext && typeof viewerContext === 'object' ? viewerContext : {};
+  const account =
+    typeof ctx.username === 'string'
+      ? ctx.username.trim()
+      : typeof ctx.account === 'string'
+        ? ctx.account.trim()
+        : '';
+  const ip = normalizeClientIp(req);
+  const rawUa = (req.headers && req.headers['user-agent']) || '';
+  const userAgent = rawUa.length > 160 ? rawUa.slice(0, 160) + '…' : rawUa;
+  const connectedAt = Date.now();
 
   const wss = new WebSocket.Server({ noServer: true });
   wss.handleUpgrade(req, socket, head, (clientWs) => {
     const streamId = crypto.randomBytes(16).toString('hex');
     const path = req.url || '/';
     const headers = sanitizeHeaders(req.headers);
-    pendingWsStreams.set(streamId, { clientWs, deviceId });
+    pendingWsStreams.set(streamId, {
+      clientWs,
+      deviceId,
+      ip,
+      userAgent,
+      account,
+      connectedAt
+    });
     broadcastViewerCount(deviceId);
     if (dbg.isProxyDebug()) {
       dbg.logWss(
