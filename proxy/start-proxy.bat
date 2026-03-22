@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-echo Starting HTMLCLASS Remote Proxy...
+echo Starting Astro Code remote proxy...
 echo Default: http://127.0.0.1:3030  (set PORT to change)
 echo.
 

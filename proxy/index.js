@@ -12,6 +12,7 @@ const proxyDbg = require('./lib/debug');
 
 const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
+  process.env.ASTRO_CODE_PROXY_DEBUG === 'true' ||
   process.env.HTMLCLASS_PROXY_DEBUG === 'true';
 
 const DEVICE_ONLINE_MS =
@@ -296,6 +297,6 @@ server.on('upgrade', (req, socket, head) => {
 const PORT = Number(process.env.PORT) || 3030;
 server.listen(PORT, () => {
   process.stdout.write(
-    `HTMLCLASS proxy listening on http://0.0.0.0:${PORT}${PROXY_DEBUG ? ' (PROXY_DEBUG: HTTP + [proxy-wss] WebSocket traffic)' : ''}\n`
+    `Astro Code remote proxy listening on http://0.0.0.0:${PORT}${PROXY_DEBUG ? ' (PROXY_DEBUG: HTTP + [proxy-wss] WebSocket traffic)' : ''}\n`
   );
 });

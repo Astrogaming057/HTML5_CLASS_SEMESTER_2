@@ -1,7 +1,7 @@
 {
-  "name": "htmlclass-remote-proxy",
+  "name": "astro-code-remote-proxy",
   "private": true,
-  "description": "Remote Explorer auth + tunnel for HTMLCLASS",
+  "description": "Remote Explorer auth + tunnel for Astro Code",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

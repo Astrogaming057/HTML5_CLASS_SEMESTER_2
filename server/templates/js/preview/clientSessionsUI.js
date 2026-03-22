@@ -1,5 +1,5 @@
 /**
- * Shows how many browsers are connected to this HTMLCLASS server via WebSocket
+ * Shows how many browsers are connected to this Astro Code backend via WebSocket
  * (live file sync / preview). Count + popover list only — no connect/disconnect toasts.
  */
 window.PreviewClientSessions = (function () {
@@ -64,7 +64,8 @@ window.PreviewClientSessions = (function () {
   function ensureWidget() {
     if (widgetEl) return;
     const mount = document.getElementById('clientSessionsMount');
-    const actions = document.querySelector('.preview-header .preview-actions');
+    const barRight = document.querySelector('.editor-status-bar-right');
+    const actions = document.getElementById('previewHeaderActions');
 
     widgetEl = document.createElement('div');
     widgetEl.className = 'client-sessions-widget';
@@ -81,13 +82,10 @@ window.PreviewClientSessions = (function () {
 
     if (mount) {
       mount.appendChild(widgetEl);
+    } else if (barRight) {
+      barRight.insertBefore(widgetEl, barRight.firstChild);
     } else if (actions) {
-      const status = document.getElementById('status');
-      if (status && status.parentNode === actions) {
-        actions.insertBefore(widgetEl, status);
-      } else {
-        actions.insertBefore(widgetEl, actions.firstChild);
-      }
+      actions.insertBefore(widgetEl, actions.firstChild);
     } else {
       return;
     }

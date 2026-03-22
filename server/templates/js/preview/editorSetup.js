@@ -89,6 +89,32 @@ window.PreviewEditorSetup = (function() {
         });
       }
 
+      // Toolbar / menu undo–redo: built-in actions often report isSupported() false when not invoked from keybindings.
+      editor.addAction({
+        id: 'preview.menu.undo',
+        label: 'Undo',
+        run: function (ed) {
+          const m = ed.getModel();
+          if (m && typeof m.undo === 'function') {
+            m.undo();
+            return;
+          }
+          ed.trigger('keyboard', 'undo', null);
+        }
+      });
+      editor.addAction({
+        id: 'preview.menu.redo',
+        label: 'Redo',
+        run: function (ed) {
+          const m = ed.getModel();
+          if (m && typeof m.redo === 'function') {
+            m.redo();
+            return;
+          }
+          ed.trigger('keyboard', 'redo', null);
+        }
+      });
+
       return editor;
     },
 

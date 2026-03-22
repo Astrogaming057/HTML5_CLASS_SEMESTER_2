@@ -9,8 +9,8 @@ module.exports = {
       success: true,
       message: [
         'About:',
-        '  HTMLCLASS Server',
-        '  A web-based code editor and preview system',
+        '  Astro Code',
+        '  A web-based IDE (editor, preview, and tools)',
         `  Node.js ${process.version}`,
         `  Platform: ${process.platform}`
       ].join('\n')

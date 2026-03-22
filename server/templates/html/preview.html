@@ -8,19 +8,280 @@
   {{CSS_CONTENT}}
 </head>
 <body>
+  <div id="electronTitleBar" class="electron-title-bar" hidden>
+    <div class="electron-title-drag">
+      <span class="electron-title-text">Astro Code</span>
+    </div>
+    <div id="electronTitleToolbarSlot" class="electron-title-toolbar"></div>
+    <div class="electron-title-controls">
+      <button type="button" class="electron-title-btn" id="electronTitleMinBtn" aria-label="Minimize" title="Minimize">&#x2014;</button>
+      <button type="button" class="electron-title-btn" id="electronTitleMaxBtn" aria-label="Maximize" title="Maximize">&#x25A1;</button>
+      <button type="button" class="electron-title-btn electron-title-btn-close" id="electronTitleCloseBtn" aria-label="Close" title="Close">&#x2715;</button>
+    </div>
+  </div>
   <div class="preview-header">
     <div class="preview-title">
-      <span id="fileName">{{FILENAME}}</span>
       <span id="modeIndicator" class="mode-indicator" title="Client Mode"></span>
     </div>
-    <div class="preview-actions">
-      <button id="backToFilesBtn" class="btn btn-secondary" title="Back to File Discovery">← Files</button>
-      <button id="saveBtn" class="btn btn-primary">💾 Save (Ctrl+S)</button>
-      <button id="helpBtn" class="btn btn-secondary" title="Help (Ctrl+?)">❓ Help</button>
-      <button id="settingsBtn" class="btn btn-secondary" title="Settings">⚙️</button>
-      <button id="resetSettingsBtn" class="btn btn-secondary" title="Reset All Settings">🔄 Reset</button>
-      <button id="closeBtn" class="btn btn-secondary">✕ Close</button>
-      <span id="status" class="status">Ready</span>
+    <div class="preview-actions" id="previewHeaderActions">
+      <div class="preview-file-menu-wrap" id="previewFileMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewFileMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewFileMenu">File</button>
+        <div class="preview-file-menu" id="previewFileMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="newFile" data-shortcut="N">
+              <span class="preview-file-menu-label">New File</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="newFolder" data-shortcut="Shift+N">
+              <span class="preview-file-menu-label">New Folder</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="openQuickOpen" data-shortcut="P">
+              <span class="preview-file-menu-label">Open File…</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="openFolder">
+              <span class="preview-file-menu-label">Change Working Directory…</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="globalSearch" data-shortcut="Shift+F">
+              <span class="preview-file-menu-label">Global Search</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="toggleExplorer" data-shortcut="Shift+E">
+              <span class="preview-file-menu-label">Toggle Explorer</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="togglePreview" data-shortcut="Shift+V">
+              <span class="preview-file-menu-label">Toggle Preview</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="toggleTerminal" data-shortcut="`">
+              <span class="preview-file-menu-label">Toggle Terminal</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="save" data-shortcut="S">
+              <span class="preview-file-menu-label">Save</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="refreshPreview">
+              <span class="preview-file-menu-label">Refresh Preview</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item preview-file-menu-item--disabled" role="menuitem" disabled aria-disabled="true" title="Not available in this build">
+              <span class="preview-file-menu-label">Save As…</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item preview-file-menu-item--disabled" role="menuitem" disabled aria-disabled="true" title="Not available in this build">
+              <span class="preview-file-menu-label">Save All</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="gitPanel" data-shortcut="Shift+G">
+              <span class="preview-file-menu-label">Git</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="settings" data-shortcut=",">
+              <span class="preview-file-menu-label">Settings</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="resetAllSettings">
+              <span class="preview-file-menu-label">Reset All Settings</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="help" data-shortcut="?">
+              <span class="preview-file-menu-label">Help</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="closeTab" data-shortcut="W">
+              <span class="preview-file-menu-label">Close Editor Tab</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="closeWindow">
+              <span class="preview-file-menu-label">Close Window</span><span class="preview-file-menu-kbd"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewEditMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewEditMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewEditMenu">Edit</button>
+        <div class="preview-file-menu" id="previewEditMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="undo" data-shortcut="Z">
+              <span class="preview-file-menu-label">Undo</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="redo" data-shortcut="Redo">
+              <span class="preview-file-menu-label">Redo</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="cut" data-shortcut="X">
+              <span class="preview-file-menu-label">Cut</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="copy" data-shortcut="C">
+              <span class="preview-file-menu-label">Copy</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="paste" data-shortcut="V">
+              <span class="preview-file-menu-label">Paste</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="find" data-shortcut="F">
+              <span class="preview-file-menu-label">Find</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="replace" data-shortcut="H">
+              <span class="preview-file-menu-label">Replace</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="findInFiles" data-shortcut="Shift+F">
+              <span class="preview-file-menu-label">Find in Files</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="replaceInFiles" data-shortcut="Shift+H">
+              <span class="preview-file-menu-label">Replace in Files</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="toggleLineComment" data-shortcut="/">
+              <span class="preview-file-menu-label">Toggle Line Comment</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="toggleBlockComment" data-shortcut="Shift+Alt+A">
+              <span class="preview-file-menu-label">Toggle Block Comment</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="emmetExpand" data-shortcut="Tab">
+              <span class="preview-file-menu-label">Emmet: Expand Abbreviation</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewSelectionMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewSelectionMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewSelectionMenu">Selection</button>
+        <div class="preview-file-menu" id="previewSelectionMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selSelectAll" data-shortcut="A">
+              <span class="preview-file-menu-label">Select All</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selExpand" data-shortcut="Shift+Alt+RightArrow">
+              <span class="preview-file-menu-label">Expand Selection</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selShrink" data-shortcut="Shift+Alt+LeftArrow">
+              <span class="preview-file-menu-label">Shrink Selection</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selCopyLineUp" data-shortcut="Shift+Alt+UpArrow">
+              <span class="preview-file-menu-label">Copy Line Up</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selCopyLineDown" data-shortcut="Shift+Alt+DownArrow">
+              <span class="preview-file-menu-label">Copy Line Down</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selMoveLineUp" data-shortcut="Alt+UpArrow">
+              <span class="preview-file-menu-label">Move Line Up</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selMoveLineDown" data-shortcut="Alt+DownArrow">
+              <span class="preview-file-menu-label">Move Line Down</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selDuplicate">
+              <span class="preview-file-menu-label">Duplicate Selection</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selCursorAbove" data-shortcut="Ctrl+Alt+UpArrow">
+              <span class="preview-file-menu-label">Add Cursor Above</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selCursorBelow" data-shortcut="Ctrl+Alt+DownArrow">
+              <span class="preview-file-menu-label">Add Cursor Below</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selCursorsLineEnds" data-shortcut="Shift+Alt+I">
+              <span class="preview-file-menu-label">Add Cursors to Line Ends</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selAddNext" data-shortcut="D">
+              <span class="preview-file-menu-label">Add Next Occurrence</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selAddPrev">
+              <span class="preview-file-menu-label">Add Previous Occurrence</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="selAllOccurrences" data-shortcut="Shift+L">
+              <span class="preview-file-menu-label">Select All Occurrences</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewViewMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewViewMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewViewMenu">View</button>
+        <div class="preview-file-menu" id="previewViewMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="viewExplorer" data-shortcut="Shift+E">
+              <span class="preview-file-menu-label">Explorer</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="viewPreview" data-shortcut="Shift+V">
+              <span class="preview-file-menu-label">Preview</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="viewTerminal" data-shortcut="`">
+              <span class="preview-file-menu-label">Terminal</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="viewMinimap">
+              <span class="preview-file-menu-label">Toggle Minimap</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="viewProblems">
+              <span class="preview-file-menu-label">Problems</span><span class="preview-file-menu-kbd"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewGoMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewGoMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewGoMenu">Go</button>
+        <div class="preview-file-menu" id="previewGoMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goBack" data-shortcut="Alt+LeftArrow">
+              <span class="preview-file-menu-label">Back</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goForward" data-shortcut="Alt+RightArrow">
+              <span class="preview-file-menu-label">Forward</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goFile" data-shortcut="P">
+              <span class="preview-file-menu-label">Go to File…</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goSymbol" data-shortcut="Shift+O">
+              <span class="preview-file-menu-label">Go to Symbol in Editor…</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goDefinition">
+              <span class="preview-file-menu-label">Go to Definition</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goReferences">
+              <span class="preview-file-menu-label">Go to References</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goLine" data-shortcut="G">
+              <span class="preview-file-menu-label">Go to Line/Column…</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goNextProblem" data-shortcut="F8">
+              <span class="preview-file-menu-label">Next Problem</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="goPrevProblem" data-shortcut="Shift+F8">
+              <span class="preview-file-menu-label">Previous Problem</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewRunMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewRunMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewRunMenu">Run</button>
+        <div class="preview-file-menu" id="previewRunMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="runOpenCompiler" title="Show the Compiler panel in the bottom terminal area">
+              <span class="preview-file-menu-label">Open Compiler</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="runCompile" title="Run or compile the active editor file (same as Compiler ▶ Run)">
+              <span class="preview-file-menu-label">Run</span><span class="preview-file-menu-kbd"></span>
+            </button>
+            <div class="preview-file-menu-sep" role="separator"></div>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="runFocusTerminal">
+              <span class="preview-file-menu-label">Focus Terminal</span><span class="preview-file-menu-kbd"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-file-menu-wrap" id="previewTerminalMenuWrap">
+        <button type="button" class="btn btn-secondary preview-file-menu-trigger" id="previewTerminalMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="previewTerminalMenu">Terminal</button>
+        <div class="preview-file-menu" id="previewTerminalMenu" role="menu" hidden>
+          <div class="preview-file-menu-inner">
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="termToggle" data-shortcut="`">
+              <span class="preview-file-menu-label">Toggle Terminal</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="preview-file-menu-item" role="menuitem" data-action="termFocus">
+              <span class="preview-file-menu-label">Focus Terminal</span><span class="preview-file-menu-kbd"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <button id="settingsBtn" class="btn btn-secondary preview-toolbar-btn-icon" type="button" title="Settings" aria-label="Settings">
+        <svg class="preview-toolbar-icon-svg" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </button>
     </div>
   </div>
   <div class="preview-container">
@@ -29,11 +290,15 @@
     </div>
     <div class="file-explorer-panel" id="fileExplorerPanel">
       <div class="panel-header">
-        <button id="backBtn" class="back-btn" title="Go Back">←</button>
-        <span>📁 Files</span>
-        <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
-        <button id="remoteExplorerBtn" class="toggle-btn" title="Remote Explorer">🌐</button>
-        <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
+        <div>
+          <button id="backBtn" class="back-btn" title="Go Back">←</button>
+          <span>📁 Files</span>
+        </div>
+        <div>
+          <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
+          <button id="remoteExplorerBtn" class="toggle-btn" title="Remote Explorer">🌐</button>
+          <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
+        </div>
       </div>
       <div class="file-tree" id="fileTree">
         <div class="file-tree-loading">Loading...</div>
@@ -594,6 +859,12 @@
 
   <footer class="editor-status-bar preview-page-status-bar" id="editorStatusBar" aria-label="Editor status">
     <div class="editor-status-bar-left">
+      <span class="editor-status-item editor-status-workspace" id="statusWorkspace" title="" aria-label="Workspace folder">📁 …</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item editor-status-filename" id="fileName" title="">{{FILENAME}}</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item status" id="status">Ready</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
       <button type="button" class="editor-status-item editor-status-btn" id="statusZoomBtn" title="Font size (click to cycle)">🔍 14px</button>
       <span class="editor-status-sep" aria-hidden="true"></span>
       <span class="editor-status-item" id="statusCursor">Ln 1, Col 1</span>
@@ -622,7 +893,20 @@
           🔔<span class="editor-status-notif-badge" id="statusNotifBadge" hidden>0</span>
         </button>
         <div class="editor-status-notifications-popover status-bar-menu-popover" id="statusNotificationsPopover" hidden role="dialog" aria-label="Notifications">
-          <div class="editor-status-notifications-header">Notifications</div>
+          <div class="editor-status-notifications-header-row">
+            <span class="editor-status-notifications-title-text">Notifications</span>
+            <div class="editor-status-notifications-toolbar" role="toolbar" aria-label="Notification actions">
+              <button type="button" class="editor-status-notif-toolbar-btn editor-status-notif-toolbar-btn-clear" id="statusNotificationsClear" title="Clear all" aria-label="Clear all notifications">
+                <span class="notif-clear-glyphs" aria-hidden="true"><span class="notif-clear-bars">☰</span><span class="notif-clear-x">×</span></span>
+              </button>
+              <button type="button" class="editor-status-notif-toolbar-btn" id="statusNotificationsDnd" title="Do not disturb" aria-label="Do not disturb" aria-pressed="false">
+                <span class="notif-dnd-icon" aria-hidden="true">🔔</span>
+              </button>
+              <button type="button" class="editor-status-notif-toolbar-btn" id="statusNotificationsClose" title="Close" aria-label="Close notifications">
+                <span aria-hidden="true">⌄</span>
+              </button>
+            </div>
+          </div>
           <ul class="editor-status-notifications-list" id="statusNotificationsList"></ul>
           <p class="editor-status-notifications-empty" id="statusNotificationsEmpty">No notifications yet.</p>
         </div>

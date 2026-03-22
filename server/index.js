@@ -34,7 +34,7 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 if (config.DEBUG) {
-  global.__HTMLCLASS_DEBUG__ = true;
+  global.__ASTRO_CODE_DEBUG__ = true;
   app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
@@ -49,9 +49,9 @@ if (config.DEBUG) {
     const err = reason instanceof Error ? reason : new Error(String(reason));
     logger.error('unhandledRejection', err);
   });
-  logger.info('HTMLCLASS_DEBUG: verbose HTTP logging and process error hooks enabled');
+  logger.info('ASTRO_CODE_DEBUG: verbose HTTP logging and process error hooks enabled');
 } else {
-  global.__HTMLCLASS_DEBUG__ = false;
+  global.__ASTRO_CODE_DEBUG__ = false;
 }
 
 const server = http.createServer(app);

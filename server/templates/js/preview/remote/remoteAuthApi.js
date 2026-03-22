@@ -46,7 +46,7 @@ window.PreviewRemoteAuthApi = (function () {
     }
   }
 
-  /** Tell the local HTMLCLASS server to connect outbound to the proxy (reverse tunnel + presence). */
+  /** Tell the local Astro Code backend to connect outbound to the proxy (reverse tunnel + presence). */
   async function pushLocalAgentConfig() {
     const t = sess.getToken();
     if (!t) return;

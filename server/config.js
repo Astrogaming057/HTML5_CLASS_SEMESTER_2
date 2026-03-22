@@ -9,6 +9,8 @@ if (process.env.SERVER_MODE === 'app' || process.env.APP_MODE === 'true') {
 }
 
 const debug =
+  process.env.ASTRO_CODE_DEBUG === '1' ||
+  process.env.ASTRO_CODE_DEBUG === 'true' ||
   process.env.HTMLCLASS_DEBUG === '1' ||
   process.env.HTMLCLASS_DEBUG === 'true';
 

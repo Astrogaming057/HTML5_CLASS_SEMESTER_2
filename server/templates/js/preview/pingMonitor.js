@@ -163,7 +163,7 @@ window.PreviewPingMonitor = (function() {
       title.textContent = 'Proxy unreachable';
       body.textContent =
         'The proxy server is down or not reachable from this browser, so the tunnel to the remote device cannot be used. ' +
-        'Your local HTMLCLASS server is still running — use “Use this PC” below to keep working without the proxy. ' +
+        'Your local Astro Code backend is still running — use “Use this PC” below to keep working without the proxy. ' +
         'No network is required for that switch.';
     } else if (kind === 'remoteTunnelOffline') {
       title.textContent = 'Remote device unreachable';
@@ -299,7 +299,7 @@ window.PreviewPingMonitor = (function() {
     const msg = detail && detail.message ? detail.message : 'Mode check failed';
     const stack = detail && detail.stack ? detail.stack : '';
     return [
-      'HTMLCLASS preview — backend mode check failed',
+      'Astro Code preview — backend mode check failed',
       'Time: ' + new Date().toISOString(),
       'Client mode: ' + client,
       'Endpoint: GET /__api__/mode',
@@ -331,7 +331,7 @@ window.PreviewPingMonitor = (function() {
     overlay.innerHTML =
       '<div class="backend-crash-dialog" role="dialog" aria-modal="true" aria-labelledby="backendCrashTitle">' +
       '<h2 id="backendCrashTitle" class="backend-crash-title">Uh oh :(</h2>' +
-      '<p class="backend-crash-body">The <strong>local</strong> HTMLCLASS server on this machine is not responding (GET /__api__/mode failed). ' +
+      '<p class="backend-crash-body">The <strong>local</strong> Astro Code backend on this machine is not responding (GET /__api__/mode failed). ' +
       'This is not the same as the remote proxy being down — if you only lost the proxy, use Remote Explorer’s “Use this PC” instead. ' +
       'Otherwise restart the app or the Node process. If this keeps happening, file a bug report with the details below.</p>' +
       '<label class="backend-crash-label" for="backendCrashStack">Details for bug reports</label>' +

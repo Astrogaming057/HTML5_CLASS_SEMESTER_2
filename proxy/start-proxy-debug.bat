@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
 set PROXY_DEBUG=1
-set HTMLCLASS_PROXY_DEBUG=true
+set ASTRO_CODE_PROXY_DEBUG=true
 set NODE_OPTIONS=--trace-warnings
-echo HTMLCLASS Remote Proxy DEBUG
+echo Astro Code remote proxy DEBUG
 echo - Request logging to console
 echo - GET /api/remote/status reports proxyDebug: true
 echo.

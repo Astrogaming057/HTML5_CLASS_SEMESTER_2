@@ -15,6 +15,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWorkingDirectory: () => ipcRenderer.invoke('get-working-directory'),
   selectWorkingDirectory: () => ipcRenderer.invoke('select-working-directory'),
   restartApp: () => ipcRenderer.invoke('restart-app'),
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  maximizeToggleWindow: () => ipcRenderer.invoke('window-maximize-toggle'),
+  isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  onWindowChromeState: (fn) => {
+    ipcRenderer.on('window-chrome-state', (_event, state) => {
+      try {
+        fn(state);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  },
   /** Main process asks renderer to run close checks before exiting */
   onAppCloseRequest: (fn) => {
     ipcRenderer.on('electron-app-close-request', (_event, payload) => {

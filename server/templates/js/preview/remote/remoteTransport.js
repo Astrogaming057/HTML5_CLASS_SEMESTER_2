@@ -31,7 +31,7 @@ window.PreviewRemoteTransport = (function () {
   }
 
   /**
-   * Paths that must stay on the preview origin (this machine's HTMLCLASS server).
+   * Paths that must stay on the preview origin (this machine's Astro Code backend).
    * - /__api__/remote/* — agent-config, tunnel-viewers, etc.; tunneling can deadlock (502).
    * - /__api__/mode — health checks must hit local Node; if tunneled, proxy down looks like a local crash.
    */

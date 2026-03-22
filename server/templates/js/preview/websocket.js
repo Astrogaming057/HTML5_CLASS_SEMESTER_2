@@ -71,7 +71,7 @@ window.PreviewWebSocket = (function() {
               typeof window.PreviewRemoteTransport.isRemote === 'function' &&
               window.PreviewRemoteTransport.isRemote();
             if (remoteUi) {
-              /* Counts for *this* PC come from PreviewRemoteViewers’ second WS to local HTMLCLASS. */
+              /* Counts for *this* PC come from PreviewRemoteViewers’ second WS to the local Astro Code origin. */
             } else if (
               window.PreviewRemoteViewers &&
               typeof window.PreviewRemoteViewers.applyUpdate === 'function'

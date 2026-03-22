@@ -130,7 +130,7 @@ function setupAPI(baseDir) {
     }
   });
 
-  /** Editor WebSocket peers (browsers connected to this HTMLCLASS server for live sync). */
+  /** Editor WebSocket peers (browsers connected to this Astro Code backend for live sync). */
   router.get('/ws/clients', (req, res) => {
     try {
       if (!wsManager || typeof wsManager.getClientSessionsList !== 'function') {
@@ -1580,92 +1580,149 @@ function setupAPI(baseDir) {
   });
 
   router.post('/search', async (req, res) => {
+    const MAX_SEARCH_FILE_BYTES = 2 * 1024 * 1024;
+    const MAX_PATHS_PER_SEARCH_REQUEST = 300;
+
+    function normalizeProjectRelativePath(filePath) {
+      return String(filePath || '')
+        .replace(/^\/+/, '')
+        .replace(/\\/g, '/');
+    }
+
     try {
-      const { query, caseSensitive = false, wholeWord = false } = req.body;
-      
+      const { query, caseSensitive = false, wholeWord = false, paths: pathList } = req.body;
+
       if (!query || typeof query !== 'string' || query.trim().length === 0) {
         return res.json({ success: true, results: [] });
       }
-      
+
       const searchQuery = query.trim();
       const results = [];
       let filesSearched = 0;
-      
-      // Build regex for search
+
       let regexPattern = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (wholeWord) {
         regexPattern = `\\b${regexPattern}\\b`;
       }
-      const regex = new RegExp(regexPattern, caseSensitive ? 'g' : 'gi');
-      
+
+      /** Minified / single-line files can be megabytes; keep previews small for UI + JSON. */
+      const MAX_MATCH_PREVIEW_CHARS = 480;
+
+      function compactMatchPreview(line, matchIndex, matchLength) {
+        const maxTotal = MAX_MATCH_PREVIEW_CHARS;
+        if (!line || line.length <= maxTotal) {
+          return line.trim();
+        }
+        const len = matchLength > 0 ? matchLength : 1;
+        const center = matchIndex + Math.floor(len / 2);
+        let start = Math.max(0, center - Math.floor(maxTotal / 2));
+        let end = start + maxTotal;
+        if (end > line.length) {
+          end = line.length;
+          start = Math.max(0, end - maxTotal);
+        }
+        let out = line.slice(start, end);
+        if (start > 0) {
+          out = '…' + out;
+        }
+        if (end < line.length) {
+          out = out + '…';
+        }
+        return out.trim();
+      }
+
       async function searchInFile(filePath) {
         try {
-          const fullPath = path.join(baseDir, filePath);
+          const rel = normalizeProjectRelativePath(filePath);
+          const fullPath = path.join(baseDir, rel);
           const resolvedPath = path.resolve(fullPath);
-          
+
           if (!isPathSafe(resolvedPath, baseDir)) {
             return null;
           }
-          
+
           const stats = await fs.stat(resolvedPath);
           if (stats.isDirectory()) {
             return null;
           }
-          
+          if (stats.size > MAX_SEARCH_FILE_BYTES) {
+            return null;
+          }
+
           const content = await fs.readFile(resolvedPath, 'utf-8');
           const lines = content.split('\n');
           const matches = [];
-          
+
           lines.forEach((line, lineNum) => {
             let match;
             const lineRegex = new RegExp(regexPattern, caseSensitive ? 'g' : 'gi');
             while ((match = lineRegex.exec(line)) !== null) {
               matches.push({
                 line: lineNum + 1,
-                text: line.trim(),
+                text: compactMatchPreview(line, match.index, match[0].length),
                 matchIndex: match.index,
                 matchLength: match[0].length
               });
-              // Prevent infinite loop for zero-length matches
               if (match[0].length === 0) break;
             }
           });
-          
+
           if (matches.length > 0) {
+            const displayPath = '/' + rel;
             return {
-              filePath,
-              name: path.basename(filePath),
-              matches: matches.slice(0, 10) // Limit matches per file for display
+              filePath: displayPath,
+              name: path.posix.basename(rel) || path.basename(rel),
+              matches: matches.slice(0, 10)
             };
           }
-          
+
           return null;
         } catch (error) {
-          // Skip files that can't be read (binary files, permissions, etc.)
           if (error.code !== 'ENOENT' && error.code !== 'EACCES') {
             logger.debug('Error searching in file', { filePath, error: error.message });
           }
           return null;
         }
       }
-      
+
+      if (Array.isArray(pathList) && pathList.length > 0) {
+        if (pathList.length > MAX_PATHS_PER_SEARCH_REQUEST) {
+          return res.status(400).json({
+            success: false,
+            error: `Too many paths in one request (max ${MAX_PATHS_PER_SEARCH_REQUEST})`
+          });
+        }
+        for (let i = 0; i < pathList.length; i++) {
+          filesSearched++;
+          const result = await searchInFile(pathList[i]);
+          if (result) {
+            results.push(result);
+          }
+        }
+        logger.debug('Search: Batch completed', {
+          query: searchQuery,
+          filesSearched,
+          resultsCount: results.length
+        });
+        return res.json({ success: true, results, filesSearched });
+      }
+
       async function walkAndSearch(dirPath) {
         try {
           const entries = await fs.readdir(dirPath, { withFileTypes: true });
-          
+
           for (const entry of entries) {
-            // Skip ide_editor_cache directory
             if (entry.name.toLowerCase() === 'ide_editor_cache' && entry.isDirectory()) {
               continue;
             }
-            
+
             const fullPath = path.join(dirPath, entry.name);
             const resolvedPath = path.resolve(fullPath);
-            
+
             if (!isPathSafe(resolvedPath, baseDir)) {
               continue;
             }
-            
+
             if (entry.isDirectory()) {
               await walkAndSearch(fullPath);
             } else {
@@ -1684,13 +1741,225 @@ function setupAPI(baseDir) {
           }
         }
       }
-      
+
       await walkAndSearch(baseDir);
-      
+
       logger.debug('Search: Completed', { query: searchQuery, filesSearched, resultsCount: results.length });
       res.json({ success: true, results, filesSearched });
     } catch (error) {
       logger.error('API: Error performing search', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  /**
+   * Replace all occurrences of `query` with `replacement` across files (text only).
+   * Body: { query, replacement, caseSensitive?, wholeWord?, dryRun?, paths?: string[] }
+   * When `paths` is provided, only those files; otherwise full workspace walk (heavy).
+   * Use `dryRun: true` to count matches without writing.
+   */
+  router.post('/search/replace-in-files', async (req, res) => {
+    const MAX_SEARCH_FILE_BYTES = 2 * 1024 * 1024;
+    const MAX_PATHS_PER_REPLACE_REQUEST = 300;
+
+    function normalizeProjectRelativePath(filePath) {
+      return String(filePath || '')
+        .replace(/^\/+/, '')
+        .replace(/\\/g, '/');
+    }
+
+    function escapeReplaceRegex(str) {
+      return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function buildReplaceRegex(searchQuery, caseSensitive, wholeWord) {
+      let pattern = escapeReplaceRegex(searchQuery);
+      if (wholeWord) {
+        pattern = `\\b${pattern}\\b`;
+      }
+      return new RegExp(pattern, caseSensitive ? 'g' : 'gi');
+    }
+
+    function countMatchesInString(content, regex) {
+      const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`);
+      let count = 0;
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        count++;
+        if (m[0].length === 0) {
+          re.lastIndex += 1;
+        }
+      }
+      return count;
+    }
+
+    function replaceAllLiteral(content, regex, replacementText) {
+      const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`);
+      return content.replace(re, () => replacementText);
+    }
+
+    try {
+      const {
+        query,
+        replacement = '',
+        caseSensitive = false,
+        wholeWord = false,
+        dryRun = false,
+        paths: pathList
+      } = req.body;
+
+      if (!query || typeof query !== 'string') {
+        return res.json({ success: false, error: 'Missing search query' });
+      }
+      if (typeof replacement !== 'string') {
+        return res.json({ success: false, error: 'Replacement must be a string' });
+      }
+
+      const searchQuery = query;
+      const regex = buildReplaceRegex(searchQuery, caseSensitive, wholeWord);
+      const fileResults = [];
+      let filesTouched = 0;
+      let totalReplacements = 0;
+
+      async function processFile(displayPath) {
+        const rel = normalizeProjectRelativePath(displayPath);
+        const fullPath = path.join(baseDir, rel);
+        const resolvedPath = path.resolve(fullPath);
+
+        if (!isPathSafe(resolvedPath, baseDir)) {
+          return null;
+        }
+
+        const stats = await fs.stat(resolvedPath);
+        if (stats.isDirectory()) {
+          return null;
+        }
+        if (stats.size > MAX_SEARCH_FILE_BYTES) {
+          return null;
+        }
+
+        let content;
+        try {
+          content = await fs.readFile(resolvedPath, 'utf-8');
+        } catch (readErr) {
+          if (readErr.code === 'ENOENT' || readErr.code === 'EACCES') {
+            return null;
+          }
+          return null;
+        }
+
+        const matches = countMatchesInString(content, regex);
+        if (matches === 0) {
+          return null;
+        }
+
+        const outPath = '/' + rel;
+
+        if (dryRun) {
+          return { filePath: outPath, matches };
+        }
+
+        const newContent = replaceAllLiteral(content, regex, replacement);
+        await fs.writeFile(resolvedPath, newContent, 'utf-8');
+
+        const editorDir = path.join(baseDir, 'ide_editor_cache');
+        const editorPath = path.join(editorDir, rel);
+        const resolvedEditorPath = path.resolve(editorPath);
+        try {
+          if (isPathSafe(resolvedEditorPath, baseDir)) {
+            await fs.unlink(resolvedEditorPath).catch(() => {});
+          }
+        } catch (_e) {
+          /* ignore */
+        }
+
+        if (wsManager) {
+          wsManager.notifyFileChange(outPath.replace(/^\//, '') || rel, 'change');
+        }
+
+        return { filePath: outPath, matches, modified: true };
+      }
+
+      if (Array.isArray(pathList) && pathList.length > 0) {
+        if (pathList.length > MAX_PATHS_PER_REPLACE_REQUEST) {
+          return res.status(400).json({
+            success: false,
+            error: `Too many paths in one request (max ${MAX_PATHS_PER_REPLACE_REQUEST})`
+          });
+        }
+        for (let i = 0; i < pathList.length; i++) {
+          filesTouched++;
+          const r = await processFile(pathList[i]);
+          if (r) {
+            fileResults.push(r);
+            totalReplacements += r.matches;
+          }
+        }
+        return res.json({
+          success: true,
+          dryRun,
+          files: fileResults,
+          filesSearched: filesTouched,
+          totalMatches: totalReplacements,
+          filesWithMatches: fileResults.length
+        });
+      }
+
+      async function walkAndReplace(dirPath) {
+        try {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+          for (const entry of entries) {
+            if (entry.name.toLowerCase() === 'ide_editor_cache' && entry.isDirectory()) {
+              continue;
+            }
+
+            const fullPath = path.join(dirPath, entry.name);
+            const resolvedPath = path.resolve(fullPath);
+
+            if (!isPathSafe(resolvedPath, baseDir)) {
+              continue;
+            }
+
+            if (entry.isDirectory()) {
+              await walkAndReplace(fullPath);
+            } else {
+              filesTouched++;
+              const relativePath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+              const filePath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
+              const r = await processFile(filePath);
+              if (r) {
+                fileResults.push(r);
+                totalReplacements += r.matches;
+              }
+            }
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            logger.debug('Error walking directory for replace-in-files', { dirPath, error: error.message });
+          }
+        }
+      }
+
+      await walkAndReplace(baseDir);
+
+      logger.debug('Replace in files: completed', {
+        dryRun,
+        query: searchQuery,
+        filesSearched: filesTouched,
+        totalMatches: totalReplacements
+      });
+
+      res.json({
+        success: true,
+        dryRun,
+        files: fileResults,
+        filesSearched: filesTouched,
+        totalMatches: totalReplacements,
+        filesWithMatches: fileResults.length
+      });
+    } catch (error) {
+      logger.error('API: Error in replace-in-files', error);
       res.json({ success: false, error: error.message });
     }
   });

@@ -165,12 +165,24 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'electronClose.js'),
         'utf-8'
       );
+      const electronTitleBarJs = await fs.readFile(
+        path.join(previewModulesDir, 'electronTitleBar.js'),
+        'utf-8'
+      );
+      const previewFileMenuJs = await fs.readFile(
+        path.join(previewModulesDir, 'previewFileMenu.js'),
+        'utf-8'
+      );
       const fileSearchJs = await fs.readFile(
         path.join(previewModulesDir, 'fileSearch.js'),
         'utf-8'
       );
       const globalSearchJs = await fs.readFile(
         path.join(previewModulesDir, 'globalSearch.js'),
+        'utf-8'
+      );
+      const replaceInFilesJs = await fs.readFile(
+        path.join(previewModulesDir, 'replaceInFiles.js'),
         'utf-8'
       );
       const gitPanelJs = await fs.readFile(
@@ -304,10 +316,16 @@ async function loadPreviewTemplates() {
         eventsJs,
         '// Electron close handshake',
         electronCloseJs,
+        '// Electron frameless title bar',
+        electronTitleBarJs,
+        '// File menu (title bar dropdown)',
+        previewFileMenuJs,
         '// File Search',
         fileSearchJs,
         '// Global Search',
         globalSearchJs,
+        '// Replace in Files',
+        replaceInFilesJs,
         '// Git Panel',
         gitPanelJs,
         '// Help Menu',

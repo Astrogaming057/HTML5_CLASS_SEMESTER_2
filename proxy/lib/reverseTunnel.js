@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const WebSocket = require('ws');
 const dbg = require('./debug');
 
-/** deviceId -> agent WebSocket (HTMLCLASS server outbound connection) */
+/** deviceId -> agent WebSocket (Astro Code backend outbound connection) */
 const deviceSockets = new Map();
 /** http request id -> { res, timer } */
 const pendingHttp = new Map();

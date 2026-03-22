@@ -2,7 +2,7 @@
  * Remote tunnel viewers: count + popover with IP, proxy account, time, UA (from proxy).
  *
  * While Remote Explorer is viewing *another* PC, the main preview WebSocket is tunneled to that
- * device, so we open a second WebSocket to this page origin (local HTMLCLASS) to keep receiving
+ * device, so we open a second WebSocket to this page origin (local Astro Code backend) to keep receiving
  * `remoteViewersUpdate` for **this** machine’s outbound agent.
  */
 window.PreviewRemoteViewers = (function () {
@@ -140,7 +140,7 @@ window.PreviewRemoteViewers = (function () {
   }
 
   /**
-   * Second WS to local HTMLCLASS — only used while tunneled to another device — so “who’s viewing my PC”
+   * Second WS to the local Astro Code origin — only used while tunneled to another device — so “who’s viewing my PC”
    * still updates live. Ignores all other message types so local file/sync events don’t mix with remote.
    */
   function startHomeViewerSocket() {

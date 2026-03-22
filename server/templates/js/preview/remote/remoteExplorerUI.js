@@ -484,7 +484,7 @@ window.PreviewRemoteExplorer = (function () {
         html += '<div class="remote-dd-debug-line">Proxy is in debug mode.</div>';
       }
       if (serverDebug) {
-        html += '<div class="remote-dd-debug-line">HTMLCLASS server is in debug mode.</div>';
+        html += '<div class="remote-dd-debug-line">Astro Code backend is in debug mode.</div>';
       }
       html += '<div class="remote-dd-debug-sub">Verbose logs may be exposed. Do not use for production secrets.</div>';
       html += '</div>';
@@ -501,9 +501,9 @@ window.PreviewRemoteExplorer = (function () {
       } else if (agentStatus && agentStatus.configured) {
         const err = (agentStatus.lastError || agentStatus.lastCloseReason || '').trim();
         html += '<div class="remote-dd-desc remote-dd-debug-warn" role="status">Outbound agent: <strong>not connected</strong>' +
-          (err ? ' — ' + escapeHtml(err) : '. Open the terminal where HTMLCLASS runs for details.') + '</div>';
+          (err ? ' — ' + escapeHtml(err) : '. Open the terminal where Astro Code runs for details.') + '</div>';
       } else if (agentStatus === null) {
-        html += '<div class="remote-dd-desc">Outbound agent: status unavailable (restart the HTMLCLASS server).</div>';
+        html += '<div class="remote-dd-desc">Outbound agent: status unavailable (restart the Astro Code backend).</div>';
       } else {
         html += '<div class="remote-dd-desc">Outbound agent: waiting — ensure PROXY_BASE is set and sign in again.</div>';
       }
@@ -608,7 +608,7 @@ window.PreviewRemoteExplorer = (function () {
     const defaultUrl =
       typeof window !== 'undefined' && window.location ? window.location.origin : 'http://127.0.0.1:3000';
     const baseUrlRaw = await window.PreviewUtils.customPrompt(
-      'URL of this HTMLCLASS server as seen from the proxy (LAN IP if proxy is on another PC). If the proxy cannot reach you directly, use anything valid (e.g. http://127.0.0.1:3000) — traffic can still use the reverse tunnel once you are signed in.',
+      'URL of this Astro Code backend as seen from the proxy (LAN IP if proxy is on another PC). If the proxy cannot reach you directly, use anything valid (e.g. http://127.0.0.1:3000) — traffic can still use the reverse tunnel once you are signed in.',
       defaultUrl
     );
     if (baseUrlRaw === null) return;

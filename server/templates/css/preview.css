@@ -48,6 +48,236 @@ body {
   height: 100vh;
 }
 
+/* Electron: frameless window — custom top bar (native min/max/close removed in main process) */
+.electron-title-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 34px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.electron-title-bar--mac {
+  flex-direction: row-reverse;
+}
+
+.electron-title-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+}
+
+.electron-title-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.electron-title-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.electron-title-controls {
+  display: flex;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* Preview header actions moved into Electron title bar: compact, same grey as window chrome */
+.electron-title-bar .preview-actions--titlebar {
+  gap: 4px;
+  padding: 0 6px;
+  margin: 0;
+}
+
+.electron-title-bar .preview-actions--titlebar .btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.25;
+  border-radius: 3px;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+.electron-title-bar .preview-actions--titlebar .btn-secondary {
+  background: var(--bg-button-secondary);
+  color: var(--text-button);
+}
+
+.electron-title-bar .preview-actions--titlebar .btn-secondary:hover {
+  background: var(--bg-button-secondary-hover);
+}
+
+.preview-toolbar-btn-icon {
+  padding: 2px 6px;
+  min-width: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-toolbar-icon-svg {
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+/* File menu (VS Code–style dropdown) */
+.preview-file-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.preview-file-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 280px;
+  max-width: min(340px, 92vw);
+  max-height: min(70vh, 520px);
+  overflow: hidden;
+  z-index: 100002;
+  padding: 4px 0;
+  margin: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.preview-file-menu-inner {
+  max-height: min(68vh, 500px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.preview-file-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  margin: 0;
+  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s ease;
+}
+
+.preview-file-menu-item:hover:not(:disabled):not(.preview-file-menu-item--disabled) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.preview-file-menu-item:focus-visible {
+  outline: 1px solid var(--border-active);
+  outline-offset: -1px;
+}
+
+.preview-file-menu-item--disabled,
+.preview-file-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.preview-file-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-file-menu-kbd {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.preview-file-menu-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-primary);
+  opacity: 0.85;
+}
+
+.electron-title-bar .preview-file-menu-trigger {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.25;
+  border-radius: 3px;
+  min-height: 22px;
+  box-sizing: border-box;
+}
+
+.electron-title-btn {
+  width: 46px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.electron-title-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+}
+
+.electron-title-btn-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+body.electron-frameless {
+  /* Mode + toolbar live in #electronTitleBar; .preview-header hidden */
+}
+
+body.electron-frameless .preview-header,
+body.preview-browser-titlebar .preview-header {
+  display: none;
+}
+
+/* Browser: match app top bar; min / max / close are not applicable */
+body.preview-browser-titlebar .electron-title-controls {
+  display: none;
+}
+
+.electron-title-drag .mode-indicator--titlebar {
+  margin-left: 0;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  font-size: 9px;
+  padding: 1px 6px;
+  line-height: 1.3;
+}
+
 .preview-header {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
@@ -432,6 +662,41 @@ body {
   font-size: 12px;
   color: var(--text-tertiary);
   margin-left: 10px;
+}
+
+.editor-status-bar .status {
+  margin-left: 0;
+  padding: 3px 12px;
+  line-height: 1.35;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.editor-status-workspace {
+  max-width: min(220px, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.editor-status-filename {
+  max-width: min(280px, 36vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-title .mode-indicator {
+  margin-left: 0;
 }
 
 .status.saving {
@@ -4271,6 +4536,15 @@ body.resizing .resizer {
   cursor: pointer;
 }
 
+.global-search-meta {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+  min-height: 0;
+}
+
 .global-search-results {
   flex: 1;
   overflow-y: auto;
@@ -4353,6 +4627,9 @@ body.resizing .resizer {
   flex: 1;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-x: auto;
+  max-height: 14em;
+  overflow-y: auto;
 }
 
 .global-search-line-text mark {
@@ -4366,6 +4643,19 @@ body.resizing .resizer {
   font-size: 12px;
   color: var(--text-tertiary);
   font-style: italic;
+}
+
+.replace-in-files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 0 20px 10px;
+}
+
+.replace-in-files-dialog .replace-in-files-actions .btn {
+  font-size: 13px;
+  padding: 6px 14px;
 }
 
 /* Git Panel */
@@ -5748,13 +6038,86 @@ body.resizing .resizer {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
-.editor-status-notifications-header {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-primary);
+.editor-status-notifications-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border-primary);
+}
+
+.editor-status-notifications-title-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.editor-status-notifications-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.editor-status-notif-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.editor-status-notif-toolbar-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+}
+
+.editor-status-notif-toolbar-btn:focus-visible {
+  outline: 1px solid var(--border-active);
+  outline-offset: 1px;
+}
+
+.editor-status-notif-toolbar-btn.is-active {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--accent-primary, var(--text-primary));
+}
+
+.editor-status-notif-toolbar-btn-clear .notif-clear-glyphs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.editor-status-notif-toolbar-btn-clear .notif-clear-bars {
+  font-size: 11px;
+  opacity: 0.9;
+  line-height: 1;
+}
+
+.editor-status-notif-toolbar-btn-clear .notif-clear-x {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.95;
 }
 
 .editor-status-notifications-list {

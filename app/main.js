@@ -425,6 +425,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    /** Custom HTML title bar (see PreviewElectronTitleBar); native min/max/close removed. */
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -441,6 +443,25 @@ function createWindow() {
     backgroundColor: '#1e1e1e',
     show: false, // Don't show until ready to prevent flicker
     autoHideMenuBar: true // Hide the menu bar (File, Edit, View, etc.)
+  });
+
+  mainWindow.on('maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('window-chrome-state', { maximized: true });
+      } catch (_e) {
+        /* ignore */
+      }
+    }
+  });
+  mainWindow.on('unmaximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('window-chrome-state', { maximized: false });
+      } catch (_e) {
+        /* ignore */
+      }
+    }
   });
 
   // Show window when ready to prevent remote desktop issues
@@ -858,6 +879,31 @@ ipcMain.handle('select-working-directory', async () => {
     return { success: true, path: selectedPath, requiresRestart: true };
   }
   return { success: false };
+});
+
+ipcMain.handle('window-minimize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize();
+  }
+});
+
+ipcMain.handle('window-maximize-toggle', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { maximized: false };
+  }
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+  return { maximized: mainWindow.isMaximized() };
+});
+
+ipcMain.handle('window-is-maximized', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+  return mainWindow.isMaximized();
 });
 
 // Prevent multiple instances

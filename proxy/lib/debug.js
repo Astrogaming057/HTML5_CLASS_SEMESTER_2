@@ -1,9 +1,10 @@
 /**
- * PROXY_DEBUG / HTMLCLASS_PROXY_DEBUG helpers for WebSocket (wss) logging.
+ * PROXY_DEBUG / ASTRO_CODE_PROXY_DEBUG helpers for WebSocket (wss) logging.
  */
 
 const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
+  process.env.ASTRO_CODE_PROXY_DEBUG === 'true' ||
   process.env.HTMLCLASS_PROXY_DEBUG === 'true';
 
 function isProxyDebug() {

@@ -6,6 +6,7 @@ window.PreviewStatusBar = (function () {
   let editorRef = null;
   let problemNavIndex = -1;
   const notifications = [];
+  let notificationsDnd = false;
   let statusToastStack = null;
   const FONT_STEPS = [10, 12, 14, 16, 18, 20, 22];
 
@@ -55,6 +56,38 @@ window.PreviewStatusBar = (function () {
     if (!btn || !editorRef) return;
     const fs = editorRef.getOption(monaco.editor.EditorOption.fontSize);
     btn.textContent = '🔍 ' + fs + 'px';
+  }
+
+  /** Short label for server root (BASE_DIR); full path in title tooltip */
+  function formatWorkspaceShort(normalizedPath) {
+    const p = (normalizedPath || '').replace(/\\/g, '/').trim();
+    if (!p) return '📁 —';
+    const parts = p.split('/').filter(Boolean);
+    if (parts.length === 0) return '📁 /';
+    const tail = parts.length > 2 ? '…/' + parts.slice(-2).join('/') : p;
+    return '📁 ' + tail;
+  }
+
+  function refreshWorkspacePath() {
+    const el = document.getElementById('statusWorkspace');
+    if (!el) return;
+    fetch('/__api__/debug/base-dir', { cache: 'no-cache' })
+      .then(function (r) {
+        return r.ok ? r.json() : Promise.reject();
+      })
+      .then(function (data) {
+        const raw =
+          (data && (data.resolvedBaseDir || data.baseDir || data.envBaseDir)) != null
+            ? String(data.resolvedBaseDir || data.baseDir || data.envBaseDir)
+            : '';
+        const p = raw.replace(/\\/g, '/');
+        el.title = p || '';
+        el.textContent = formatWorkspaceShort(p);
+      })
+      .catch(function () {
+        el.textContent = '📁 —';
+        el.title = '';
+      });
   }
 
   function refresh() {
@@ -239,7 +272,42 @@ window.PreviewStatusBar = (function () {
     }
   }
 
+  function loadNotificationsDnd() {
+    try {
+      notificationsDnd = sessionStorage.getItem('previewNotificationsDnd') === '1';
+    } catch (e) {
+      notificationsDnd = false;
+    }
+  }
+
+  function saveNotificationsDnd() {
+    try {
+      sessionStorage.setItem('previewNotificationsDnd', notificationsDnd ? '1' : '0');
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function updateDndToolbarButton() {
+    const btn = document.getElementById('statusNotificationsDnd');
+    if (!btn) return;
+    btn.classList.toggle('is-active', notificationsDnd);
+    btn.setAttribute('aria-pressed', notificationsDnd ? 'true' : 'false');
+    btn.title = notificationsDnd ? 'Resume notifications' : 'Do not disturb';
+    const icon = btn.querySelector('.notif-dnd-icon');
+    if (icon) {
+      icon.textContent = notificationsDnd ? '🔕' : '🔔';
+    }
+  }
+
+  function clearNotificationsList() {
+    notifications.length = 0;
+    renderNotificationsList();
+    updateBadge();
+  }
+
   function recordClientEvent(title, sub) {
+    if (notificationsDnd) return;
     notifications.unshift({
       at: Date.now(),
       title: title || '',
@@ -254,6 +322,7 @@ window.PreviewStatusBar = (function () {
 
   /** Toast + notification list (used for remote tunnel viewer connect/disconnect). */
   function showStatusToast(title, sub) {
+    if (notificationsDnd) return;
     recordClientEvent(title, sub || '');
     if (!statusToastStack) {
       statusToastStack = document.createElement('div');
@@ -317,6 +386,9 @@ window.PreviewStatusBar = (function () {
     const pop = document.getElementById('statusNotificationsPopover');
     if (!btn || !pop) return;
 
+    loadNotificationsDnd();
+    updateDndToolbarButton();
+
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       const open = pop.hasAttribute('hidden');
@@ -328,6 +400,32 @@ window.PreviewStatusBar = (function () {
         pop.setAttribute('hidden', '');
       }
     });
+
+    const clearBtn = document.getElementById('statusNotificationsClear');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        clearNotificationsList();
+      });
+    }
+
+    const dndBtn = document.getElementById('statusNotificationsDnd');
+    if (dndBtn) {
+      dndBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        notificationsDnd = !notificationsDnd;
+        saveNotificationsDnd();
+        updateDndToolbarButton();
+      });
+    }
+
+    const closeBtn = document.getElementById('statusNotificationsClose');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        pop.setAttribute('hidden', '');
+      });
+    }
 
     pop.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -386,11 +484,13 @@ window.PreviewStatusBar = (function () {
 
     refresh();
     updateProblemsCount();
+    refreshWorkspacePath();
   }
 
   return {
     init: init,
     refresh: refresh,
+    refreshWorkspacePath: refreshWorkspacePath,
     recordClientEvent: recordClientEvent,
     showStatusToast: showStatusToast,
     closeAllPopoversExcept: closeAllPopoversExcept

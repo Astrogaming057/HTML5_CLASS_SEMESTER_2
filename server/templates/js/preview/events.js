@@ -1,6 +1,6 @@
 window.PreviewEvents = (function() {
   return {
-    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openHelpMenu, toggleTerminal, closeCurrentTab, switchToNextTab, switchToPrevTab, createNewFile, createNewFolder, openGitPanel, openSettings) {
+    setupKeyboardShortcuts(toggleFileExplorer, togglePreviewPanel, openFileSearch, openGlobalSearch, openReplaceInFiles, openHelpMenu, toggleTerminal, closeCurrentTab, switchToNextTab, switchToPrevTab, createNewFile, createNewFolder, openGitPanel, openSettings) {
       document.addEventListener('keydown', (e) => {
         // Don't trigger shortcuts when typing in inputs/editors (except for some special cases)
         const target = e.target;
@@ -10,7 +10,10 @@ window.PreviewEvents = (function() {
         
         // Allow shortcuts in Monaco editor for editor-specific commands
         const allowInEditor = isMonacoEditor && (
-          (e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'Tab' || e.key === 'n' || e.key === 'k')
+          (e.ctrlKey || e.metaKey) && (
+            e.key === 'w' || e.key === 'Tab' || e.key === 'n' || e.key === 'k' ||
+            (e.shiftKey && (e.key === 'F' || e.key === 'H'))
+          )
         );
         
         if (isInput && !allowInEditor) {
@@ -27,6 +30,12 @@ window.PreviewEvents = (function() {
           e.stopPropagation();
           if (openGlobalSearch && typeof openGlobalSearch === 'function') {
             openGlobalSearch();
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'H') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (openReplaceInFiles && typeof openReplaceInFiles === 'function') {
+            openReplaceInFiles();
           }
         } else if ((e.ctrlKey || e.metaKey) && e.key === 'p' && !isInput) {
           // Ctrl+P for file search (only if not in input)
@@ -118,63 +127,24 @@ window.PreviewEvents = (function() {
       });
     },
 
-    setupButtonHandlers(saveBtn, refreshBtn, closeBtn, backToFilesBtn, updatePreview, filePath, customConfirm, isDirty, openPreviewPopout, openTerminalPopout, togglePreviewPanel) {
-      saveBtn.addEventListener('click', () => {
-        const saveFile = window.__previewSaveFile;
-        if (saveFile) {
-          saveFile();
-        }
-      });
-      
-      refreshBtn.addEventListener('click', () => {
-        const editor = window.__previewEditor;
-        if (editor) {
-          const updatePreviewFn = window.__previewUpdatePreview;
-          if (updatePreviewFn) {
-            updatePreviewFn(editor.getValue());
-          }
-        }
-        const syncChannel = window.__previewSyncChannel;
-        if (syncChannel) {
-          syncChannel.postMessage({
-            type: 'preview-refresh'
-          });
-        }
-      });
-      
-      if (backToFilesBtn) {
-        backToFilesBtn.addEventListener('click', () => {
-          const filePathGetter = window.__previewFilePath;
-          const filePath = typeof filePathGetter === 'function' ? filePathGetter() : filePathGetter;
-          if (filePath && typeof filePath === 'string') {
-            const dirPath = filePath.split('/').slice(0, -1).join('/') || '';
-            // Construct proper URL using current origin to ensure correct protocol and host
-            const targetPath = dirPath ? '/' + dirPath + '/' : '/';
-            try {
-              const url = new URL(targetPath, window.location.origin);
-              window.location.href = url.href;
-            } catch (e) {
-              // Fallback to relative path if URL construction fails
-            window.location.href = targetPath;
+    setupButtonHandlers(refreshBtn, openPreviewPopout, openTerminalPopout, togglePreviewPanel) {
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+          const editor = window.__previewEditor;
+          if (editor) {
+            const updatePreviewFn = window.__previewUpdatePreview;
+            if (updatePreviewFn) {
+              updatePreviewFn(editor.getValue());
             }
-          } else {
-            // No file open, go to root
-            window.location.href = '/';
+          }
+          const syncChannel = window.__previewSyncChannel;
+          if (syncChannel) {
+            syncChannel.postMessage({
+              type: 'preview-refresh'
+            });
           }
         });
       }
-      
-      closeBtn.addEventListener('click', async () => {
-        const isDirty = window.__previewIsDirty;
-        const customConfirm = window.__previewCustomConfirm;
-        if (isDirty && isDirty.current) {
-          const confirmed = await customConfirm('You have unsaved changes. Are you sure you want to close?');
-          if (!confirmed) {
-            return;
-          }
-        }
-        window.close();
-      });
       
       const popoutPreviewBtn = document.getElementById('popoutPreview');
       const popoutTerminalBtn = document.getElementById('popoutTerminal');

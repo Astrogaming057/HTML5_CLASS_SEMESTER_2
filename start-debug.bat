@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
-set HTMLCLASS_DEBUG=1
+set ASTRO_CODE_DEBUG=1
 set NODE_OPTIONS=--trace-warnings
-echo HTMLCLASS server DEBUG
+echo Astro Code backend DEBUG
 echo - Verbose HTTP request logging
 echo - uncaughtException / unhandledRejection logged
 echo - GET /__api__/mode includes "debug": true

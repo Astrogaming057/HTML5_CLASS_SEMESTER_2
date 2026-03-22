@@ -28,17 +28,56 @@ require(['vs/editor/editor.main'], function() {
   let logMessageListenerSetup = false;
   
   const editorContainer = document.getElementById('editor');
-  const saveBtn = document.getElementById('saveBtn');
   const refreshBtn = document.getElementById('refreshBtn');
-  const closeBtn = document.getElementById('closeBtn');
-  const resetSettingsBtn = document.getElementById('resetSettingsBtn');
-  const backToFilesBtn = document.getElementById('backToFilesBtn');
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsPanel = document.getElementById('settingsPanel');
   const settingsCloseBtn = document.getElementById('settingsCloseBtn');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const resetSettingsBtn2 = document.getElementById('resetSettingsBtn2');
   const status = document.getElementById('status');
+
+  function goToFileDiscovery() {
+    const filePathGetter = window.__previewFilePath;
+    const fp = typeof filePathGetter === 'function' ? filePathGetter() : filePathGetter;
+    if (fp && typeof fp === 'string') {
+      const dirPath = fp.split('/').slice(0, -1).join('/') || '';
+      const targetPath = dirPath ? '/' + dirPath + '/' : '/';
+      try {
+        window.location.href = new URL(targetPath, window.location.origin).href;
+      } catch (e) {
+        window.location.href = targetPath;
+      }
+    } else {
+      window.location.href = '/';
+    }
+  }
+
+  /** Same as Mode menu → Change Working Directory (Electron); browser falls back to file discovery URL. */
+  function changeWorkingDirectory() {
+    if (window.electronAPI && typeof window.electronAPI.selectWorkingDirectory === 'function') {
+      window.electronAPI.selectWorkingDirectory().then(function (result) {
+        if (result && result.success) {
+          if (status) {
+            status.textContent = 'Working directory changed. Restart required.';
+            status.className = 'status';
+          }
+          setTimeout(function () {
+            if (confirm('Working directory changed. Restart now?')) {
+              if (window.electronAPI && typeof window.electronAPI.restartApp === 'function') {
+                window.electronAPI.restartApp();
+              }
+            }
+          }, 100);
+        }
+      });
+    } else {
+      goToFileDiscovery();
+    }
+  }
+
+  if (window.PreviewElectronTitleBar && typeof window.PreviewElectronTitleBar.init === 'function') {
+    window.PreviewElectronTitleBar.init();
+  }
   const fileName = document.getElementById('fileName');
   const modeIndicator = document.getElementById('modeIndicator');
   previewFrame = document.getElementById('previewFrame');
@@ -541,19 +580,7 @@ require(['vs/editor/editor.main'], function() {
         }
         break;
       case 'working-dir':
-        if (window.electronAPI && window.electronAPI.selectWorkingDirectory) {
-          window.electronAPI.selectWorkingDirectory().then(result => {
-            if (result.success) {
-              status.textContent = `Working directory changed. Restart required.`;
-              status.className = 'status';
-              setTimeout(() => {
-                if (confirm('Working directory changed. Restart now?')) {
-                  window.electronAPI.restartApp();
-                }
-              }, 100);
-            }
-          });
-        }
+        changeWorkingDirectory();
         break;
       case 'open-in-app':
         // Try to open in app mode
@@ -580,8 +607,9 @@ require(['vs/editor/editor.main'], function() {
         if (settingsBtnEl) settingsBtnEl.click();
         break;
       case 'help':
-        const helpBtnEl = document.getElementById('helpBtn');
-        if (helpBtnEl) helpBtnEl.click();
+        if (window.PreviewHelpMenu && typeof window.PreviewHelpMenu.open === 'function') {
+          PreviewHelpMenu.open();
+        }
         break;
     }
   }
@@ -1576,7 +1604,52 @@ require(['vs/editor/editor.main'], function() {
       PreviewEditorManager.switchToFile(filePath, () => filePathRef.current, isDirty, customConfirm, fileName, () => currentDirRef.currentDir, loadFileTree, updateActiveFileTreeItem, loadFile, saveState, false);
     }, editor);
   }
-  
+
+  function openReplaceInFiles() {
+    if (!window.PreviewReplaceInFiles || typeof window.PreviewReplaceInFiles.open !== 'function') {
+      return;
+    }
+    window.PreviewReplaceInFiles.open(
+      function (filePath) {
+        PreviewEditorManager.switchToFile(
+          filePath,
+          () => filePathRef.current,
+          isDirty,
+          customConfirm,
+          fileName,
+          () => currentDirRef.currentDir,
+          loadFileTree,
+          updateActiveFileTreeItem,
+          loadFile,
+          saveState,
+          false
+        );
+      },
+      editor,
+      function (modifiedPaths) {
+        if (typeof window.__previewReloadFileExplorer === 'function') {
+          window.__previewReloadFileExplorer();
+        }
+        const cur = filePathRef.current;
+        if (!cur || cur.indexOf('browser://') === 0) {
+          return;
+        }
+        const norm = function (p) {
+          return String(p || '')
+            .replace(/^\/+/, '')
+            .replace(/\\/g, '/');
+        };
+        const curN = norm(cur);
+        for (let i = 0; i < modifiedPaths.length; i++) {
+          if (norm(modifiedPaths[i]) === curN) {
+            loadFile(cur, true);
+            break;
+          }
+        }
+      }
+    );
+  }
+
   function openHelpMenu() {
     PreviewHelpMenu.open();
   }
@@ -1632,12 +1705,39 @@ require(['vs/editor/editor.main'], function() {
   function openSettings() {
     PreviewSettings.openSettings();
   }
+
+  function refreshPreviewFromMenu() {
+    const ed = window.__previewEditor;
+    if (ed) {
+      const u = window.__previewUpdatePreview;
+      if (typeof u === 'function') {
+        u(ed.getValue());
+      }
+    }
+    const syncChannel = window.__previewSyncChannel;
+    if (syncChannel) {
+      syncChannel.postMessage({ type: 'preview-refresh' });
+    }
+  }
+
+  async function closeWindowFromMenu() {
+    const isDirtyRef = window.__previewIsDirty;
+    const customConfirmFn = window.__previewCustomConfirm;
+    if (isDirtyRef && isDirtyRef.current && typeof customConfirmFn === 'function') {
+      const confirmed = await customConfirmFn('You have unsaved changes. Are you sure you want to close?');
+      if (!confirmed) {
+        return;
+      }
+    }
+    window.close();
+  }
   
   PreviewEvents.setupKeyboardShortcuts(
     toggleFileExplorer, 
     togglePreviewPanel, 
     openFileSearch, 
-    openGlobalSearch, 
+    openGlobalSearch,
+    openReplaceInFiles,
     openHelpMenu,
     toggleTerminalPanel,
     closeCurrentTab,
@@ -1648,6 +1748,30 @@ require(['vs/editor/editor.main'], function() {
     openGitPanel,
     openSettings
   );
+
+  if (window.PreviewFileMenu && typeof window.PreviewFileMenu.init === 'function') {
+    window.PreviewFileMenu.init({
+      newFile: function () {
+        createNewFile();
+      },
+      newFolder: function () {
+        createNewFolder();
+      },
+      openQuickOpen: openFileSearch,
+      openFolder: changeWorkingDirectory,
+      globalSearch: openGlobalSearch,
+      toggleExplorer: toggleFileExplorer,
+      togglePreview: togglePreviewPanel,
+      toggleTerminal: toggleTerminalPanel,
+      save: saveFile,
+      refreshPreview: refreshPreviewFromMenu,
+      gitPanel: openGitPanel,
+      settings: openSettings,
+      help: openHelpMenu,
+      closeTab: closeCurrentTab,
+      closeWindow: closeWindowFromMenu
+    });
+  }
   
   function toggleFileExplorer() {
     PreviewUI.toggleFileExplorer(fileExplorerPanel, toggleExplorer, updateExplorerVisibility, updateBackButton, saveState);
@@ -1842,6 +1966,95 @@ require(['vs/editor/editor.main'], function() {
   }
   
   window.__previewEditor = editor;
+
+  function runMonacoAction(actionId) {
+    if (!editor) return;
+    editor.focus();
+    const a = editor.getAction(actionId);
+    if (a && a.isSupported()) {
+      a.run();
+    } else {
+      editor.trigger('menu', actionId, null);
+    }
+  }
+
+  /**
+   * Edit menu runs after dropdown closes; defer so focus returns to the editor.
+   * Uses actions registered in PreviewEditorSetup (preview.menu.undo / preview.menu.redo).
+   */
+  function runEditorUndo() {
+    if (!editor) return;
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        editor.focus();
+        const a = editor.getAction('preview.menu.undo');
+        if (a) {
+          a.run();
+        }
+      }, 0);
+    });
+  }
+
+  function runEditorRedo() {
+    if (!editor) return;
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        editor.focus();
+        const a = editor.getAction('preview.menu.redo');
+        if (a) {
+          a.run();
+        }
+      }, 0);
+    });
+  }
+
+  function tryEmmetExpandAbbreviation() {
+    if (!editor) return;
+    editor.focus();
+    const tryIds = [
+      'editor.emmet.action.expandAbbreviation',
+      'editor.action.emmetExpandAbbreviation'
+    ];
+    for (let i = 0; i < tryIds.length; i++) {
+      const act = editor.getAction(tryIds[i]);
+      if (act && act.isSupported()) {
+        act.run();
+        return;
+      }
+    }
+  }
+
+  if (window.PreviewFileMenu && typeof window.PreviewFileMenu.initEdit === 'function') {
+    window.PreviewFileMenu.initEdit({
+      undo: runEditorUndo,
+      redo: runEditorRedo,
+      cut: function () {
+        runMonacoAction('editor.action.clipboardCutAction');
+      },
+      copy: function () {
+        runMonacoAction('editor.action.clipboardCopyAction');
+      },
+      paste: function () {
+        runMonacoAction('editor.action.clipboardPasteAction');
+      },
+      find: function () {
+        runMonacoAction('actions.find');
+      },
+      replace: function () {
+        runMonacoAction('editor.action.startFindReplaceAction');
+      },
+      findInFiles: openGlobalSearch,
+      replaceInFiles: openReplaceInFiles,
+      toggleLineComment: function () {
+        runMonacoAction('editor.action.commentLine');
+      },
+      toggleBlockComment: function () {
+        runMonacoAction('editor.action.blockComment');
+      },
+      emmetExpand: tryEmmetExpandAbbreviation
+    });
+  }
+
   window.__previewFilePath = () => filePathRef.current;
   window.__previewSwitchToFile = switchToFile;
   window.__previewSetExplorerDir = (p) => {
@@ -1868,6 +2081,251 @@ require(['vs/editor/editor.main'], function() {
   }
 
   PreviewEditorSetup.setupEditorNavigation(editor, openSymbolNavigator);
+
+  function focusTerminalClientInput() {
+    if (terminalPanel && terminalPanel.classList.contains('collapsed')) {
+      terminalPanel.classList.remove('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    }
+    const clientTab = document.querySelector('.terminal-tab[data-tab="client"]');
+    if (clientTab) {
+      clientTab.click();
+    }
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        const inp = document.getElementById('terminalClientInput');
+        if (inp) {
+          inp.focus();
+        }
+      }, 0);
+    });
+  }
+
+  function openProblemsTerminalTab() {
+    if (terminalPanel && terminalPanel.classList.contains('collapsed')) {
+      terminalPanel.classList.remove('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    }
+    const tab = document.querySelector('.terminal-tab[data-tab="problems"]');
+    if (tab) {
+      tab.click();
+    }
+  }
+
+  function openCompilerTerminalTab() {
+    if (terminalPanel && terminalPanel.classList.contains('collapsed')) {
+      terminalPanel.classList.remove('collapsed');
+      updateTerminalVisibility();
+      saveState();
+    }
+    const tab = document.querySelector('.terminal-tab[data-tab="compiler"]');
+    if (tab) {
+      tab.click();
+    }
+  }
+
+  function runCompileFromMenu() {
+    openCompilerTerminalTab();
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        if (window.PreviewCompiler && typeof window.PreviewCompiler.run === 'function') {
+          window.PreviewCompiler.run();
+        }
+      }, 0);
+    });
+  }
+
+  function toggleEditorMinimap() {
+    if (!editor || !monaco || !monaco.editor || typeof monaco.editor.EditorOption === 'undefined') {
+      return;
+    }
+    editor.focus();
+    try {
+      const minimapOpt = editor.getOption(monaco.editor.EditorOption.minimap);
+      const enabled = minimapOpt && minimapOpt.enabled;
+      editor.updateOptions({ minimap: { enabled: !enabled } });
+    } catch (_e) {
+      const raw = editor.getRawOptions && editor.getRawOptions();
+      if (raw && raw.minimap) {
+        editor.updateOptions({ minimap: { enabled: !raw.minimap.enabled } });
+      }
+    }
+  }
+
+  function runMarkerNavigation(next) {
+    if (!editor) {
+      return;
+    }
+    editor.focus();
+    const ids = next
+      ? ['editor.action.marker.nextInFiles', 'editor.action.marker.next']
+      : ['editor.action.marker.prevInFiles', 'editor.action.marker.prev'];
+    for (let i = 0; i < ids.length; i++) {
+      const a = editor.getAction(ids[i]);
+      if (a && a.isSupported()) {
+        a.run();
+        return;
+      }
+    }
+  }
+
+  function runDeferredMenuEditor(fn) {
+    if (!editor) {
+      return;
+    }
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        fn();
+      }, 0);
+    });
+  }
+
+  if (window.PreviewFileMenu && typeof window.PreviewFileMenu.registerMenu === 'function') {
+    window.PreviewFileMenu.registerMenu('previewSelectionMenuWrap', 'previewSelectionMenuBtn', 'previewSelectionMenu', {
+      selSelectAll: function () {
+        runMonacoAction('editor.action.selectAll');
+      },
+      selExpand: function () {
+        runMonacoAction('editor.action.smartSelect.expand');
+      },
+      selShrink: function () {
+        runMonacoAction('editor.action.smartSelect.shrink');
+      },
+      selCopyLineUp: function () {
+        runMonacoAction('editor.action.copyLinesUpAction');
+      },
+      selCopyLineDown: function () {
+        runMonacoAction('editor.action.copyLinesDownAction');
+      },
+      selMoveLineUp: function () {
+        runMonacoAction('editor.action.moveLinesUpAction');
+      },
+      selMoveLineDown: function () {
+        runMonacoAction('editor.action.moveLinesDownAction');
+      },
+      selDuplicate: function () {
+        runMonacoAction('editor.action.duplicateSelection');
+      },
+      selCursorAbove: function () {
+        runMonacoAction('editor.action.insertCursorAbove');
+      },
+      selCursorBelow: function () {
+        runMonacoAction('editor.action.insertCursorBelow');
+      },
+      selCursorsLineEnds: function () {
+        runMonacoAction('editor.action.insertCursorAtEndOfEachLineSelected');
+      },
+      selAddNext: function () {
+        runMonacoAction('editor.action.addSelectionToNextFindMatch');
+      },
+      selAddPrev: function () {
+        runMonacoAction('editor.action.addSelectionToPreviousFindMatch');
+      },
+      selAllOccurrences: function () {
+        if (!editor) {
+          return;
+        }
+        editor.focus();
+        const ids = ['editor.action.selectHighlights', 'editor.action.changeAll'];
+        for (let i = 0; i < ids.length; i++) {
+          const a = editor.getAction(ids[i]);
+          if (a && a.isSupported()) {
+            a.run();
+            return;
+          }
+        }
+      }
+    });
+
+    window.PreviewFileMenu.registerMenu('previewViewMenuWrap', 'previewViewMenuBtn', 'previewViewMenu', {
+      viewExplorer: function () {
+        toggleFileExplorer();
+      },
+      viewPreview: function () {
+        togglePreviewPanel();
+      },
+      viewTerminal: function () {
+        toggleTerminalPanel();
+      },
+      viewMinimap: function () {
+        toggleEditorMinimap();
+      },
+      viewProblems: function () {
+        openProblemsTerminalTab();
+      }
+    });
+
+    window.PreviewFileMenu.registerMenu('previewGoMenuWrap', 'previewGoMenuBtn', 'previewGoMenu', {
+      goBack: function () {
+        runMonacoAction('editor.action.navigateBack');
+      },
+      goForward: function () {
+        runMonacoAction('editor.action.navigateForward');
+      },
+      goFile: function () {
+        openFileSearch();
+      },
+      goSymbol: function () {
+        if (window.PreviewEditorNavigation && typeof window.PreviewEditorNavigation.openSymbolNavigator === 'function') {
+          runDeferredMenuEditor(function () {
+            window.PreviewEditorNavigation.openSymbolNavigator(editor);
+          });
+        } else {
+          openSymbolNavigator();
+        }
+      },
+      goDefinition: function () {
+        if (window.PreviewEditorNavigation && typeof window.PreviewEditorNavigation.jumpToDefinition === 'function') {
+          runDeferredMenuEditor(function () {
+            window.PreviewEditorNavigation.jumpToDefinition(editor, function () {
+              return filePathRef.current;
+            }, switchToFile);
+          });
+        }
+      },
+      goReferences: function () {
+        if (window.PreviewEditorNavigation && typeof window.PreviewEditorNavigation.findReferences === 'function') {
+          runDeferredMenuEditor(function () {
+            window.PreviewEditorNavigation.findReferences(editor, function () {
+              return filePathRef.current;
+            });
+          });
+        }
+      },
+      goLine: function () {
+        runMonacoAction('editor.action.gotoLine');
+      },
+      goNextProblem: function () {
+        runMarkerNavigation(true);
+      },
+      goPrevProblem: function () {
+        runMarkerNavigation(false);
+      }
+    });
+
+    window.PreviewFileMenu.registerMenu('previewRunMenuWrap', 'previewRunMenuBtn', 'previewRunMenu', {
+      runOpenCompiler: function () {
+        openCompilerTerminalTab();
+      },
+      runCompile: function () {
+        runCompileFromMenu();
+      },
+      runFocusTerminal: function () {
+        focusTerminalClientInput();
+      }
+    });
+
+    window.PreviewFileMenu.registerMenu('previewTerminalMenuWrap', 'previewTerminalMenuBtn', 'previewTerminalMenu', {
+      termToggle: function () {
+        toggleTerminalPanel();
+      },
+      termFocus: function () {
+        focusTerminalClientInput();
+      }
+    });
+  }
 
   if (window.PreviewCrossModuleNavigation) {
     if (typeof window.PreviewCrossModuleNavigation.initCompletionProviders === 'function') {
@@ -1899,16 +2357,8 @@ require(['vs/editor/editor.main'], function() {
   
   loadFile(filePath);
   
-  const helpBtn = document.getElementById('helpBtn');
-  if (helpBtn) {
-    helpBtn.addEventListener('click', () => {
-      PreviewHelpMenu.open();
-    });
-  }
-  
   PreviewEvents.setupButtonHandlers(
-    saveBtn, refreshBtn, closeBtn, backToFilesBtn, updatePreview, filePath, customConfirm,
-    isDirty, openPreviewPopout, openTerminalPopout, togglePreviewPanel
+    refreshBtn, openPreviewPopout, openTerminalPopout, togglePreviewPanel
   );
   
   if (pinPreviewBtn) {
@@ -1938,7 +2388,11 @@ require(['vs/editor/editor.main'], function() {
   
   PreviewSettingsUI.setupSettingsEventHandlers(
     settingsBtn, settingsPanel, settingsCloseBtn, saveSettingsBtn, resetSettingsBtn2,
-    resetSettingsBtn, status, editor, customConfirm, resetSettings
+    null,
+    status,
+    editor,
+    customConfirm,
+    resetSettings
   );
   
   PreviewEvents.setupBeforeUnload(isDirty, ws, saveState);
