@@ -574,6 +574,47 @@
       <button id="reopenPreviewBtn" class="panel-reopen-btn" title="Reopen Preview">← Preview</button>
     </div>
   </div>
+
+  <footer class="editor-status-bar preview-page-status-bar" id="editorStatusBar" aria-label="Editor status">
+    <div class="editor-status-bar-left">
+      <button type="button" class="editor-status-item editor-status-btn" id="statusZoomBtn" title="Font size (click to cycle)">🔍 14px</button>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item" id="statusCursor">Ln 1, Col 1</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item" id="statusIndent">Spaces: 4</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item" id="statusEncoding">UTF-8</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item" id="statusEol">LF</span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <span class="editor-status-item editor-status-lang" id="statusLang"><span class="editor-status-lang-icon" aria-hidden="true">{ }</span><span id="statusLangLabel">Plain Text</span></span>
+      <span class="editor-status-sep" aria-hidden="true"></span>
+      <button type="button" class="editor-status-item editor-status-btn editor-status-problems" id="statusProblemsBtn" title="Problems — click to jump to next error or warning" aria-label="Problems">
+        <span class="editor-status-problem-ico editor-status-problem-ico-error" aria-hidden="true"><span class="editor-status-problem-x">×</span></span>
+        <span class="editor-status-problem-num" id="statusErrorCount">0</span>
+        <span class="editor-status-problem-ico editor-status-problem-ico-warn" aria-hidden="true">⚠</span>
+        <span class="editor-status-problem-num" id="statusWarningCount">0</span>
+      </button>
+    </div>
+    <div class="editor-status-bar-right">
+      <div class="remote-viewers-widget" id="remoteViewersWidget" title="Remote viewers via tunnel">
+        <span class="remote-viewers-icon" aria-hidden="true">🌐</span>
+        <span id="remoteViewerCount">0</span>
+      </div>
+      <span class="editor-status-sep editor-status-sep-tight" aria-hidden="true"></span>
+      <div id="clientSessionsMount" class="client-sessions-mount"></div>
+      <div class="editor-status-notifications-wrap">
+        <button type="button" class="editor-status-item editor-status-btn editor-status-notif-btn" id="statusNotificationsBtn" title="Notifications" aria-label="Notifications">
+          🔔<span class="editor-status-notif-badge" id="statusNotifBadge" hidden>0</span>
+        </button>
+        <div class="editor-status-notifications-popover" id="statusNotificationsPopover" hidden role="dialog" aria-label="Notifications">
+          <div class="editor-status-notifications-header">Notifications</div>
+          <ul class="editor-status-notifications-list" id="statusNotificationsList"></ul>
+          <p class="editor-status-notifications-empty" id="statusNotificationsEmpty">No notifications yet.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
   
   <div id="contextMenu" class="context-menu" style="display: none;">
   <div class="context-menu-item" id="contextNewFile">📄 New File</div>

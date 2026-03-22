@@ -97,6 +97,18 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'websocket.js'),
         'utf-8'
       );
+      const clientSessionsUIJs = await fs.readFile(
+        path.join(previewModulesDir, 'clientSessionsUI.js'),
+        'utf-8'
+      );
+      const previewStatusBarJs = await fs.readFile(
+        path.join(previewModulesDir, 'previewStatusBar.js'),
+        'utf-8'
+      );
+      const previewRemoteViewersJs = await fs.readFile(
+        path.join(previewModulesDir, 'previewRemoteViewers.js'),
+        'utf-8'
+      );
       const terminalJs = await fs.readFile(
         path.join(previewModulesDir, 'terminal.js'),
         'utf-8'
@@ -252,6 +264,12 @@ async function loadPreviewTemplates() {
         tabManagerJs,
         '// WebSocket',
         websocketJs,
+        '// Client sessions (connected browsers)',
+        clientSessionsUIJs,
+        '// Editor status bar',
+        previewStatusBarJs,
+        '// Remote tunnel viewers',
+        previewRemoteViewersJs,
         '// Terminal',
         terminalJs,
         '// Compiler',

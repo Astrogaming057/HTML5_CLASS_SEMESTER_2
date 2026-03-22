@@ -113,6 +113,33 @@ function setupAPI(baseDir) {
     }
   });
 
+  /** Reverse-tunnel remote browsers viewing this device (via proxy); requires outbound agent. */
+  router.get('/remote/tunnel-viewers', (req, res) => {
+    try {
+      const count =
+        typeof remoteAgentModule.getRemoteTunnelViewerCount === 'function'
+          ? remoteAgentModule.getRemoteTunnelViewerCount()
+          : 0;
+      res.json({ success: true, count });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || 'Server error' });
+    }
+  });
+
+  /** Editor WebSocket peers (browsers connected to this HTMLCLASS server for live sync). */
+  router.get('/ws/clients', (req, res) => {
+    try {
+      if (!wsManager || typeof wsManager.getClientSessionsList !== 'function') {
+        res.json({ success: true, clients: [], total: 0 });
+        return;
+      }
+      const clients = wsManager.getClientSessionsList();
+      res.json({ success: true, clients, total: clients.length });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || 'Server error' });
+    }
+  });
+
   router.get('/files', async (req, res) => {
     try {
       const filePath = req.query.path || '/';

@@ -106,6 +106,9 @@ window.PreviewSettings = (function() {
           lineNumbers: previewSettings.editorLineNumbers ? 'on' : 'off',
           tabSize: previewSettings.editorTabSize
         });
+        if (window.PreviewStatusBar && typeof window.PreviewStatusBar.refresh === 'function') {
+          window.PreviewStatusBar.refresh();
+        }
       }
       
       this.loadTheme(previewSettings.pageTheme);

@@ -1,5 +1,13 @@
 const WebSocket = require('ws');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
+
+function normalizeClientIp(address) {
+  if (!address) return 'unknown';
+  const s = String(address);
+  if (s.startsWith('::ffff:')) return s.slice(7);
+  return s;
+}
 
 class WebSocketManager {
   constructor() {
@@ -16,14 +24,26 @@ class WebSocketManager {
     this.wss = new WebSocket.Server({ server });
 
     this.wss.on('connection', (ws, req) => {
+      const sessionId = crypto.randomUUID();
+      const ip = normalizeClientIp(req.socket && req.socket.remoteAddress);
+      const ua = (req.headers && req.headers['user-agent']) || '';
+      ws._sessionMeta = {
+        id: sessionId,
+        ip,
+        connectedAt: Date.now(),
+        userAgentShort: ua.length > 160 ? ua.slice(0, 160) + '…' : ua
+      };
+
       this.clients.add(ws);
-      const clientInfo = { 
-        ip: req.socket.remoteAddress, 
-        totalClients: this.clients.size 
+      const clientInfo = {
+        ip,
+        sessionId,
+        totalClients: this.clients.size
       };
       logger.info('WebSocket client connected', clientInfo);
-      
+
       this.notifyConnectionListeners();
+      this.broadcastClientList();
 
       ws.on('message', async (data) => {
         try {
@@ -100,10 +120,13 @@ class WebSocketManager {
       });
 
       ws.on('close', () => {
+        const sid = ws._sessionMeta && ws._sessionMeta.id;
         this.clients.delete(ws);
-        logger.info('WebSocket client disconnected', { 
-          remainingClients: this.clients.size 
+        logger.info('WebSocket client disconnected', {
+          sessionId: sid,
+          remainingClients: this.clients.size
         });
+        this.broadcastClientList();
       });
 
       ws.on('error', (error) => {
@@ -184,6 +207,34 @@ class WebSocketManager {
       } catch (error) {
         logger.error('Error in connection listener', error);
       }
+    });
+  }
+
+  /**
+   * Connected editor/preview WebSocket peers (for UI + GET /__api__/ws/clients).
+   */
+  getClientSessionsList() {
+    const out = [];
+    this.clients.forEach((ws) => {
+      const m = ws._sessionMeta;
+      if (m) {
+        out.push({
+          id: m.id,
+          ip: m.ip,
+          connectedAt: m.connectedAt,
+          userAgent: m.userAgentShort || ''
+        });
+      }
+    });
+    return out;
+  }
+
+  broadcastClientList() {
+    const clients = this.getClientSessionsList();
+    this.broadcast({
+      type: 'editorClientsSnapshot',
+      clients,
+      total: clients.length
     });
   }
 }

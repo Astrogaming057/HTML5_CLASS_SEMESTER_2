@@ -58,7 +58,19 @@ window.PreviewWebSocket = (function() {
           }
           
           const data = JSON.parse(dataString);
-          
+
+          if (data.type === 'editorClientsSnapshot') {
+            if (window.PreviewClientSessions && typeof window.PreviewClientSessions.applySnapshot === 'function') {
+              window.PreviewClientSessions.applySnapshot(data);
+            }
+          }
+
+          if (data.type === 'remoteViewersUpdate') {
+            if (window.PreviewRemoteViewers && typeof window.PreviewRemoteViewers.applyUpdate === 'function') {
+              window.PreviewRemoteViewers.applyUpdate(data);
+            }
+          }
+
           // Handle cache cleanup messages
           if (data.type === 'cache-cleanup-start') {
             console.log(`[Cache Cleanup] ${data.message}`);

@@ -14,6 +14,27 @@ const appConfig = require('./config');
 
 const streams = new Map();
 
+/** Last known count of reverse-tunnel remote browsers (from proxy). */
+let remoteTunnelViewerCount = 0;
+
+/** Broadcast preview WebSocket messages (set from index.js). */
+let previewBroadcaster = null;
+
+function setPreviewBroadcaster(fn) {
+  previewBroadcaster = typeof fn === 'function' ? fn : null;
+}
+
+function broadcastRemoteViewersToPreview(count, previous) {
+  remoteTunnelViewerCount = Math.max(0, Number(count) || 0);
+  if (typeof previewBroadcaster === 'function') {
+    previewBroadcaster({
+      type: 'remoteViewersUpdate',
+      count: remoteTunnelViewerCount,
+      previous: Number(previous) || 0
+    });
+  }
+}
+
 /** Observable state for GET /__api__/remote/agent-status */
 const agentRuntimeState = {
   configured: false,
@@ -218,6 +239,15 @@ function onProxyMessage(data, proxyWs, localBase, localPort) {
   } catch (e) {
     return;
   }
+  if (msg.type === 'remote_viewers') {
+    const n = Math.max(0, Number(msg.count) || 0);
+    const prev =
+      msg.previous !== undefined && msg.previous !== null
+        ? Math.max(0, Number(msg.previous) || 0)
+        : remoteTunnelViewerCount;
+    broadcastRemoteViewersToPreview(n, prev);
+    return;
+  }
   if (msg.type === 'http_req') {
     handleHttpReq(msg, proxyWs, localBase);
     return;
@@ -361,6 +391,12 @@ function startRemoteAgent(opts) {
     ws.on('close', (code, reason) => {
       ws = null;
       clearStreams();
+      const prevViewers = remoteTunnelViewerCount;
+      if (prevViewers > 0) {
+        broadcastRemoteViewersToPreview(0, prevViewers);
+      } else {
+        remoteTunnelViewerCount = 0;
+      }
       const r = String(reason || '');
       setAgentState({
         connected: false,
@@ -483,10 +519,16 @@ function reconfigure(body) {
   return { ok: true };
 }
 
+function getRemoteTunnelViewerCount() {
+  return remoteTunnelViewerCount;
+}
+
 module.exports = {
   startRemoteAgent,
   startFromEnv,
   reconfigure,
   buildAgentWsUrl,
-  getAgentStatus
+  getAgentStatus,
+  setPreviewBroadcaster,
+  getRemoteTunnelViewerCount
 };

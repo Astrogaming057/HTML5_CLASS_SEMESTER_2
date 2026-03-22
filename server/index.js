@@ -63,6 +63,7 @@ const serverCommands = new ServerCommands(wsManager, server, config.BASE_DIR);
 wsManager.setServerCommands(serverCommands);
 wsManager.setup(server);
 logger.setWebSocketManager(wsManager);
+remoteAgent.setPreviewBroadcaster((msg) => wsManager.broadcast(msg));
 logger.info('WebSocket server initialized');
 let watcher;
 try {

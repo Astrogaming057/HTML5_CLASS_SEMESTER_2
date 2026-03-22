@@ -8,6 +8,28 @@ const deviceSockets = new Map();
 const pendingHttp = new Map();
 /** streamId -> { clientWs, deviceId } (browser <-> proxy WS, piped through agent) */
 const pendingWsStreams = new Map();
+/** Last broadcast remote viewer count per device (for previous/count payloads) */
+const viewerCountByDevice = new Map();
+
+function computedTunnelViewerCount(deviceId) {
+  let n = 0;
+  for (const [, entry] of pendingWsStreams.entries()) {
+    if (entry.deviceId === deviceId) n++;
+  }
+  return n;
+}
+
+/**
+ * Notify agent WebSocket of how many reverse-tunnel browser WS streams are open for this device.
+ */
+function broadcastViewerCount(deviceId) {
+  const ws = deviceSockets.get(deviceId);
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const old = viewerCountByDevice.has(deviceId) ? viewerCountByDevice.get(deviceId) : 0;
+  const n = computedTunnelViewerCount(deviceId);
+  viewerCountByDevice.set(deviceId, n);
+  sendJson(ws, { type: 'remote_viewers', count: n, previous: old });
+}
 
 function sendJson(ws, obj) {
   if (dbg.isProxyDebug() && obj && typeof obj.type === 'string') {
@@ -66,6 +88,8 @@ function registerDevice(deviceId, ws) {
     }
   }
   deviceSockets.set(deviceId, ws);
+  viewerCountByDevice.delete(deviceId);
+  broadcastViewerCount(deviceId);
 }
 
 function unregisterDevice(deviceId, ws) {
@@ -74,6 +98,7 @@ function unregisterDevice(deviceId, ws) {
   }
   cleanupDeviceStreams(deviceId);
   deviceSockets.delete(deviceId);
+  viewerCountByDevice.delete(deviceId);
 }
 
 function hasAgentForDevice(deviceId) {
@@ -122,6 +147,7 @@ function onDeviceMessage(deviceId, data) {
 
   if (msg.type === 'ws_server_close' && msg.streamId) {
     const entry = pendingWsStreams.get(msg.streamId);
+    const did = entry && entry.deviceId;
     if (entry && entry.clientWs) {
       try {
         entry.clientWs.close(msg.code || 1000);
@@ -130,6 +156,7 @@ function onDeviceMessage(deviceId, data) {
       }
     }
     pendingWsStreams.delete(msg.streamId);
+    if (did) broadcastViewerCount(did);
   }
 }
 
@@ -198,6 +225,7 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
     const path = req.url || '/';
     const headers = sanitizeHeaders(req.headers);
     pendingWsStreams.set(streamId, { clientWs, deviceId });
+    broadcastViewerCount(deviceId);
     if (dbg.isProxyDebug()) {
       dbg.logWss(
         `reverse tunnel-ws browser open stream=${streamId.slice(0, 10)}… device=${String(deviceId).slice(0, 8)}… path=${dbg.safeUrlForLog(path)}`
@@ -225,6 +253,7 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
       }
       sendJson(ws, { type: 'ws_client_close', streamId });
       pendingWsStreams.delete(streamId);
+      broadcastViewerCount(deviceId);
     });
     clientWs.on('error', () => {
       if (dbg.isProxyDebug()) {
@@ -232,6 +261,7 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
       }
       sendJson(ws, { type: 'ws_client_close', streamId });
       pendingWsStreams.delete(streamId);
+      broadcastViewerCount(deviceId);
     });
 
     const ok = sendJson(ws, {
@@ -247,6 +277,7 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
         /* ignore */
       }
       pendingWsStreams.delete(streamId);
+      broadcastViewerCount(deviceId);
     }
   });
   return true;
