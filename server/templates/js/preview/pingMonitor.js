@@ -16,6 +16,7 @@ window.PreviewPingMonitor = (function() {
 
   let remoteOfflineTimer = null;
   let remoteOfflineDialogShown = false;
+  let pendingRemoteOfflineDetail = null;
 
   function isRemoteSessionActive() {
     return (
@@ -23,19 +24,6 @@ window.PreviewPingMonitor = (function() {
       typeof PreviewRemoteSession.isRemoteActive === 'function' &&
       PreviewRemoteSession.isRemoteActive()
     );
-  }
-
-  /** Bad gateway / upstream offline while using Remote Explorer tunnel */
-  function isRemoteTunnelOfflineDetail(detail) {
-    if (!detail) return false;
-    if (detail.kind === 'remoteTunnelOffline') return true;
-    if (!isRemoteSessionActive()) return false;
-    const st = Number(detail.status);
-    if (st === 502 || st === 503 || st === 504) return true;
-    const msg = String(detail.message || '');
-    if (msg.indexOf('502') >= 0 || msg.indexOf('503') >= 0 || msg.indexOf('504') >= 0) return true;
-    if (msg.toLowerCase().indexOf('bad gateway') >= 0) return true;
-    return false;
   }
 
   function hideRemoteOfflineDialog() {
@@ -56,9 +44,8 @@ window.PreviewPingMonitor = (function() {
     overlay.setAttribute('aria-hidden', 'true');
     overlay.innerHTML =
       '<div class="remote-offline-dialog" role="dialog" aria-modal="true" aria-labelledby="remoteOfflineTitle">' +
-      '<h2 id="remoteOfflineTitle" class="remote-offline-title">Remote device unreachable</h2>' +
-      '<p class="remote-offline-body">The other computer went offline, or the connection through the proxy failed (bad gateway). ' +
-      'Switch to this PC or pick another device from your account.</p>' +
+      '<h2 id="remoteOfflineTitle" class="remote-offline-title">Remote connection issue</h2>' +
+      '<p id="remoteOfflineBody" class="remote-offline-body">Loading…</p>' +
       '<div class="remote-offline-actions-top">' +
       '<button type="button" class="btn btn-primary" id="remoteOfflineUseLocal">Use this PC (local)</button>' +
       '</div>' +
@@ -100,21 +87,27 @@ window.PreviewPingMonitor = (function() {
     return overlay;
   }
 
-  function populateRemoteOfflineDeviceList() {
+  function populateRemoteOfflineDeviceList(detail) {
     const container = document.getElementById('remoteOfflineDeviceList');
     const hint = document.getElementById('remoteOfflineHint');
     if (!container) return;
     container.innerHTML = '';
     if (hint) hint.textContent = '';
 
+    const kind = detail && detail.kind;
+    if (kind === 'proxyUnreachable' && hint) {
+      hint.textContent =
+        'Listing devices needs the proxy. “Use this PC” always works — it only changes this tab to local mode (no proxy call).';
+    }
+
     if (!window.PreviewRemoteAuthApi || !window.PreviewRemoteSession) {
-      if (hint) hint.textContent = 'Remote Explorer is not available.';
+      if (hint && !hint.textContent) hint.textContent = 'Remote Explorer is not available.';
       return;
     }
     const sess = PreviewRemoteSession;
     const auth = PreviewRemoteAuthApi;
     if (!sess.getToken()) {
-      if (hint) {
+      if (hint && !hint.textContent) {
         hint.textContent = 'Sign in via Remote Explorer (satellite icon) to list your devices.';
       }
       return;
@@ -127,7 +120,7 @@ window.PreviewPingMonitor = (function() {
       .then(function (devices) {
         container.innerHTML = '';
         if (!devices || devices.length === 0) {
-          if (hint) {
+          if (hint && !hint.textContent) {
             hint.textContent = 'No online devices. Use “Use this PC” or register a device when it is back.';
           }
           return;
@@ -154,13 +147,40 @@ window.PreviewPingMonitor = (function() {
       })
       .catch(function () {
         container.innerHTML = '';
-        if (hint) hint.textContent = 'Could not load devices. Check the proxy and try Remote Explorer.';
+        if (hint && !hint.textContent) {
+          hint.textContent =
+            'Could not load devices (proxy may be down). Use “Use this PC” to exit remote mode without the proxy.';
+        }
       });
   }
 
-  function showRemoteOfflineDialog() {
+  function applyRemoteOfflineCopy(detail) {
+    const title = document.getElementById('remoteOfflineTitle');
+    const body = document.getElementById('remoteOfflineBody');
+    if (!title || !body) return;
+    const kind = detail && detail.kind;
+    if (kind === 'proxyUnreachable') {
+      title.textContent = 'Proxy unreachable';
+      body.textContent =
+        'The proxy server is down or not reachable from this browser, so the tunnel to the remote device cannot be used. ' +
+        'Your local HTMLCLASS server is still running — use “Use this PC” below to keep working without the proxy. ' +
+        'No network is required for that switch.';
+    } else if (kind === 'remoteTunnelOffline') {
+      title.textContent = 'Remote device unreachable';
+      body.textContent =
+        'The other computer may be offline, or the proxy returned an error (bad gateway) for the tunnel. ' +
+        'Try “Use this PC” to work locally, or pick another device when the proxy is available.';
+    } else {
+      title.textContent = 'Remote connection unavailable';
+      body.textContent =
+        'The tunnel through the proxy is not working right now. Use “Use this PC” to continue on this machine without the remote session.';
+    }
+  }
+
+  function showRemoteOfflineDialog(detail) {
     const overlay = ensureRemoteOfflineDialog();
-    populateRemoteOfflineDeviceList();
+    applyRemoteOfflineCopy(detail || pendingRemoteOfflineDetail || { kind: 'unknown' });
+    populateRemoteOfflineDeviceList(detail);
     hideBackendCrashDialog();
     overlay.removeAttribute('hidden');
     overlay.setAttribute('aria-hidden', 'false');
@@ -175,14 +195,103 @@ window.PreviewPingMonitor = (function() {
     }
   }
 
-  function scheduleRemoteOfflineDialog() {
+  function scheduleRemoteOfflineDialog(detail) {
     if (remoteOfflineDialogShown) return;
     if (remoteOfflineTimer) return;
+    pendingRemoteOfflineDetail = detail || null;
     remoteOfflineTimer = setTimeout(function () {
       remoteOfflineTimer = null;
       remoteOfflineDialogShown = true;
-      showRemoteOfflineDialog();
+      const d = pendingRemoteOfflineDetail;
+      pendingRemoteOfflineDetail = null;
+      showRemoteOfflineDialog(d);
     }, REMOTE_OFFLINE_DELAY_MS);
+  }
+
+  /**
+   * Second step when Remote Explorer is active: probe tunnel to remote device via proxy.
+   * Local GET /__api__/mode stays on this machine (see remoteTransport); this fetch uses the tunneled URL.
+   */
+  function notifyTunnelProbeResult(ok, detail) {
+    if (!isRemoteSessionActive()) {
+      clearRemoteOfflineTimer();
+      remoteOfflineDialogShown = false;
+      pendingRemoteOfflineDetail = null;
+      hideRemoteOfflineDialog();
+      return;
+    }
+    if (ok) {
+      clearRemoteOfflineTimer();
+      remoteOfflineDialogShown = false;
+      pendingRemoteOfflineDetail = null;
+      hideRemoteOfflineDialog();
+      return;
+    }
+    clearBackendCrashTimer();
+    backendCrashDialogShown = false;
+    hideBackendCrashDialog();
+    if (remoteOfflineDialogShown) return;
+    if (remoteOfflineTimer) return;
+    scheduleRemoteOfflineDialog(detail);
+  }
+
+  async function probeRemoteTunnelAfterLocalOk() {
+    if (!isRemoteSessionActive()) {
+      notifyTunnelProbeResult(true);
+      return;
+    }
+    const transport = window.PreviewRemoteTransport;
+    if (!transport || typeof transport.rewriteUrl !== 'function') {
+      notifyTunnelProbeResult(true);
+      return;
+    }
+    let tunnelUrl;
+    try {
+      tunnelUrl = transport.rewriteUrl('/__api__/mode');
+    } catch (e) {
+      notifyTunnelProbeResult(true);
+      return;
+    }
+    if (
+      !tunnelUrl ||
+      typeof tunnelUrl !== 'string' ||
+      tunnelUrl.indexOf('http') !== 0 ||
+      tunnelUrl.indexOf(window.location.origin) === 0
+    ) {
+      notifyTunnelProbeResult(true);
+      return;
+    }
+
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(function () {
+      ctrl2.abort();
+    }, 6000);
+    try {
+      const r2 = await fetch(tunnelUrl, {
+        method: 'GET',
+        cache: 'no-cache',
+        signal: ctrl2.signal
+      });
+      clearTimeout(t2);
+      if (!r2.ok) {
+        const st = r2.status;
+        const kind = st >= 502 && st <= 504 ? 'remoteTunnelOffline' : 'proxyUnreachable';
+        notifyTunnelProbeResult(false, {
+          kind: kind,
+          message: 'HTTP ' + st + ' ' + (r2.statusText || ''),
+          status: st
+        });
+      } else {
+        notifyTunnelProbeResult(true);
+      }
+    } catch (e2) {
+      clearTimeout(t2);
+      notifyTunnelProbeResult(false, {
+        kind: 'proxyUnreachable',
+        message: e2 && e2.message ? e2.message : String(e2),
+        stack: e2 && e2.stack ? e2.stack : ''
+      });
+    }
   }
 
   function buildBugReportText(detail) {
@@ -222,8 +331,9 @@ window.PreviewPingMonitor = (function() {
     overlay.innerHTML =
       '<div class="backend-crash-dialog" role="dialog" aria-modal="true" aria-labelledby="backendCrashTitle">' +
       '<h2 id="backendCrashTitle" class="backend-crash-title">Uh oh :(</h2>' +
-      '<p class="backend-crash-body">Something went wrong. It looks like the backend has crashed. Please restart the app. ' +
-      'If this continues to happen, please file a bug report and include the details below (crash stack / diagnostics).</p>' +
+      '<p class="backend-crash-body">The <strong>local</strong> HTMLCLASS server on this machine is not responding (GET /__api__/mode failed). ' +
+      'This is not the same as the remote proxy being down — if you only lost the proxy, use Remote Explorer’s “Use this PC” instead. ' +
+      'Otherwise restart the app or the Node process. If this keeps happening, file a bug report with the details below.</p>' +
       '<label class="backend-crash-label" for="backendCrashStack">Details for bug reports</label>' +
       '<pre class="backend-crash-stack" id="backendCrashStack" readonly tabindex="0"></pre>' +
       '<div class="backend-crash-actions">' +
@@ -284,28 +394,19 @@ window.PreviewPingMonitor = (function() {
   function notifyModeCheckResult(ok, detail) {
     if (ok) {
       clearBackendCrashTimer();
-      clearRemoteOfflineTimer();
       backendCrashDialogShown = false;
-      remoteOfflineDialogShown = false;
       lastCrashDetail = null;
       hideBackendCrashDialog();
-      hideRemoteOfflineDialog();
+      /* Remote/proxy overlay is driven by tunnel probe (notifyTunnelProbeResult), not local ping — avoids flicker and false “crash” when proxy is down. */
       return;
     }
 
     lastCrashDetail = detail || { message: 'Mode check failed', stack: '' };
 
-    if (isRemoteTunnelOfflineDetail(lastCrashDetail)) {
-      clearBackendCrashTimer();
-      backendCrashDialogShown = false;
-      if (remoteOfflineDialogShown) return;
-      if (remoteOfflineTimer) return;
-      scheduleRemoteOfflineDialog();
-      return;
-    }
-
+    /* Local GET /__api__/mode failed — real local backend issue, not proxy (mode is never tunneled). */
     clearRemoteOfflineTimer();
     remoteOfflineDialogShown = false;
+    pendingRemoteOfflineDetail = null;
     hideRemoteOfflineDialog();
 
     if (backendCrashDialogShown) return;
@@ -318,21 +419,19 @@ window.PreviewPingMonitor = (function() {
   }
 
   function modeCheckFailureDetail(status, statusText) {
-    const base = {
+    return {
       message: 'HTTP ' + status + ' ' + (statusText || ''),
       stack: '',
       status: status
     };
-    if (isRemoteSessionActive() && (status === 502 || status === 503 || status === 504)) {
-      base.kind = 'remoteTunnelOffline';
-    }
-    return base;
   }
 
   async function measurePing() {
     const startTime = performance.now();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(function () {
+      controller.abort();
+    }, 5000);
 
     try {
       const response = await fetch('/__api__/mode', {
@@ -351,6 +450,7 @@ window.PreviewPingMonitor = (function() {
           success: true
         });
         notifyModeCheckResult(true);
+        await probeRemoteTunnelAfterLocalOk();
       } else {
         pingHistory.push({
           time: Date.now(),
@@ -372,7 +472,6 @@ window.PreviewPingMonitor = (function() {
       });
     }
 
-    // Keep only last MAX_PING_HISTORY entries
     if (pingHistory.length > MAX_PING_HISTORY) {
       pingHistory = pingHistory.slice(-MAX_PING_HISTORY);
     }
@@ -520,11 +619,11 @@ window.PreviewPingMonitor = (function() {
     start() {
       if (pingInterval) return;
 
-      // Initial ping
-      measurePing();
+      void measurePing().catch(function () {});
 
-      // Start interval
-      pingInterval = setInterval(measurePing, PING_INTERVAL);
+      pingInterval = setInterval(function () {
+        void measurePing().catch(function () {});
+      }, PING_INTERVAL);
     },
 
     stop() {

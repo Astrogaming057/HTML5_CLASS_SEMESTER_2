@@ -105,6 +105,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'previewStatusBar.js'),
         'utf-8'
       );
+      const previewProblemsPanelJs = await fs.readFile(
+        path.join(previewModulesDir, 'previewProblemsPanel.js'),
+        'utf-8'
+      );
       const previewRemoteViewersJs = await fs.readFile(
         path.join(previewModulesDir, 'previewRemoteViewers.js'),
         'utf-8'
@@ -268,6 +272,8 @@ async function loadPreviewTemplates() {
         clientSessionsUIJs,
         '// Editor status bar',
         previewStatusBarJs,
+        '// Problems panel',
+        previewProblemsPanelJs,
         '// Remote tunnel viewers',
         previewRemoteViewersJs,
         '// Terminal',

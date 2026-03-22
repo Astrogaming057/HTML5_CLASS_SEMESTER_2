@@ -710,17 +710,11 @@ require(['vs/editor/editor.main'], function() {
       .then((res) => {
         if (!res.ok) {
           if (window.PreviewPingMonitor && typeof PreviewPingMonitor.notifyModeCheckResult === 'function') {
-            const remote =
-              window.PreviewRemoteSession &&
-              typeof PreviewRemoteSession.isRemoteActive === 'function' &&
-              PreviewRemoteSession.isRemoteActive();
             const st = res.status;
-            const isGw = st === 502 || st === 503 || st === 504;
             PreviewPingMonitor.notifyModeCheckResult(false, {
               message: 'HTTP ' + st + ' ' + (res.statusText || ''),
               stack: '',
-              status: st,
-              kind: remote && isGw ? 'remoteTunnelOffline' : undefined
+              status: st
             });
           }
           throw new Error('MODE_HTTP_' + res.status);
@@ -1723,6 +1717,9 @@ require(['vs/editor/editor.main'], function() {
   PreviewSettings.applyPreviewSettings(editor);
   if (window.PreviewStatusBar && typeof window.PreviewStatusBar.init === 'function') {
     window.PreviewStatusBar.init(editor);
+  }
+  if (window.PreviewProblemsPanel && typeof window.PreviewProblemsPanel.init === 'function') {
+    window.PreviewProblemsPanel.init(editor);
   }
   
   PreviewTabManager.initialize(

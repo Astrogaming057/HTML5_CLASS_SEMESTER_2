@@ -47,6 +47,7 @@
           <div class="terminal-tabs">
             <button class="terminal-tab active" data-tab="client">Client</button>
             <button class="terminal-tab" data-tab="server">Server</button>
+            <button class="terminal-tab" data-tab="problems">Problems</button>
             <button class="terminal-tab" data-tab="commands">Commands</button>
             <button class="terminal-tab" data-tab="powershell">PowerShell</button>
             <button class="terminal-tab" data-tab="ssh">Remote SSH</button>
@@ -64,6 +65,16 @@
             <div class="terminal-input-container">
               <span class="terminal-prompt">></span>
               <input type="text" class="terminal-input" id="terminalClientInput" placeholder="Type JavaScript commands...">
+            </div>
+          </div>
+          <div class="terminal-tab-content" id="terminalProblems">
+            <div class="problems-panel-toolbar">
+              <span class="problems-panel-file" id="problemsPanelFile"></span>
+              <span class="problems-panel-count" id="problemsPanelCount"></span>
+            </div>
+            <div class="problems-panel-list-wrap">
+              <div class="problems-panel-list" id="problemsPanelList" role="listbox" aria-label="Problems in current file"></div>
+              <div class="problems-panel-empty" id="problemsPanelEmpty" hidden>No problems in this file.</div>
             </div>
           </div>
           <div class="terminal-tab-content" id="terminalServer">

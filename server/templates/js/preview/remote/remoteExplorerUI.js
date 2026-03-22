@@ -154,22 +154,6 @@ window.PreviewRemoteExplorer = (function () {
     if (dropdownEl) dropdownEl.setAttribute('hidden', '');
   }
 
-  async function showDropdown() {
-    const d = ensureDropdown();
-    if (!d) return;
-    await renderDropdown();
-    positionDropdown();
-    d.removeAttribute('hidden');
-  }
-
-  async function toggleDropdown() {
-    if (dropdownEl && !dropdownEl.hasAttribute('hidden')) {
-      hideDropdown();
-    } else {
-      await showDropdown();
-    }
-  }
-
   function deviceIsThisPc(d) {
     const reg = sess.getRegisteredLocalDeviceId();
     if (reg && String(d.id) === String(reg)) return true;
@@ -198,24 +182,31 @@ window.PreviewRemoteExplorer = (function () {
     let serverDebug = false;
     let agentStatus = null;
     try {
-      const [proxySt, modeRes] = await Promise.all([
+      const modeFetch = fetch('/__api__/mode', { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : {}; })
+        .catch(function () { return {}; });
+      const devicesFetch = loggedIn
+        ? auth.fetchDevices().catch(function () { return []; })
+        : Promise.resolve([]);
+      const agentFetch =
+        loggedIn && auth.fetchLocalAgentStatus
+          ? auth.fetchLocalAgentStatus().catch(function () { return null; })
+          : Promise.resolve(null);
+      const [proxySt, modeRes, devicesList, agentFromParallel] = await Promise.all([
         auth.fetchProxyRemoteStatus(),
-        fetch('/__api__/mode', { cache: 'no-cache' })
-          .then(function (r) { return r.ok ? r.json() : {}; })
-          .catch(function () { return {}; })
+        modeFetch,
+        devicesFetch,
+        agentFetch
       ]);
+      devicesCache = Array.isArray(devicesList) ? devicesList : [];
       proxyDebug = !!(proxySt && proxySt.proxyDebug);
       serverDebug = !!modeRes.debug;
+      agentStatus = agentFromParallel;
     } catch (e) {
+      devicesCache = [];
       proxyDebug = false;
       serverDebug = false;
-    }
-    if (loggedIn && auth.fetchLocalAgentStatus) {
-      try {
-        agentStatus = await auth.fetchLocalAgentStatus();
-      } catch (e) {
-        agentStatus = null;
-      }
+      agentStatus = null;
     }
     const registered = !!sess.getRegisteredLocalDeviceId() ||
       (devicesCache && devicesCache.some(deviceIsThisPc));
@@ -364,8 +355,18 @@ window.PreviewRemoteExplorer = (function () {
         showAuthModal(false);
         return;
       }
-      await refreshDevices();
-      await toggleDropdown();
+      if (dropdownEl && !dropdownEl.hasAttribute('hidden')) {
+        hideDropdown();
+        return;
+      }
+      const d = ensureDropdown();
+      if (!d) return;
+      d.innerHTML =
+        '<div class="remote-dd-title">Remote Explorer</div>' +
+        '<div class="remote-dd-loading">Loading…</div>';
+      positionDropdown();
+      d.removeAttribute('hidden');
+      await renderDropdown();
     });
   }
 

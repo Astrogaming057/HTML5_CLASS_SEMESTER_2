@@ -147,8 +147,8 @@ window.PreviewStatusBar = (function () {
       btn.setAttribute(
         'title',
         total
-          ? errors + ' error(s), ' + warnings + ' warning(s) — click to jump to next'
-          : 'No problems — click cycles when issues exist'
+          ? errors + ' error(s), ' + warnings + ' warning(s) — click to open Problems tab and jump to next'
+          : 'No problems — click opens Problems tab'
       );
     }
   }
@@ -157,6 +157,13 @@ window.PreviewStatusBar = (function () {
     if (!editorRef || typeof monaco === 'undefined') return;
     const model = editorRef.getModel();
     if (!model) return;
+
+    if (
+      window.PreviewProblemsPanel &&
+      typeof window.PreviewProblemsPanel.revealProblemsTab === 'function'
+    ) {
+      window.PreviewProblemsPanel.revealProblemsTab();
+    }
 
     const Sev = monaco.MarkerSeverity;
     const markers = monaco.editor

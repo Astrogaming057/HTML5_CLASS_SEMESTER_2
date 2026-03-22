@@ -31,12 +31,14 @@ window.PreviewRemoteTransport = (function () {
   }
 
   /**
-   * Paths under /__api__/remote/* must stay on the preview origin (this machine's
-   * HTMLCLASS server). They must NOT go through the tunnel — e.g. agent-config
-   * starts the outbound reverse agent; tunneling it would deadlock (502).
+   * Paths that must stay on the preview origin (this machine's HTMLCLASS server).
+   * - /__api__/remote/* — agent-config, tunnel-viewers, etc.; tunneling can deadlock (502).
+   * - /__api__/mode — health checks must hit local Node; if tunneled, proxy down looks like a local crash.
    */
   function isLocalRemoteControlPath(path) {
-    return path.indexOf('/__api__/remote/') === 0;
+    if (path.indexOf('/__api__/remote/') === 0) return true;
+    if (path === '/__api__/mode' || path.indexOf('/__api__/mode?') === 0) return true;
+    return false;
   }
 
   function shouldRewriteUrl(urlStr) {

@@ -204,7 +204,7 @@ window.PreviewHelpMenu = (function() {
                 <li>Pin the preview when you want to keep viewing a specific page while editing other files</li>
                 <li>Modified files are automatically detected - check the Git panel to see all changes</li>
                 <li>Settings are saved automatically and persist across sessions</li>
-                <li>Use the terminal tabs for client-side JavaScript, server logs, and server commands</li>
+                <li>Use the bottom panel tabs for client JS, server logs, commands, and the <strong>Problems</strong> list (errors/warnings from the editor)</li>
                 <li>Right-click in the file explorer to create new files/folders, rename, or delete</li>
               </ul>
             </div>

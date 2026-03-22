@@ -2,6 +2,26 @@ window.PreviewRemoteAuthApi = (function () {
   const cfg = window.PreviewRemoteConfig;
   const sess = window.PreviewRemoteSession;
 
+  /** Default timeout for proxy HTTP (browser can hang ~30s when host is down). */
+  const DEFAULT_PROXY_FETCH_MS = 8000;
+
+  /**
+   * fetch() with AbortController timeout so Remote Explorer stays responsive when proxy is offline.
+   * @param {number} [timeoutMs] - default DEFAULT_PROXY_FETCH_MS
+   */
+  function fetchWithTimeout(url, options, timeoutMs) {
+    const ms =
+      timeoutMs !== undefined && timeoutMs !== null ? Number(timeoutMs) : DEFAULT_PROXY_FETCH_MS;
+    const controller = new AbortController();
+    const id = setTimeout(function () {
+      controller.abort();
+    }, Math.max(1000, ms));
+    const next = Object.assign({}, options || {}, { signal: controller.signal });
+    return fetch(url, next).finally(function () {
+      clearTimeout(id);
+    });
+  }
+
   function proxyUrl(path) {
     const base = (cfg.PROXY_BASE || '').replace(/\/$/, '');
     const p = path.startsWith('/') ? path : '/' + path;
@@ -75,7 +95,7 @@ window.PreviewRemoteAuthApi = (function () {
   }
 
   async function login(username, password) {
-    const res = await fetch(proxyUrl(cfg.PATHS.login), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.login), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -95,7 +115,7 @@ window.PreviewRemoteAuthApi = (function () {
   }
 
   async function register(username, password) {
-    const res = await fetch(proxyUrl(cfg.PATHS.register), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.register), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -115,7 +135,7 @@ window.PreviewRemoteAuthApi = (function () {
   }
 
   async function fetchDevices() {
-    const res = await fetch(proxyUrl(cfg.PATHS.devices), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.devices), {
       method: 'GET',
       headers: authHeaders()
     });
@@ -135,7 +155,7 @@ window.PreviewRemoteAuthApi = (function () {
     if (!base && typeof window !== 'undefined' && window.location) {
       base = window.location.origin;
     }
-    const res = await fetch(proxyUrl(cfg.PATHS.registerDevice), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.registerDevice), {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -158,7 +178,7 @@ window.PreviewRemoteAuthApi = (function () {
   }
 
   async function fetchMe() {
-    const res = await fetch(proxyUrl(cfg.PATHS.me), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.me), {
       method: 'GET',
       headers: authHeaders()
     });
@@ -178,7 +198,7 @@ window.PreviewRemoteAuthApi = (function () {
   async function sendHeartbeat() {
     const t = sess.getToken();
     if (!t) return;
-    const res = await fetch(proxyUrl(cfg.PATHS.heartbeat), {
+    const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.heartbeat), {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ deviceKey: sess.deviceKey() })
@@ -192,7 +212,7 @@ window.PreviewRemoteAuthApi = (function () {
 
   async function fetchProxyRemoteStatus() {
     try {
-      const res = await fetch(proxyUrl(cfg.PATHS.remoteStatus), {
+      const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.remoteStatus), {
         method: 'GET',
         cache: 'no-cache'
       });
@@ -217,6 +237,7 @@ window.PreviewRemoteAuthApi = (function () {
     fetchProxyRemoteStatus,
     sendHeartbeat,
     pushLocalAgentConfig,
-    fetchLocalAgentStatus
+    fetchLocalAgentStatus,
+    fetchWithTimeout
   };
 })();
