@@ -19,6 +19,13 @@ window.PreviewWebSocket = (function() {
       };
       
       ws.onclose = (event) => {
+        if (window.__appClosing) {
+          console.log('Preview WebSocket closed during app shutdown — not reconnecting', {
+            code: event.code,
+            reason: event.reason
+          });
+          return;
+        }
         console.log('Preview WebSocket disconnected - Reconnecting...', { code: event.code, reason: event.reason });
         // Reconnect after a short delay, unless it was a normal closure (1000)
         // Code 1001 (going away) and others will trigger reconnection

@@ -190,186 +190,7 @@ require(['vs/editor/editor.main'], function() {
     }
     return null;
   }
-  
-  async function measurePing() {
-    const startTime = performance.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    try {
-      const response = await fetch('/__api__/mode', {
-        method: 'GET',
-        cache: 'no-cache',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      const endTime = performance.now();
-      const ping = Math.round(endTime - startTime);
-      
-      if (response.ok) {
-        pingHistory.push({
-          time: Date.now(),
-          ping: ping,
-          success: true
-        });
-      } else {
-        pingHistory.push({
-          time: Date.now(),
-          ping: null,
-          success: false
-        });
-      }
-    } catch (error) {
-      clearTimeout(timeoutId);
-      pingHistory.push({
-        time: Date.now(),
-        ping: null,
-        success: false
-      });
-    }
-    
-    // Keep only last MAX_PING_HISTORY entries
-    if (pingHistory.length > MAX_PING_HISTORY) {
-      pingHistory = pingHistory.slice(-MAX_PING_HISTORY);
-    }
-  }
-  
-  function startPingMonitoring() {
-    if (pingInterval) return;
-    
-    // Initial ping
-    measurePing();
-    
-    // Start interval
-    pingInterval = setInterval(measurePing, PING_INTERVAL);
-  }
-  
-  function stopPingMonitoring() {
-    if (pingInterval) {
-      clearInterval(pingInterval);
-      pingInterval = null;
-    }
-  }
-  
-  function getPingStats() {
-    const successfulPings = pingHistory.filter(p => p.success && p.ping !== null);
-    const failedPings = pingHistory.filter(p => !p.success || p.ping === null);
-    
-    if (successfulPings.length === 0) {
-      return {
-        average: null,
-        last: null,
-        packetLoss: pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0',
-        serverEndpoint: 'localhost:3000'
-      };
-    }
-    
-    const pings = successfulPings.map(p => p.ping);
-    const average = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
-    const last = successfulPings[successfulPings.length - 1].ping;
-    const packetLoss = pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0';
-    
-    return {
-      average,
-      last,
-      packetLoss,
-      serverEndpoint: 'localhost:3000'
-    };
-  }
-  
-  function drawPingGraph(canvas, ctx) {
-    const width = canvas.width;
-    const height = canvas.height;
-    const padding = 20;
-    const graphWidth = width - padding * 2;
-    const graphHeight = height - padding * 2;
-    
-    // Clear canvas
-    ctx.fillStyle = '#2a2a2a';
-    ctx.fillRect(0, 0, width, height);
-    
-    // Draw grid
-    ctx.strokeStyle = '#3a3a3a';
-    ctx.lineWidth = 1;
-    
-    // Horizontal grid lines (ping values)
-    for (let i = 0; i <= 4; i++) {
-      const y = padding + (graphHeight / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
-      ctx.stroke();
-      
-      // Y-axis labels
-      ctx.fillStyle = '#aaa';
-      ctx.font = '9px sans-serif';
-      ctx.textAlign = 'left';
-      const value = 20 - (i * 5);
-      ctx.fillText(value.toString(), 5, y + 3);
-    }
-    
-    // Draw ping line
-    if (pingHistory.length > 1) {
-      const successfulPings = pingHistory.filter(p => p.success && p.ping !== null);
-      
-      if (successfulPings.length > 0) {
-        ctx.strokeStyle = '#4a9eff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        
-        const maxPing = Math.max(20, ...successfulPings.map(p => p.ping));
-        const minPing = Math.min(0, ...successfulPings.map(p => p.ping));
-        const pingRange = maxPing - minPing || 20;
-        
-        successfulPings.forEach((pingData, index) => {
-          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
-          const normalizedPing = Math.min(pingData.ping, 20);
-          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
-          
-          if (index === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-        
-        ctx.stroke();
-        
-        // Draw points
-        ctx.fillStyle = '#4a9eff';
-        successfulPings.forEach((pingData, index) => {
-          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
-          const normalizedPing = Math.min(pingData.ping, 20);
-          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
-          ctx.beginPath();
-          ctx.arc(x, y, 2, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
-    }
-    
-    // X-axis time labels (simplified - show start and end)
-    if (pingHistory.length > 0) {
-      ctx.fillStyle = '#aaa';
-      ctx.font = '9px sans-serif';
-      ctx.textAlign = 'center';
-      
-      const firstTime = new Date(pingHistory[0].time);
-      const lastTime = new Date(pingHistory[pingHistory.length - 1].time);
-      
-      const formatTime = (date) => {
-        const hours = date.getHours();
-        const minutes = date.getMinutes();
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours % 12 || 12;
-        return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-      };
-      
-      ctx.fillText(formatTime(firstTime), padding, height - 5);
-      ctx.fillText(formatTime(lastTime), width - padding, height - 5);
-    }
-  }
-  
+
   function buildModeMenuContent(clientMode, serverMode) {
     if (!modeMenu) createModeMenu();
     
@@ -380,7 +201,31 @@ require(['vs/editor/editor.main'], function() {
     
     // Get GPU information
     const gpuInfo = getGPUInfo();
-    
+
+    let connectionLabel =
+      typeof window !== 'undefined' && window.location && window.location.host
+        ? window.location.host
+        : 'localhost';
+    const remoteSess = window.PreviewRemoteSession;
+    if (
+      remoteSess &&
+      typeof remoteSess.isRemoteActive === 'function' &&
+      remoteSess.isRemoteActive()
+    ) {
+      const lbl = remoteSess.getTargetDeviceLabel && remoteSess.getTargetDeviceLabel();
+      const tid = remoteSess.getTargetDeviceId && remoteSess.getTargetDeviceId();
+      if (lbl) connectionLabel = lbl;
+      else if (tid)
+        connectionLabel =
+          'Device ' + String(tid).slice(0, 10) + (String(tid).length > 10 ? '…' : '');
+      else connectionLabel = 'Remote device';
+    }
+    const connectionLabelHtml = String(connectionLabel)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
     modeMenu.innerHTML = `
       <div class="mode-menu-header">
         <div class="mode-menu-title">Mode Information</div>
@@ -475,7 +320,7 @@ require(['vs/editor/editor.main'], function() {
           <canvas id="pingGraph" width="240" height="80" class="ping-graph-canvas"></canvas>
           <div class="mode-menu-connection-stats">
             <div class="mode-menu-connection-server">
-              <strong>localhost:3000</strong>
+              <strong id="connectionEndpoint">${connectionLabelHtml}</strong>
             </div>
             <div class="mode-menu-connection-detail-item">
               <span class="mode-menu-connection-label">Average ping:</span>
@@ -622,21 +467,9 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function updatePingGraph() {
-    const canvas = document.getElementById('pingGraph');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    drawPingGraph(canvas, ctx);
-    
-    // Update stats
-    const stats = getPingStats();
-    const avgPingEl = document.getElementById('avgPing');
-    const lastPingEl = document.getElementById('lastPing');
-    const packetLossEl = document.getElementById('packetLoss');
-    
-    if (avgPingEl) avgPingEl.textContent = stats.average !== null ? `${stats.average} ms` : '-';
-    if (lastPingEl) lastPingEl.textContent = stats.last !== null ? `${stats.last} ms` : '-';
-    if (packetLossEl) packetLossEl.textContent = `${stats.packetLoss}%`;
+    if (window.PreviewPingMonitor && typeof PreviewPingMonitor.updateGraph === 'function') {
+      PreviewPingMonitor.updateGraph();
+    }
   }
   
   function showModeMenu() {
@@ -2387,6 +2220,15 @@ require(['vs/editor/editor.main'], function() {
       PreviewGitPanel.toggle();
     });
   }
+  if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.init === 'function') {
+    PreviewGitStatusBar.init();
+  }
+  const statusGitBranch = document.getElementById('statusGitBranch');
+  if (statusGitBranch && window.PreviewGitPanel && typeof PreviewGitPanel.showRepoTab === 'function') {
+    statusGitBranch.addEventListener('click', () => {
+      PreviewGitPanel.showRepoTab();
+    });
+  }
   
   PreviewSettingsUI.setupSettingsEventHandlers(
     settingsBtn, settingsPanel, settingsCloseBtn, saveSettingsBtn, resetSettingsBtn2,
@@ -2400,7 +2242,10 @@ require(['vs/editor/editor.main'], function() {
   PreviewEvents.setupBeforeUnload(isDirty, ws, saveState);
 
   if (window.PreviewElectronClose && typeof PreviewElectronClose.setup === 'function') {
-    PreviewElectronClose.setup(isDirty, ws, saveState, customConfirm);
+    PreviewElectronClose.setup(isDirty, ws, saveState, customConfirm, {
+      getEditorValue: () => (editor ? editor.getValue() : ''),
+      getFilePath: () => filePathRef.current
+    });
   }
   
   if (previewPanel) {

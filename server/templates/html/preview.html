@@ -71,7 +71,7 @@
             </button>
             <div class="preview-file-menu-sep" role="separator"></div>
             <button type="button" class="preview-file-menu-item" role="menuitem" data-action="gitPanel" data-shortcut="Shift+G">
-              <span class="preview-file-menu-label">Git</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
+              <span class="preview-file-menu-label">Source control</span><span class="preview-file-menu-kbd" aria-hidden="true"></span>
             </button>
             <div class="preview-file-menu-sep" role="separator"></div>
             <button type="button" class="preview-file-menu-item" role="menuitem" data-action="settings" data-shortcut=",">
@@ -297,7 +297,7 @@
           <span>📁 Files</span>
         </div>
         <div>
-          <button id="gitPanelBtn" class="toggle-btn" title="Git Panel">📦</button>
+          <button id="gitPanelBtn" class="toggle-btn" title="Source control (editor cache + Git)">📦</button>
           <button id="remoteExplorerBtn" class="toggle-btn" title="Remote Explorer">🌐</button>
           <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
         </div>
@@ -863,6 +863,8 @@
     <div class="editor-status-bar-left">
       <span class="editor-status-item editor-status-workspace" id="statusWorkspace" title="" aria-label="Workspace folder">📁 …</span>
       <span class="editor-status-sep" aria-hidden="true"></span>
+      <button type="button" class="editor-status-item editor-status-btn" id="statusGitBranch" title="Git branch and changes" aria-label="Git" hidden>Git</button>
+      <span class="editor-status-sep editor-status-git-sep" id="statusGitSeparator" aria-hidden="true" hidden></span>
       <span class="editor-status-item editor-status-filename" id="fileName" title="">{{FILENAME}}</span>
       <span class="editor-status-sep" aria-hidden="true"></span>
       <span class="editor-status-item status" id="status">Ready</span>

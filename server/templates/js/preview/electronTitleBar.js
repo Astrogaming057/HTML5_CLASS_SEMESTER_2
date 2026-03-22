@@ -92,6 +92,9 @@ window.PreviewElectronTitleBar = (function () {
       closeBtn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
+        if (window.PreviewElectronClose && typeof PreviewElectronClose.armClose === 'function') {
+          PreviewElectronClose.armClose();
+        }
         window.close();
       });
     }

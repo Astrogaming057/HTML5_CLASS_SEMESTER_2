@@ -2427,7 +2427,6 @@ body.resizing .resizer {
 
 .browser-tab.drag-over {
   border-top: 2px solid var(--border-active);
-}
   max-width: 200px;
   transition: background 0.15s;
   position: relative;
@@ -3914,6 +3913,115 @@ body.resizing .resizer {
   display: none !important;
 }
 
+/* In-app close / hang panel (electronClose.js) — theme-aligned like backend-crash / settings modals */
+.electron-close-hang-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10025;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.electron-close-hang-overlay[hidden] {
+  display: none !important;
+}
+
+.electron-close-hang-dialog {
+  max-width: 440px;
+  width: 100%;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.electron-close-hang-badge {
+  display: inline-block;
+  margin: 20px 24px 0 24px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+}
+
+.electron-close-hang-title {
+  margin: 12px 24px 10px 24px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.electron-close-hang-lead {
+  margin: 0 24px 12px 24px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.electron-close-hang-progress {
+  margin: 0 24px 18px 24px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  min-height: 2.6em;
+}
+
+.electron-close-hang-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-primary);
+}
+
+.electron-close-hang-wait {
+  min-width: 120px;
+}
+
+.electron-close-hang-force {
+  min-width: 120px;
+  background: var(--status-error, #c62828) !important;
+  border: 1px solid var(--status-error, #b71c1c) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.electron-close-hang-force:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.electron-close-hang-footnote {
+  margin: 0;
+  padding: 12px 24px 18px 24px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-tertiary, #888);
+}
+
 .backend-crash-dialog {
   max-width: 520px;
   width: 100%;
@@ -4329,7 +4437,6 @@ body.resizing .resizer {
 #selectWorkingDirectoryBtn {
   white-space: nowrap;
   min-width: 120px;
-}
   transform: translateX(20px);
 }
 
@@ -4693,6 +4800,194 @@ body.resizing .resizer {
   overflow: hidden;
 }
 
+.git-panel-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-panel-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.git-panel-tab:hover {
+  color: var(--text-primary);
+}
+
+.git-panel-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-active);
+  font-weight: 600;
+}
+
+.git-panel-tab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* [hidden] alone loses to display:flex above — must force collapse or both tabs show at once */
+.git-panel-tab-panel[hidden] {
+  display: none !important;
+}
+
+.git-panel-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.git-panel-hint code {
+  font-size: 10px;
+}
+
+.git-repo-content {
+  padding-bottom: 8px;
+  overflow-x: hidden;
+}
+
+.git-repo-banner {
+  margin: 12px 15px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.git-repo-banner code {
+  font-size: 11px;
+}
+
+.git-repo-error {
+  margin: 12px 15px 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: rgba(220, 53, 69, 0.12);
+  color: var(--status-error);
+  font-size: 12px;
+}
+
+.git-repo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.git-repo-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repo-toolbar-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.git-files-list.git-repo-files-list {
+  max-height: 180px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.git-files-list.git-repo-files-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.git-files-list.git-repo-files-list::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+
+.git-repo-file-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 6px;
+  min-width: 0;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+}
+
+.git-repo-file-row:last-child {
+  border-bottom: none;
+}
+
+.git-repo-xy {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  width: 1.75em;
+  text-align: center;
+  padding-top: 2px;
+}
+
+.git-repo-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.25;
+}
+
+.git-repo-basename {
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repo-relpath {
+  font-size: 10px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repo-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 3px;
+  padding-top: 1px;
+}
+
+.git-btn-gitrow {
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .git-panel-header {
   padding: 10px 15px;
   border-bottom: 1px solid var(--border-primary);
@@ -4790,6 +5085,7 @@ body.resizing .resizer {
 
 .git-files-list {
   max-height: 200px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -5245,7 +5541,6 @@ body.resizing .resizer {
   flex: 1;
   white-space: pre-wrap;
   word-break: break-word;
-}
   position: relative;
   color: var(--text-secondary);
   font-size: 13px;

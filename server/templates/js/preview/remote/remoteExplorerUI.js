@@ -593,6 +593,8 @@ window.PreviewRemoteExplorer = (function () {
       }
       sess.setMode('remote');
       sess.setTargetDeviceId(id);
+      const nm = dev ? dev.name || dev.label || id : id;
+      if (sess.setTargetDeviceLabel) sess.setTargetDeviceLabel(nm);
       window.location.reload();
     }
   }

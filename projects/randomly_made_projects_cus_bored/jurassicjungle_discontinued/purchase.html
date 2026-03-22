@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Purchase or inquire about this domain — Jurassic Jungle / Astro's Lounge.">
+    <title>Purchase this domain | Jurassic Jungle</title>
+    <style>
+        :root { --bg:#020805; --text:#b4f5c8; --dim:#3d6b4f; --accent:#39ff14; --link:#7fff7f; --border:#1a3d28; }
+        *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,#0d1f14 0%,var(--bg) 55%);color:var(--text);font-family:Consolas,"Courier New",monospace;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+        .wrap{max-width:620px;width:100%;text-align:left;border:1px solid var(--border);border-radius:4px;padding:28px 24px;box-shadow:0 0 40px rgba(57,255,20,.08)}
+        .prompt{color:var(--accent);font-size:.75rem;letter-spacing:.15em;margin:0 0 12px}
+        h1{margin:0;font-size:1.35rem;font-weight:700;color:var(--accent);text-shadow:0 0 12px rgba(57,255,20,.35)}
+        .brand{margin:16px 0 0;font-size:1rem;color:var(--text)}
+        .byline{margin:6px 0 0;font-size:.85rem;color:var(--dim)}
+        .msg{margin:20px 0 0;font-size:.9rem;border-left:3px solid var(--accent);padding-left:14px;line-height:1.55}
+        .domain-box{margin:18px 0 0;padding:12px 14px;border:1px dashed var(--border);background:rgba(57,255,20,.04);font-size:.95rem;color:var(--accent);word-break:break-all}
+        .cta{margin-top:22px;display:flex;flex-direction:column;gap:10px}
+        .cta a{display:block;padding:12px 14px;border:1px solid var(--accent);color:var(--bg);background:rgba(57,255,20,.85);text-decoration:none;font-size:.88rem;font-weight:600;text-align:center;transition:.15s}
+        .cta a:hover{background:#5cff44;box-shadow:0 0 20px rgba(57,255,20,.35)}
+        .cta a.secondary{border-style:dashed;border-color:var(--border);background:transparent;color:var(--link);font-weight:400}
+        .cta a.secondary:hover{background:rgba(57,255,20,.06)}
+        .fine{margin-top:18px;font-size:.78rem;color:var(--dim);line-height:1.5}
+        .back{margin-top:20px;font-size:.85rem}
+        .back a{color:var(--link);text-decoration:none;border-bottom:1px dotted var(--dim)}
+        .back a:hover{border-bottom-style:solid;border-color:var(--link)}
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <p class="prompt">&gt; DOMAIN.INQUIRY // FOR_SALE</p>
+        <h1>Purchase this domain</h1>
+        <p class="brand">Jurassic Jungle</p>
+        <p class="byline">by Astro's Lounge — gaming community</p>
+        <p class="msg">This domain may be available for acquisition. Serious inquiries only. Reply with your offer and intended use; spam is ignored.</p>
+        <p class="domain-box" id="domainLine" aria-live="polite">jurassicjungle.gg</p>
+        <nav class="cta" aria-label="Contact">
+            <a href="mailto:astrogaming057@gmail.com?subject=Domain%20purchase%20inquiry%20%E2%80%94%20jurassicjungle.gg">Email inquiry</a>
+            <a class="secondary" href="index.html">← Back to discontinued notice</a>
+        </nav>
+    </main>
+    <script>
+        (function () {
+            var h = window.location.hostname;
+            if (h) {
+                var el = document.getElementById('domainLine');
+                if (el) el.textContent = h;
+            }
+        })();
+    </script>
+</body>
+</html>

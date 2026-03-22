@@ -39,5 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   sendCloseReady: () => ipcRenderer.send('electron-close-ready'),
   sendCloseAborted: () => ipcRenderer.send('electron-close-aborted'),
-  sendCloseProgress: (stage) => ipcRenderer.send('electron-close-progress', stage)
+  sendCloseProgress: (stage) => ipcRenderer.send('electron-close-progress', stage),
+  /** Skip graceful teardown (unsaved risk); used by in-app “Force close” during hang */
+  forceCloseApp: () => ipcRenderer.send('electron-force-close')
 });

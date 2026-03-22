@@ -6,6 +6,7 @@ window.PreviewRemoteConfig = {
   STORAGE_REGISTERED_DEVICE_ID: 'previewRemoteRegisteredDeviceId',
   STORAGE_MODE: 'previewRemoteMode',
   STORAGE_TARGET_DEVICE_ID: 'previewRemoteTargetDeviceId',
+  STORAGE_TARGET_DEVICE_LABEL: 'previewRemoteTargetDeviceLabel',
   PATHS: {
     login: '/api/auth/login',
     register: '/api/auth/register',

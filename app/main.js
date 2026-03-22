@@ -248,7 +248,7 @@ function scheduleMainWindowCloseHangWatchdog() {
       console.error('[Close] hang watchdog dialog failed', e);
       scheduleMainWindowCloseHangWatchdog();
     }
-  }, 6000);
+  }, 15000);
 }
 
 function attachMainWindowCloseInterceptor(win) {
@@ -865,6 +865,22 @@ ipcMain.on('electron-close-ready', () => {
 ipcMain.on('electron-close-aborted', () => {
   lastCloseProgress = 'Close canceled in editor';
   clearMainWindowCloseHangTimer();
+});
+
+ipcMain.on('electron-force-close', () => {
+  console.log('[Close] force exit requested from renderer');
+  allowMainWindowClose = true;
+  clearMainWindowCloseHangTimer();
+  lastCloseProgress = 'Force exit (renderer)';
+  try {
+    stopServer();
+  } catch (e) {
+    console.error('[Close] stopServer during force close', e);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
+  app.quit();
 });
 
 ipcMain.handle('get-working-directory', () => {

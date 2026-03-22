@@ -2,6 +2,8 @@ window.PreviewPingMonitor = (function() {
   let pingHistory = [];
   let pingInterval = null;
   const MAX_PING_HISTORY = 60; // Store last 60 pings (3 minutes at 3s intervals)
+  /** Stats + graph use the last N samples (rolling window). */
+  const DISPLAY_PING_WINDOW = 20;
   const PING_INTERVAL = 3000; // Ping every 3 seconds
 
   /** After mode check stays failed for this long, show crash dialog (once until recovery). */
@@ -139,6 +141,7 @@ window.PreviewPingMonitor = (function() {
           btn.addEventListener('click', function () {
             sess.setMode('remote');
             sess.setTargetDeviceId(String(id));
+            if (sess.setTargetDeviceLabel) sess.setTargetDeviceLabel(name);
             hideRemoteOfflineDialog();
             window.location.reload();
           });
@@ -477,49 +480,92 @@ window.PreviewPingMonitor = (function() {
     }
   }
 
+  function getConnectionEndpointText() {
+    const sess = window.PreviewRemoteSession;
+    if (
+      sess &&
+      typeof sess.isRemoteActive === 'function' &&
+      sess.isRemoteActive()
+    ) {
+      const label = typeof sess.getTargetDeviceLabel === 'function' ? sess.getTargetDeviceLabel() : null;
+      const id = typeof sess.getTargetDeviceId === 'function' ? sess.getTargetDeviceId() : null;
+      if (label) return label;
+      if (id) return 'Device ' + String(id).slice(0, 10) + (String(id).length > 10 ? '…' : '');
+      return 'Remote device';
+    }
+    return typeof window !== 'undefined' && window.location && window.location.host
+      ? window.location.host
+      : 'localhost';
+  }
+
   function getPingStats() {
-    const successfulPings = pingHistory.filter(p => p.success && p.ping !== null);
-    const failedPings = pingHistory.filter(p => !p.success || p.ping === null);
+    const windowHist = pingHistory.slice(-DISPLAY_PING_WINDOW);
+    const successfulPings = windowHist.filter(p => p.success && p.ping !== null);
+    const failedPings = windowHist.filter(p => !p.success || p.ping === null);
 
     if (successfulPings.length === 0) {
       return {
         average: null,
         last: null,
-        packetLoss: pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0',
-        serverEndpoint: 'localhost:3000'
+        packetLoss: windowHist.length > 0 ? (failedPings.length / windowHist.length * 100).toFixed(1) : '0.0',
+        serverEndpoint: getConnectionEndpointText()
       };
     }
 
     const pings = successfulPings.map(p => p.ping);
     const average = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
     const last = successfulPings[successfulPings.length - 1].ping;
-    const packetLoss = pingHistory.length > 0 ? (failedPings.length / pingHistory.length * 100).toFixed(1) : '0.0';
+    const packetLoss = windowHist.length > 0 ? (failedPings.length / windowHist.length * 100).toFixed(1) : '0.0';
 
     return {
       average,
       last,
       packetLoss,
-      serverEndpoint: 'localhost:3000'
+      serverEndpoint: getConnectionEndpointText()
     };
   }
 
+  /**
+   * Upper bound for the Y-axis so any latency (e.g. 60ms) is not clipped at a fixed 0–20ms scale.
+   * Adds a little headroom and rounds to a readable step (10, 20, 50, 100ms, …).
+   */
+  function niceAxisMaxMs(maxPingMs) {
+    const v = Number(maxPingMs);
+    if (!isFinite(v) || v <= 0) return 20;
+    const headroom = Math.max(v * 1.12, v + 4);
+    const exp = Math.floor(Math.log10(headroom));
+    const pow = Math.pow(10, exp);
+    const n = headroom / pow;
+    let step;
+    if (n <= 1) step = 1;
+    else if (n <= 2) step = 2;
+    else if (n <= 5) step = 5;
+    else step = 10;
+    return step * pow;
+  }
+
   function drawPingGraph(canvas, ctx) {
-    const history = pingHistory; // Use local variable
+    const history = pingHistory.slice(-DISPLAY_PING_WINDOW);
     const width = canvas.width;
     const height = canvas.height;
     const padding = 20;
     const graphWidth = width - padding * 2;
     const graphHeight = height - padding * 2;
 
-    // Clear canvas
     ctx.fillStyle = '#2a2a2a';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw grid
     ctx.strokeStyle = '#3a3a3a';
     ctx.lineWidth = 1;
 
-    // Horizontal grid lines (ping values)
+    const successVals = history
+      .filter(p => p.success && p.ping !== null)
+      .map(p => Number(p.ping))
+      .filter(p => isFinite(p));
+    const dataMax = successVals.length ? Math.max.apply(null, successVals) : 0;
+    const yMax = dataMax > 0 ? niceAxisMaxMs(dataMax) : 20;
+    const yMin = 0;
+
     for (let i = 0; i <= 4; i++) {
       const y = padding + (graphHeight / 4) * i;
       ctx.beginPath();
@@ -527,55 +573,62 @@ window.PreviewPingMonitor = (function() {
       ctx.lineTo(width - padding, y);
       ctx.stroke();
 
-      // Y-axis labels
       ctx.fillStyle = '#aaa';
       ctx.font = '9px sans-serif';
       ctx.textAlign = 'left';
-      const value = 20 - (i * 5);
-      ctx.fillText(value.toString(), 5, y + 3);
+      const value = Math.round(yMax - (i / 4) * (yMax - yMin));
+      ctx.fillText(String(value), 5, y + 3);
     }
 
-    // Draw ping line
-    if (history.length > 1) {
-      const successfulPings = history.filter(p => p.success && p.ping !== null);
+    const n = history.length;
+    function xAt(index) {
+      if (n <= 1) return padding + graphWidth / 2;
+      return padding + (graphWidth / (n - 1)) * index;
+    }
+    function yForPing(ms) {
+      const t = (ms - yMin) / (yMax - yMin || 1);
+      return padding + graphHeight - t * graphHeight;
+    }
 
-      if (successfulPings.length > 0) {
-        ctx.strokeStyle = '#4a9eff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
+    if (n > 0) {
+      ctx.strokeStyle = '#4a9eff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < n; i++) {
+        const p = history[i];
+        if (!p.success || p.ping === null) {
+          started = false;
+          continue;
+        }
+        const x = xAt(i);
+        const y = yForPing(p.ping);
+        if (!started) {
+          ctx.moveTo(x, y);
+          started = true;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
 
-        const maxPing = Math.max(20, ...successfulPings.map(p => p.ping));
-        const minPing = Math.min(0, ...successfulPings.map(p => p.ping));
-        const pingRange = maxPing - minPing || 20;
-
-        successfulPings.forEach((pingData, index) => {
-          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
-          const normalizedPing = Math.min(pingData.ping, 20);
-          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
-
-          if (index === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        });
-
-        ctx.stroke();
-
-        // Draw points
-        ctx.fillStyle = '#4a9eff';
-        successfulPings.forEach((pingData, index) => {
-          const x = padding + (graphWidth / (successfulPings.length - 1)) * index;
-          const normalizedPing = Math.min(pingData.ping, 20);
-          const y = padding + graphHeight - ((normalizedPing / 20) * graphHeight);
+      for (let i = 0; i < n; i++) {
+        const p = history[i];
+        const x = xAt(i);
+        if (p.success && p.ping !== null) {
+          ctx.fillStyle = '#4a9eff';
           ctx.beginPath();
-          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.arc(x, yForPing(p.ping), 2.5, 0, Math.PI * 2);
           ctx.fill();
-        });
+        } else {
+          ctx.fillStyle = '#c44';
+          ctx.beginPath();
+          ctx.arc(x, padding + graphHeight - 3, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
 
-    // X-axis time labels (simplified - show start and end)
     if (history.length > 0) {
       ctx.fillStyle = '#aaa';
       ctx.font = '9px sans-serif';
@@ -613,6 +666,8 @@ window.PreviewPingMonitor = (function() {
     if (avgPingEl) avgPingEl.textContent = stats.average !== null ? `${stats.average} ms` : '-';
     if (lastPingEl) lastPingEl.textContent = stats.last !== null ? `${stats.last} ms` : '-';
     if (packetLossEl) packetLossEl.textContent = `${stats.packetLoss}%`;
+    const endpointEl = document.getElementById('connectionEndpoint');
+    if (endpointEl) endpointEl.textContent = stats.serverEndpoint;
   }
 
   const module = {

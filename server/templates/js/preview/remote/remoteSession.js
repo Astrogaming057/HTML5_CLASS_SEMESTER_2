@@ -70,11 +70,24 @@ window.PreviewRemoteSession = (function () {
     return localStorage.getItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_ID);
   }
 
+  function getTargetDeviceLabel() {
+    return localStorage.getItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_LABEL);
+  }
+
+  function setTargetDeviceLabel(label) {
+    if (label) {
+      localStorage.setItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_LABEL, String(label));
+    } else {
+      localStorage.removeItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_LABEL);
+    }
+  }
+
   function setTargetDeviceId(id) {
     if (id) {
       localStorage.setItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_ID, id);
     } else {
       localStorage.removeItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_ID);
+      setTargetDeviceLabel(null);
     }
   }
 
@@ -94,6 +107,8 @@ window.PreviewRemoteSession = (function () {
     setMode,
     getTargetDeviceId,
     setTargetDeviceId,
+    getTargetDeviceLabel,
+    setTargetDeviceLabel,
     isRemoteActive
   };
 })();

@@ -3,7 +3,9 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
@@ -1961,6 +1963,228 @@ function setupAPI(baseDir) {
     } catch (error) {
       logger.error('API: Error in replace-in-files', error);
       res.json({ success: false, error: error.message });
+    }
+  });
+
+  /** Run git in the workspace folder (uses .git like any other IDE). */
+  function runGitCmd(args) {
+    return execFileAsync('git', args, {
+      cwd: baseDir,
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
+    });
+  }
+
+  function parseGitStatusPorcelain(stdout) {
+    const lines = stdout.split(/\r?\n/).filter((l) => l.length > 0);
+    const branch = { name: '', tracking: '', ahead: 0, behind: 0, detached: false, noCommits: false };
+    const files = [];
+    for (const line of lines) {
+      if (line.startsWith('##')) {
+        const rest = line.slice(3).trim();
+        const detachedMatch = rest.match(/^HEAD \(detached at ([^)]+)\)/);
+        if (detachedMatch) {
+          branch.detached = true;
+          branch.name = detachedMatch[1];
+          continue;
+        }
+        const noCommits = rest.match(/^No commits yet on (.+)$/);
+        if (noCommits) {
+          branch.noCommits = true;
+          branch.name = noCommits[1].trim();
+          continue;
+        }
+        const ab = rest.match(/\[ahead (\d+)(?:,\s*behind (\d+))?\]/);
+        if (ab) {
+          branch.ahead = parseInt(ab[1], 10) || 0;
+          branch.behind = parseInt(ab[2], 10) || 0;
+        }
+        const m = rest.match(/^([^\s.]+)(?:\.\.\.([^\s\[]+))?/);
+        if (m) {
+          branch.name = m[1] || branch.name;
+          branch.tracking = m[2] || '';
+        }
+        continue;
+      }
+      if (line.startsWith('!!')) continue;
+      if (line.startsWith('??')) {
+        files.push({ path: line.slice(3).trim(), xy: '??', untracked: true });
+        continue;
+      }
+      const xy = line.slice(0, 2);
+      const pathRaw = line.slice(3);
+      if (pathRaw.includes(' -> ')) {
+        const parts = pathRaw.split(' -> ');
+        const to = parts[parts.length - 1].trim();
+        const from = parts.slice(0, -1).join(' -> ').trim();
+        files.push({ path: to, pathFrom: from, xy, rename: true });
+        continue;
+      }
+      files.push({
+        path: pathRaw.trim(),
+        xy,
+        index: xy[0],
+        worktree: xy[1],
+      });
+    }
+    return { branch, files };
+  }
+
+  function gitPathError(relPath) {
+    const resolved = path.resolve(baseDir, relPath);
+    if (!isPathSafe(resolved, baseDir)) {
+      return 'Forbidden path';
+    }
+    return null;
+  }
+
+  router.get('/git/repo-status', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (e) {
+      return res.json({ success: true, isRepo: false });
+    }
+    try {
+      let branchName = '';
+      try {
+        const { stdout } = await runGitCmd(['branch', '--show-current']);
+        branchName = stdout.trim();
+      } catch (_e) {
+        /* detached or empty */
+      }
+      const { stdout: stOut } = await runGitCmd(['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-b']);
+      const parsed = parseGitStatusPorcelain(stOut);
+      const b = parsed.branch;
+      if (branchName) {
+        b.name = branchName;
+      }
+      res.json({
+        success: true,
+        isRepo: true,
+        branch: b.name || '(unknown)',
+        tracking: b.tracking || '',
+        ahead: b.ahead,
+        behind: b.behind,
+        detached: b.detached,
+        noCommits: b.noCommits,
+        files: parsed.files,
+      });
+    } catch (error) {
+      logger.error('API: git repo-status', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, isRepo: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stage', async (req, res) => {
+    try {
+      const paths = req.body && Array.isArray(req.body.paths) ? req.body.paths : [];
+      if (paths.length === 0) {
+        return res.json({ success: false, error: 'No paths' });
+      }
+      for (const p of paths) {
+        const err = gitPathError(p);
+        if (err) {
+          return res.json({ success: false, error: err });
+        }
+      }
+      await runGitCmd(['add', '--', ...paths]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stage', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/unstage', async (req, res) => {
+    try {
+      const paths = req.body && Array.isArray(req.body.paths) ? req.body.paths : [];
+      if (paths.length === 0) {
+        return res.json({ success: false, error: 'No paths' });
+      }
+      for (const p of paths) {
+        const err = gitPathError(p);
+        if (err) {
+          return res.json({ success: false, error: err });
+        }
+      }
+      await runGitCmd(['reset', 'HEAD', '--', ...paths]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git unstage', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stage-all', async (req, res) => {
+    try {
+      await runGitCmd(['add', '-A']);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stage-all', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/unstage-all', async (req, res) => {
+    try {
+      await runGitCmd(['reset', 'HEAD']);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git unstage-all', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/commit', async (req, res) => {
+    try {
+      const message = req.body && typeof req.body.message === 'string' ? req.body.message.trim() : '';
+      if (!message) {
+        return res.json({ success: false, error: 'Missing commit message' });
+      }
+      await runGitCmd(['commit', '-m', message]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git commit', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/fetch', async (req, res) => {
+    try {
+      await runGitCmd(['fetch']);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git fetch', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/pull', async (req, res) => {
+    try {
+      await runGitCmd(['pull', '--no-edit']);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git pull', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/push', async (req, res) => {
+    try {
+      await runGitCmd(['push']);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git push', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
     }
   });
 

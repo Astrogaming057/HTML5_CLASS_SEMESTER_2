@@ -216,7 +216,12 @@ window.PreviewEvents = (function() {
 
     setupBeforeUnload(isDirty, ws, saveState) {
       window.addEventListener('beforeunload', (e) => {
-        if (window.__appClosing) {
+        /**
+         * Renderer `window.close()` (custom title bar ✕) runs `beforeunload` before the main-process
+         * `close` event, so `onAppCloseRequest` has not set `__appClosing` yet. `armClose()` sets
+         * `__closeHangClientArmed` first — allow unload so the graceful close + server cache path runs.
+         */
+        if (window.__appClosing || window.__closeHangClientArmed) {
           return;
         }
         if (isDirty && isDirty.current) {
