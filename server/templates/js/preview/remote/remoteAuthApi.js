@@ -226,6 +226,35 @@ window.PreviewRemoteAuthApi = (function () {
     }
   }
 
+  function deviceUrl(id) {
+    return proxyUrl('/api/devices/' + encodeURIComponent(String(id)));
+  }
+
+  async function updateDevice(id, patch) {
+    const res = await fetchWithTimeout(deviceUrl(id), {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(patch || {})
+    });
+    const data = await parseJson(res);
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to update device');
+    }
+    return data.device || data;
+  }
+
+  async function deleteDevice(id) {
+    const res = await fetchWithTimeout(deviceUrl(id), {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    const data = await parseJson(res);
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to remove device');
+    }
+    return data;
+  }
+
   return {
     login,
     register,
@@ -238,6 +267,8 @@ window.PreviewRemoteAuthApi = (function () {
     sendHeartbeat,
     pushLocalAgentConfig,
     fetchLocalAgentStatus,
-    fetchWithTimeout
+    fetchWithTimeout,
+    updateDevice,
+    deleteDevice
   };
 })();

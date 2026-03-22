@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 const auth = require('./lib/auth');
 const store = require('./lib/store');
 const tunnel = require('./lib/tunnel');
+const reverseTunnel = require('./lib/reverseTunnel');
 const agentConnection = require('./lib/agentConnection');
 const { pathnameOnly } = require('./lib/agentSocket');
 const proxyDbg = require('./lib/debug');
@@ -118,20 +119,69 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 
 app.get('/api/devices', authMiddleware, (req, res) => {
   const now = Date.now();
-  const list = store
-    .listDevicesForUser(req.userId)
-    .filter((d) => {
-      const seen = typeof d.lastSeen === 'number' ? d.lastSeen : 0;
-      return now - seen < DEVICE_ONLINE_MS;
-    })
-    .map((d) => ({
+  const list = store.listDevicesForUser(req.userId).map((d) => {
+    const seen = typeof d.lastSeen === 'number' ? d.lastSeen : 0;
+    const online = now - seen < DEVICE_ONLINE_MS;
+    return {
       id: d.id,
       name: d.name,
       deviceKey: d.deviceKey,
       baseUrl: d.baseUrl,
-      lastSeen: d.lastSeen
-    }));
+      lastSeen: d.lastSeen,
+      online,
+      disabled: !!d.disabled,
+      agentConnected: reverseTunnel.hasAgentForDevice(d.id)
+    };
+  });
+  list.sort(function (a, b) {
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    const an = (a.name || '').toLowerCase();
+    const bn = (b.name || '').toLowerCase();
+    return an < bn ? -1 : an > bn ? 1 : 0;
+  });
   res.json({ devices: list });
+});
+
+app.patch('/api/devices/:id', authMiddleware, (req, res) => {
+  const id = req.params && req.params.id ? String(req.params.id) : '';
+  const d = store.findDeviceById(id);
+  if (!d || d.userId !== req.userId) {
+    res.status(404).json({ error: 'Device not found' });
+    return;
+  }
+  const body = req.body || {};
+  if (typeof body.name === 'string') {
+    const n = body.name.trim();
+    if (n) d.name = n;
+  }
+  if (typeof body.disabled === 'boolean') {
+    d.disabled = body.disabled;
+  }
+  if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
+    d.baseUrl = tunnel.normalizeBaseUrl(body.baseUrl.trim());
+  }
+  store.updateDevice(d);
+  res.json({
+    device: {
+      id: d.id,
+      name: d.name,
+      deviceKey: d.deviceKey,
+      baseUrl: d.baseUrl,
+      lastSeen: d.lastSeen,
+      disabled: !!d.disabled
+    }
+  });
+});
+
+app.delete('/api/devices/:id', authMiddleware, (req, res) => {
+  const id = req.params && req.params.id ? String(req.params.id) : '';
+  const d = store.findDeviceById(id);
+  if (!d || d.userId !== req.userId) {
+    res.status(404).json({ error: 'Device not found' });
+    return;
+  }
+  store.removeDevice(id);
+  res.json({ ok: true });
 });
 
 app.post('/api/devices/heartbeat', authMiddleware, (req, res) => {
@@ -175,7 +225,8 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     name,
     deviceKey,
     baseUrl,
-    lastSeen: now
+    lastSeen: now,
+    disabled: false
   };
   store.addDevice(device);
   res.json({ device: { id: device.id, name: device.name, deviceKey: device.deviceKey, baseUrl: device.baseUrl } });

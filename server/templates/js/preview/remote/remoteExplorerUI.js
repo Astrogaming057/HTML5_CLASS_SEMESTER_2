@@ -4,6 +4,7 @@ window.PreviewRemoteExplorer = (function () {
   const transport = window.PreviewRemoteTransport;
   let dropdownEl = null;
   let devicesCache = [];
+  let deviceContextMenuEl = null;
 
   function ensureAuthModal() {
     let wrap = document.getElementById('remoteAuthModal');
@@ -123,6 +124,202 @@ window.PreviewRemoteExplorer = (function () {
     }
   }
 
+  function hideDeviceContextMenu() {
+    if (deviceContextMenuEl && deviceContextMenuEl.parentNode) {
+      deviceContextMenuEl.parentNode.removeChild(deviceContextMenuEl);
+    }
+    deviceContextMenuEl = null;
+  }
+
+  function formatLastSeen(ts) {
+    if (ts == null || typeof ts !== 'number') return '—';
+    try {
+      return new Date(ts).toLocaleString();
+    } catch (e) {
+      return String(ts);
+    }
+  }
+
+  function maskKey(k) {
+    if (!k || typeof k !== 'string') return '—';
+    if (k.length <= 8) return '••••••••';
+    return '…' + k.slice(-6);
+  }
+
+  function syncSessionAfterDeviceRemoved(deviceId) {
+    const sid = String(deviceId);
+    if (sess.getTargetDeviceId() === sid) {
+      sess.setMode('local');
+      sess.setTargetDeviceId(null);
+    }
+    if (sess.getRegisteredLocalDeviceId() === sid) {
+      sess.setRegisteredLocalDeviceId(null);
+    }
+  }
+
+  function openDeviceContextMenu(clientX, clientY, dev) {
+    hideDeviceContextMenu();
+    const id = dev.id || dev.deviceId;
+    const disabled = !!dev.disabled;
+    const online = dev.online !== false;
+    const agentOn = !!dev.agentConnected;
+
+    const menu = document.createElement('div');
+    menu.className = 'remote-device-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML =
+      '<button type="button" class="remote-device-context-item" data-act="rename" role="menuitem">Rename…</button>' +
+      '<button type="button" class="remote-device-context-item" data-act="baseurl" role="menuitem">Set base URL…</button>' +
+      (disabled
+        ? '<button type="button" class="remote-device-context-item" data-act="enable" role="menuitem">Enable</button>'
+        : '<button type="button" class="remote-device-context-item" data-act="disable" role="menuitem">Disable</button>') +
+      '<button type="button" class="remote-device-context-item" data-act="status" role="menuitem">Connection status…</button>' +
+      '<button type="button" class="remote-device-context-item" data-act="info" role="menuitem">Device info…</button>' +
+      '<button type="button" class="remote-device-context-item" data-act="copy-id" role="menuitem">Copy device ID</button>' +
+      '<button type="button" class="remote-device-context-item remote-device-context-danger" data-act="remove" role="menuitem">Remove device…</button>';
+
+    document.body.appendChild(menu);
+    deviceContextMenuEl = menu;
+
+    menu.style.position = 'fixed';
+    menu.style.left = '0';
+    menu.style.top = '0';
+    menu.style.zIndex = '10060';
+    menu.style.visibility = 'hidden';
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    let left = Math.min(clientX, window.innerWidth - mw - 8);
+    let top = Math.min(clientY, window.innerHeight - mh - 8);
+    left = Math.max(8, left);
+    top = Math.max(8, top);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.visibility = '';
+
+    function closeAll() {
+      hideDeviceContextMenu();
+      document.removeEventListener('click', onDocClick, true);
+      document.removeEventListener('keydown', onEsc, true);
+    }
+
+    function onDocClick(ev) {
+      if (menu.contains(ev.target)) return;
+      closeAll();
+    }
+
+    function onEsc(ev) {
+      if (ev.key === 'Escape') closeAll();
+    }
+
+    setTimeout(function () {
+      document.addEventListener('click', onDocClick, true);
+      document.addEventListener('keydown', onEsc, true);
+    }, 0);
+
+    menu.querySelectorAll('[data-act]').forEach(function (item) {
+      item.addEventListener('click', async function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const act = item.getAttribute('data-act');
+        closeAll();
+        try {
+          if (act === 'rename') {
+            const cur = dev.name || dev.label || String(id);
+            const next = await window.PreviewUtils.customPrompt('Device name', cur);
+            if (next == null || !String(next).trim()) return;
+            await auth.updateDevice(id, { name: String(next).trim() });
+            await refreshDevices();
+            await renderDropdown();
+            return;
+          }
+          if (act === 'baseurl') {
+            const cur = dev.baseUrl || '';
+            const next = await window.PreviewUtils.customPrompt(
+              'Base URL (as seen from the proxy)',
+              cur
+            );
+            if (next == null || !String(next).trim()) return;
+            await auth.updateDevice(id, { baseUrl: String(next).trim() });
+            await refreshDevices();
+            await renderDropdown();
+            return;
+          }
+          if (act === 'disable') {
+            await auth.updateDevice(id, { disabled: true });
+            await refreshDevices();
+            await renderDropdown();
+            return;
+          }
+          if (act === 'enable') {
+            await auth.updateDevice(id, { disabled: false });
+            await refreshDevices();
+            await renderDropdown();
+            return;
+          }
+          if (act === 'status') {
+            const lines = [
+              'Device: ' + (dev.name || id),
+              'Online (recent heartbeat): ' + (online ? 'yes' : 'no'),
+              'Disabled: ' + (disabled ? 'yes' : 'no'),
+              'Reverse tunnel agent on proxy: ' + (agentOn ? 'connected' : 'not connected'),
+              'Last seen: ' + formatLastSeen(dev.lastSeen),
+              'Base URL: ' + (dev.baseUrl || '—')
+            ];
+            if (window.PreviewUtils.customAlert) {
+              await window.PreviewUtils.customAlert(lines.join('\n'));
+            }
+            return;
+          }
+          if (act === 'info') {
+            const lines = [
+              'Name: ' + (dev.name || '—'),
+              'ID: ' + id,
+              'Device key: ' + maskKey(dev.deviceKey),
+              'Base URL: ' + (dev.baseUrl || '—'),
+              'Last seen: ' + formatLastSeen(dev.lastSeen),
+              'Online: ' + online,
+              'Disabled: ' + disabled,
+              'Agent (proxy): ' + (agentOn ? 'connected' : 'not connected')
+            ];
+            if (window.PreviewUtils.customAlert) {
+              await window.PreviewUtils.customAlert(lines.join('\n'));
+            }
+            return;
+          }
+          if (act === 'copy-id') {
+            const t = String(id);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(t);
+            } else {
+              const ta = document.createElement('textarea');
+              ta.value = t;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+            }
+            return;
+          }
+          if (act === 'remove') {
+            const ok = await window.PreviewUtils.customConfirm(
+              'Remove this device from your account? You can register it again later.',
+              false
+            );
+            if (!ok) return;
+            await auth.deleteDevice(id);
+            syncSessionAfterDeviceRemoved(id);
+            await refreshDevices();
+            await renderDropdown();
+          }
+        } catch (err) {
+          if (window.PreviewUtils.customAlert) {
+            await window.PreviewUtils.customAlert((err && err.message) || String(err));
+          }
+        }
+      });
+    });
+  }
+
   function ensureDropdown() {
     if (dropdownEl) return dropdownEl;
     const btn = document.getElementById('remoteExplorerBtn');
@@ -134,8 +331,34 @@ window.PreviewRemoteExplorer = (function () {
     document.body.appendChild(dropdownEl);
     document.addEventListener('click', function (e) {
       if (!dropdownEl.contains(e.target) && e.target !== btn) {
+        hideDeviceContextMenu();
         hideDropdown();
       }
+    });
+    dropdownEl.addEventListener('contextmenu', function (e) {
+      const row = e.target && e.target.closest ? e.target.closest('.remote-dd-device-row') : null;
+      if (!row || !dropdownEl.contains(row)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rid = row.getAttribute('data-id');
+      const dev = devicesCache.find(function (d) {
+        return String(d.id || d.deviceId) === String(rid);
+      });
+      if (!dev) return;
+      openDeviceContextMenu(e.clientX, e.clientY, dev);
+    });
+    dropdownEl.addEventListener('click', function (e) {
+      const dots = e.target && e.target.closest ? e.target.closest('.remote-dd-device-dots') : null;
+      if (!dots || !dropdownEl.contains(dots)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rid = dots.getAttribute('data-id');
+      const dev = devicesCache.find(function (d) {
+        return String(d.id || d.deviceId) === String(rid);
+      });
+      if (!dev) return;
+      const r = dots.getBoundingClientRect();
+      openDeviceContextMenu(r.left, r.bottom + 2, dev);
     });
     return dropdownEl;
   }
@@ -151,6 +374,7 @@ window.PreviewRemoteExplorer = (function () {
   }
 
   function hideDropdown() {
+    hideDeviceContextMenu();
     if (dropdownEl) dropdownEl.setAttribute('hidden', '');
   }
 
@@ -253,9 +477,31 @@ window.PreviewRemoteExplorer = (function () {
           const id = dev.id || dev.deviceId;
           const name = dev.name || dev.label || id;
           const isSelf = deviceIsThisPc(dev);
-          const label = isSelf ? name + ' (this PC)' : name;
-          html += '<button type="button" class="remote-dd-item remote-dd-device" data-action="remote" data-id="' +
-            String(id).replace(/"/g, '&quot;') + '">' + escapeHtml(label) + '</button>';
+          let label = isSelf ? name + ' (this PC)' : name;
+          if (dev.disabled) {
+            label += ' — disabled';
+          } else if (dev.online === false) {
+            label += ' — offline';
+          }
+          let mainClass = 'remote-dd-item remote-dd-device remote-dd-device-main';
+          if (dev.disabled) mainClass += ' remote-dd-device-disabled';
+          else if (dev.online === false) mainClass += ' remote-dd-device-offline';
+          const idEsc = String(id).replace(/"/g, '&quot;');
+          html +=
+            '<div class="remote-dd-device-row" data-id="' +
+            idEsc +
+            '" role="group" title="Hover for ⋯ menu · right-click for device actions">' +
+            '<button type="button" class="' +
+            mainClass +
+            '" data-action="remote" data-id="' +
+            idEsc +
+            '" title="Open this device">' +
+            escapeHtml(label) +
+            '</button>' +
+            '<button type="button" class="remote-dd-device-dots" data-id="' +
+            idEsc +
+            '" aria-label="Device menu" title="Device actions — rename, remove, connection status…">⋯</button>' +
+            '</div>';
         });
       }
       html += '<button type="button" class="remote-dd-item remote-dd-logout" data-action="logout">Sign out</button>';
@@ -292,6 +538,17 @@ window.PreviewRemoteExplorer = (function () {
       return;
     }
     if (action === 'remote' && id) {
+      const dev = devicesCache.find(function (d) {
+        return String(d.id || d.deviceId) === String(id);
+      });
+      if (dev && dev.disabled) {
+        if (window.PreviewUtils.customAlert) {
+          window.PreviewUtils.customAlert(
+            'This device is disabled. Right-click it and choose Enable, or use the context menu.'
+          );
+        }
+        return;
+      }
       sess.setMode('remote');
       sess.setTargetDeviceId(id);
       window.location.reload();

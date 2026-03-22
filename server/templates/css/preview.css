@@ -1280,6 +1280,17 @@ body.resizing .resizer-terminal {
   white-space: nowrap;
 }
 
+.terminal-tab-problems-summary {
+  margin-left: 4px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  opacity: 0.95;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
 .terminal-tab:hover {
   color: var(--text-secondary);
   background: var(--bg-tertiary);
@@ -1317,14 +1328,44 @@ body.resizing .resizer-terminal {
 
 .problems-panel-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   flex-shrink: 0;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-primary);
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.problems-panel-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.problems-panel-toolbar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.problems-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.problems-filter-label input {
+  margin: 0;
+  cursor: pointer;
 }
 
 .problems-panel-file {
@@ -1359,6 +1400,43 @@ body.resizing .resizer-terminal {
   font-size: 12px;
   color: var(--text-tertiary);
   text-align: center;
+}
+
+.problems-row-wrap {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 0;
+}
+
+.problems-row-wrap .problems-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.problems-row-copy {
+  flex-shrink: 0;
+  align-self: stretch;
+  padding: 4px 8px;
+  margin: 0;
+  border: none;
+  border-left: 1px solid var(--border-primary);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.problems-row-copy:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-secondary);
+}
+
+.problems-row-copy:focus-visible {
+  outline: 1px solid var(--border-active);
+  outline-offset: -1px;
 }
 
 .problems-row {

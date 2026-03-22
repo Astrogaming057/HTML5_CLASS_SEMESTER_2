@@ -164,6 +164,114 @@
   font-weight: 500;
 }
 
+.remote-dd-device-offline {
+  opacity: 0.75;
+  color: var(--text-secondary);
+}
+
+.remote-dd-device-disabled {
+  opacity: 0.65;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.remote-dd-device-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+
+.remote-dd-device-main {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-dd-device-dots {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 100%;
+  padding: 0 4px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.remote-dd-device-row:hover .remote-dd-device-dots,
+.remote-dd-device-row:focus-within .remote-dd-device-dots {
+  opacity: 1;
+}
+
+.remote-dd-device-dots:hover,
+.remote-dd-device-dots:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  opacity: 1;
+}
+
+/* Right-click context menu (device rows) */
+.remote-device-context-menu {
+  position: fixed;
+  z-index: 10060;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 4px 0;
+  margin: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+}
+
+.remote-device-context-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.remote-device-context-item:hover {
+  background: var(--bg-hover);
+}
+
+.remote-device-context-item:focus-visible {
+  outline: 1px solid var(--border-active);
+  outline-offset: -1px;
+}
+
+.remote-device-context-danger {
+  color: #f44336;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-primary);
+  padding-top: 10px;
+}
+
+.remote-device-context-danger:hover {
+  background: rgba(244, 67, 54, 0.12);
+}
+
 .remote-dd-empty {
   padding: 8px 14px;
   font-size: 12px;

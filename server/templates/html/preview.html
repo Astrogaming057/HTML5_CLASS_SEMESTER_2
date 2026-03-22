@@ -47,7 +47,7 @@
           <div class="terminal-tabs">
             <button class="terminal-tab active" data-tab="client">Client</button>
             <button class="terminal-tab" data-tab="server">Server</button>
-            <button class="terminal-tab" data-tab="problems">Problems</button>
+            <button class="terminal-tab" data-tab="problems" type="button"><span class="terminal-tab-label">Problems</span><span class="terminal-tab-problems-summary" id="problemsTabSummary" hidden></span></button>
             <button class="terminal-tab" data-tab="commands">Commands</button>
             <button class="terminal-tab" data-tab="powershell">PowerShell</button>
             <button class="terminal-tab" data-tab="ssh">Remote SSH</button>
@@ -69,11 +69,17 @@
           </div>
           <div class="terminal-tab-content" id="terminalProblems">
             <div class="problems-panel-toolbar">
-              <span class="problems-panel-file" id="problemsPanelFile"></span>
-              <span class="problems-panel-count" id="problemsPanelCount"></span>
+              <div class="problems-panel-toolbar-row">
+                <span class="problems-panel-file" id="problemsPanelFile"></span>
+                <span class="problems-panel-count" id="problemsPanelCount"></span>
+              </div>
+              <div class="problems-panel-toolbar-filters" role="group" aria-label="Problems filters" style="display: none;">
+                <label class="problems-filter-label"><input type="checkbox" id="problemsFilterErrorsOnly" /> Errors only</label>
+                <label class="problems-filter-label"><input type="checkbox" id="problemsFilterHideHints" /> Hide hints</label>
+              </div>
             </div>
             <div class="problems-panel-list-wrap">
-              <div class="problems-panel-list" id="problemsPanelList" role="listbox" aria-label="Problems in current file"></div>
+              <div class="problems-panel-list" id="problemsPanelList" role="list" aria-label="Problems in current file"></div>
               <div class="problems-panel-empty" id="problemsPanelEmpty" hidden>No problems in this file.</div>
             </div>
           </div>

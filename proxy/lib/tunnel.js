@@ -15,6 +15,7 @@ function normalizeBaseUrl(url) {
 function verifyDeviceAccess(deviceId, userId) {
   const d = store.findDeviceById(deviceId);
   if (!d || d.userId !== userId) return null;
+  if (d.disabled) return null;
   return d;
 }
 

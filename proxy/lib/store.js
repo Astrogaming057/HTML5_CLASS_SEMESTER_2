@@ -29,6 +29,7 @@ function load() {
         d.baseUrl = defaultBase;
         fixedBaseUrl = true;
       }
+      if (d.disabled !== true) d.disabled = false;
     }
     if (fixedBaseUrl) {
       save(data);
@@ -89,6 +90,14 @@ function updateDevice(device) {
   return true;
 }
 
+function removeDevice(id) {
+  const i = cache.devices.findIndex((d) => d.id === id);
+  if (i === -1) return false;
+  cache.devices.splice(i, 1);
+  persist();
+  return true;
+}
+
 function listDevicesForUser(userId) {
   return cache.devices.filter((d) => d.userId === userId);
 }
@@ -103,5 +112,6 @@ module.exports = {
   addUser,
   addDevice,
   updateDevice,
+  removeDevice,
   listDevicesForUser
 };
