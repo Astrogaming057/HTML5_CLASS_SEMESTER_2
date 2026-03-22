@@ -621,13 +621,48 @@ window.PreviewGitPanel = (function () {
       const data = await r.json();
       if (!data.success || !data.isRepo) {
         list.innerHTML = '<div class="git-empty">Open a Git repository to see commit history.</div>';
+        const sh = document.getElementById('gitGraphSyncHint');
+        if (sh) {
+          sh.hidden = true;
+          sh.textContent = '';
+          sh.classList.remove('has-unpushed');
+        }
         return;
+      }
+      const branch = data.branch || '';
+      const branchTips = data.branchTips || [];
+      const syncHint = document.getElementById('gitGraphSyncHint');
+      if (syncHint) {
+        const s = data.branchSync;
+        if (s && s.upstream) {
+          syncHint.hidden = false;
+          if ((s.ahead || 0) > 0 || (s.behind || 0) > 0) {
+            const parts = [];
+            if (s.ahead > 0) parts.push(s.ahead + ' unpushed');
+            if (s.behind > 0) parts.push(s.behind + ' behind ' + s.upstream);
+            syncHint.textContent = parts.join(' · ');
+            syncHint.title =
+              'Local ' +
+              (s.localRef || 'branch') +
+              ' vs ' +
+              s.upstream +
+              ' (counts use your last fetch)';
+            syncHint.classList.toggle('has-unpushed', s.ahead > 0);
+          } else {
+            syncHint.textContent = 'Synced with ' + s.upstream;
+            syncHint.title = 'Local ' + (s.localRef || 'branch') + ' matches ' + s.upstream;
+            syncHint.classList.remove('has-unpushed');
+          }
+        } else {
+          syncHint.hidden = true;
+          syncHint.textContent = '';
+          syncHint.classList.remove('has-unpushed');
+        }
       }
       if (!data.commits || data.commits.length === 0) {
         list.innerHTML = '<div class="git-empty">No commits yet.</div>';
         return;
       }
-      const branch = data.branch || '';
       list.innerHTML = '';
       commitFilesCache.clear();
       data.commits.forEach(function (c) {
@@ -658,7 +693,22 @@ window.PreviewGitPanel = (function () {
         main.appendChild(meta);
         const tags = document.createElement('div');
         tags.className = 'git-graph-tags';
-        if (c.isHead && branch) {
+        let showedTip = false;
+        branchTips.forEach(function (tip) {
+          if (c.hash === tip.hash) {
+            showedTip = true;
+            const pill = document.createElement('span');
+            pill.className =
+              'git-graph-branch-pill' + (tip.kind === 'remote' ? ' is-remote' : '');
+            pill.textContent = tip.label;
+            pill.title =
+              tip.kind === 'remote'
+                ? 'Remote tip: ' + tip.label + ' (last seen from fetch)'
+                : 'Local branch tip: ' + tip.label;
+            tags.appendChild(pill);
+          }
+        });
+        if (!showedTip && c.isHead && branch) {
           const pill = document.createElement('span');
           pill.className = 'git-graph-branch-pill';
           pill.textContent = branch;
@@ -1058,7 +1108,10 @@ window.PreviewGitPanel = (function () {
     graphPanel.className = 'git-graph-panel';
     graphPanel.innerHTML =
       '<div class="git-graph-header">' +
+      '<div class="git-graph-header-left">' +
       '<span class="git-graph-title">GRAPH</span>' +
+      '<span class="git-graph-sync-hint" id="gitGraphSyncHint" hidden></span>' +
+      '</div>' +
       '<div class="git-graph-toolbar">' +
       '<button type="button" class="git-btn git-btn-small" id="gitGraphFetchBtn" title="Fetch">Fetch</button>' +
       '<button type="button" class="git-btn git-btn-small" id="gitGraphPullBtn" title="Pull">Pull</button>' +

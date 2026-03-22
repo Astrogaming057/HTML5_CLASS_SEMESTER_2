@@ -4895,13 +4895,32 @@ body.resizing .resizer {
 
 .git-graph-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-tertiary);
   flex-shrink: 0;
+}
+
+.git-graph-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.git-graph-sync-hint {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  line-height: 1.3;
+}
+
+.git-graph-sync-hint.has-unpushed {
+  color: #e3b341;
 }
 
 .git-graph-title {
@@ -5037,6 +5056,10 @@ body.resizing .resizer {
   background: rgba(100, 149, 237, 0.25);
   color: var(--text-primary);
   white-space: nowrap;
+}
+
+.git-graph-branch-pill.is-remote {
+  background: rgba(163, 99, 255, 0.22);
 }
 
 /* Expanded commit: files changed */

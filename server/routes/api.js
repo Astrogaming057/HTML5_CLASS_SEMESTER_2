@@ -2296,7 +2296,14 @@ function setupAPI(baseDir) {
     try {
       await runGitCmd(['rev-parse', '--is-inside-work-tree']);
     } catch (_e) {
-      return res.json({ success: true, isRepo: false, branch: '', commits: [] });
+      return res.json({
+        success: true,
+        isRepo: false,
+        branch: '',
+        commits: [],
+        branchTips: [],
+        branchSync: { ahead: 0, behind: 0, upstream: '', localRef: '' },
+      });
     }
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 80, 1), 200);
     let headHash = '';
@@ -2333,6 +2340,8 @@ function setupAPI(baseDir) {
         isRepo: true,
         branch: branch,
         commits: [],
+        branchTips: [],
+        branchSync: { ahead: 0, behind: 0, upstream: '', localRef: '' },
         error: (error.stderr && String(error.stderr)) || error.message,
       });
     }
@@ -2354,7 +2363,76 @@ function setupAPI(baseDir) {
         isHead: !!(headHash && hash === headHash),
       });
     }
-    res.json({ success: true, isRepo: true, branch: branch, commits: commits });
+
+    const branchTips = [];
+    async function pushTipIfExists(label, refName, kind) {
+      try {
+        const { stdout } = await runGitCmd(['rev-parse', '--verify', refName]);
+        const h = (stdout || '').trim();
+        if (h && /^[0-9a-f]{40}$/i.test(h)) {
+          branchTips.push({ label, hash: h, kind });
+        }
+      } catch (_e) {
+        /* missing ref */
+      }
+    }
+    await pushTipIfExists('main', 'main', 'local');
+    await pushTipIfExists('origin/main', 'origin/main', 'remote');
+    if (!branchTips.some((t) => t.label === 'main')) {
+      await pushTipIfExists('master', 'master', 'local');
+    }
+    if (!branchTips.some((t) => t.label === 'origin/main')) {
+      await pushTipIfExists('origin/master', 'origin/master', 'remote');
+    }
+
+    let branchSync = { ahead: 0, behind: 0, upstream: '', localRef: '' };
+    async function computeSync(localRef) {
+      let upstream = '';
+      try {
+        const { stdout: u } = await runGitCmd(['rev-parse', '--abbrev-ref', `${localRef}@{upstream}`]);
+        upstream = (u || '').trim();
+      } catch (_e) {
+        return;
+      }
+      if (!upstream) return;
+      try {
+        const { stdout: cnt } = await runGitCmd([
+          'rev-list',
+          '--left-right',
+          '--count',
+          `${localRef}...${upstream}`,
+        ]);
+        const p = (cnt || '').trim().split(/\t/);
+        branchSync = {
+          ahead: parseInt(p[0], 10) || 0,
+          behind: parseInt(p[1], 10) || 0,
+          upstream,
+          localRef,
+        };
+      } catch (_e) {
+        branchSync = { ahead: 0, behind: 0, upstream, localRef };
+      }
+    }
+    try {
+      await runGitCmd(['rev-parse', '-q', '--verify', 'main']);
+      await computeSync('main');
+    } catch (_e) {
+      try {
+        await runGitCmd(['rev-parse', '-q', '--verify', 'master']);
+        await computeSync('master');
+      } catch (_e2) {
+        /* no main/master */
+      }
+    }
+
+    res.json({
+      success: true,
+      isRepo: true,
+      branch: branch,
+      commits: commits,
+      branchTips,
+      branchSync,
+    });
   });
 
   router.get('/git/commit-info', async (req, res) => {
