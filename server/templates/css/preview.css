@@ -58,7 +58,8 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
   user-select: none;
-  -webkit-app-region: drag;
+  /* no-drag on the bar; only .electron-title-drag-region is draggable (see below) */
+  -webkit-app-region: no-drag;
 }
 
 .electron-title-bar--mac {
@@ -69,9 +70,27 @@ body {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
   padding: 0 12px;
+}
+
+/* Title label only (no flex-grow) — badge stays flush next to "Astro Code" */
+.electron-title-drag-region {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+}
+
+/* Remaining width in the title strip — draggable so the window is still easy to drag */
+.electron-title-drag-fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 100%;
+  align-self: stretch;
   -webkit-app-region: drag;
 }
 
@@ -269,10 +288,15 @@ body.preview-browser-titlebar .electron-title-controls {
   display: none;
 }
 
+/* Sibling of .electron-title-drag-region (not inside drag) — required for Electron hover/click */
 .electron-title-drag .mode-indicator--titlebar {
   margin-left: 0;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
   font-size: 9px;
   padding: 1px 6px;
   line-height: 1.3;
@@ -327,10 +351,10 @@ body.preview-browser-titlebar .electron-title-controls {
 
 /* Mode Indicator Hover Menu */
 .mode-menu {
-  position: absolute;
-  top: 100%;
+  position: fixed;
+  top: 0;
   left: 0;
-  margin-top: 8px;
+  margin-top: 0;
   background: var(--bg-primary, #1e1e1e);
   border: 1px solid var(--border-color, #333);
   border-radius: 8px;

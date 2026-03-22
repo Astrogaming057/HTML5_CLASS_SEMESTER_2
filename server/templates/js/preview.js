@@ -129,11 +129,18 @@ require(['vs/editor/editor.main'], function() {
     
     // Close menu when clicking outside
     document.addEventListener('click', function closeModeMenu(e) {
-      if (modeMenu && !modeMenu.contains(e.target) && !modeIndicator.contains(e.target)) {
+      if (modeMenu && !modeMenu.contains(e.target) && modeIndicator && !modeIndicator.contains(e.target)) {
         hideModeMenu();
       }
     });
-    
+
+    modeMenu.addEventListener('mouseenter', function () {
+      if (modeMenuTimeout) clearTimeout(modeMenuTimeout);
+    });
+    modeMenu.addEventListener('mouseleave', function () {
+      hideModeMenu();
+    });
+
     return modeMenu;
   }
   
@@ -646,8 +653,10 @@ require(['vs/editor/editor.main'], function() {
       .then(res => res.json())
       .then(data => {
         buildModeMenuContent(clientMode, data.mode || 'browser');
-        positionModeMenu();
         modeMenu.classList.add('show');
+        requestAnimationFrame(function () {
+          positionModeMenu();
+        });
         
         // Draw initial ping graph
         setTimeout(() => {
@@ -684,8 +693,10 @@ require(['vs/editor/editor.main'], function() {
       })
       .catch(err => {
         buildModeMenuContent(clientMode, 'browser');
-        positionModeMenu();
         modeMenu.classList.add('show');
+        requestAnimationFrame(function () {
+          positionModeMenu();
+        });
         setTimeout(() => {
           if (window.PreviewPingMonitor) {
             window.PreviewPingMonitor.updateGraph();
@@ -706,7 +717,9 @@ require(['vs/editor/editor.main'], function() {
   
   function positionModeMenu() {
     if (!modeMenu || !modeIndicator) return;
-    
+
+    modeMenu.style.position = 'fixed';
+
     const rect = modeIndicator.getBoundingClientRect();
     const menuRect = modeMenu.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
@@ -800,17 +813,6 @@ require(['vs/editor/editor.main'], function() {
           showModeMenu();
         }
       });
-      
-      // Keep menu open when hovering over it
-      if (modeMenu) {
-        modeMenu.addEventListener('mouseenter', () => {
-          if (modeMenuTimeout) clearTimeout(modeMenuTimeout);
-        });
-        
-        modeMenu.addEventListener('mouseleave', () => {
-          hideModeMenu();
-        });
-      }
     }
   }
   

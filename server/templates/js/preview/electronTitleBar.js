@@ -36,11 +36,23 @@ window.PreviewElectronTitleBar = (function () {
       previewActions.classList.add('preview-actions--titlebar');
     }
 
-    const electronTitleText = bar.querySelector('.electron-title-text');
+    const titleDrag = bar.querySelector('.electron-title-drag');
+    const dragRegion = bar.querySelector('.electron-title-drag-region');
     const modeIndicator = document.getElementById('modeIndicator');
-    if (electronTitleText && modeIndicator) {
-      electronTitleText.insertAdjacentElement('afterend', modeIndicator);
+    /**
+     * Badge sits immediately after "Astro Code" (not at the far end of the bar).
+     * A separate flex spacer (.electron-title-drag-fill) absorbs the rest of the drag width.
+     * Badge stays a sibling of .electron-title-drag-region (not inside drag) for Electron hit-testing.
+     */
+    if (dragRegion && modeIndicator) {
+      dragRegion.insertAdjacentElement('afterend', modeIndicator);
       modeIndicator.classList.add('mode-indicator--titlebar');
+    }
+    if (titleDrag && !titleDrag.querySelector('.electron-title-drag-fill')) {
+      const fill = document.createElement('div');
+      fill.className = 'electron-title-drag-fill';
+      fill.setAttribute('aria-hidden', 'true');
+      titleDrag.appendChild(fill);
     }
 
     if (!isElectron) {
