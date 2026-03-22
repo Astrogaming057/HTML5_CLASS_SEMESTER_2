@@ -1234,11 +1234,36 @@ body.resizing .resizer-terminal {
   align-items: center;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
+  min-width: 0;
+  gap: 4px;
 }
 
 .terminal-tabs {
   display: flex;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
+}
+
+.terminal-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.terminal-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-tabs::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+
+.terminal-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--border-active);
 }
 
 .terminal-tab {
@@ -1251,6 +1276,8 @@ body.resizing .resizer-terminal {
   font-family: inherit;
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .terminal-tab:hover {

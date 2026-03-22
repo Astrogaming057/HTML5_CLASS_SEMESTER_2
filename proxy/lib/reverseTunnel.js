@@ -55,16 +55,22 @@ function computedTunnelViewerCount(deviceId) {
 /**
  * Notify agent WebSocket of how many reverse-tunnel browser WS streams are open for this device.
  */
-function broadcastViewerCount(deviceId) {
+/**
+ * @param {string} deviceId
+ * @param {{ syncOnly?: boolean }} [opts] - If syncOnly, send previous === count so clients don't toast (agent reconnect / initial sync).
+ */
+function broadcastViewerCount(deviceId, opts) {
+  const syncOnly = opts && opts.syncOnly;
   const ws = deviceSockets.get(deviceId);
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   const old = viewerCountByDevice.has(deviceId) ? viewerCountByDevice.get(deviceId) : 0;
   const n = computedTunnelViewerCount(deviceId);
   viewerCountByDevice.set(deviceId, n);
+  const previous = syncOnly ? n : old;
   sendJson(ws, {
     type: 'remote_viewers',
     count: n,
-    previous: old,
+    previous,
     sessions: buildSessionsSnapshot(deviceId)
   });
 }
@@ -127,7 +133,8 @@ function registerDevice(deviceId, ws) {
   }
   deviceSockets.set(deviceId, ws);
   viewerCountByDevice.delete(deviceId);
-  broadcastViewerCount(deviceId);
+  /* syncOnly: avoid false "viewer connected" toasts (previous was 0 after delete) */
+  broadcastViewerCount(deviceId, { syncOnly: true });
 }
 
 function unregisterDevice(deviceId, ws) {

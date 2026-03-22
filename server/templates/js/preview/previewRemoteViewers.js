@@ -2,8 +2,6 @@
  * Remote tunnel viewers: count + popover with IP, proxy account, time, UA (from proxy).
  */
 window.PreviewRemoteViewers = (function () {
-  let lastSynced = null;
-  let ready = false;
   let widgetEl = null;
   let popoverEl = null;
   let countEl = null;
@@ -144,7 +142,8 @@ window.PreviewRemoteViewers = (function () {
   }
 
   function applyUpdate(data) {
-    if (!ready) return;
+    ensureWidget();
+    if (!countEl) return;
     const count = Number(data.count) || 0;
     const previous =
       data.previous !== undefined && data.previous !== null
@@ -152,15 +151,20 @@ window.PreviewRemoteViewers = (function () {
         : count;
     const sessions = Array.isArray(data.sessions) ? data.sessions : [];
     updateDisplay(count, sessions);
-    if (lastSynced === null) {
-      lastSynced = count;
-      return;
-    }
-    if (previous === lastSynced && count !== previous) {
+
+    /**
+     * Proxy only sends remote_viewers when the tunnel viewer count changes; it sets
+     * previous = count before the change and count = new total. Toast when that
+     * differs (do not require previous === lastSynced — that broke when fetch
+     * was stale or a WS message arrived before init() finished).
+     */
+    const serverReportedChange = count !== previous;
+    if (serverReportedChange) {
       const title =
         count > previous ? 'Remote viewer connected' : 'Remote viewer disconnected';
       const sub =
-        (count === 1 ? '1 remote viewer' : count + ' remote viewers') + ' via tunnel';
+        (count === 1 ? '1 remote viewer' : count + ' remote viewers') +
+        ' via tunnel · your PC';
       if (
         window.PreviewStatusBar &&
         typeof window.PreviewStatusBar.showStatusToast === 'function'
@@ -168,7 +172,6 @@ window.PreviewRemoteViewers = (function () {
         window.PreviewStatusBar.showStatusToast(title, sub);
       }
     }
-    lastSynced = count;
   }
 
   async function fetchInitial() {
@@ -179,10 +182,8 @@ window.PreviewRemoteViewers = (function () {
         const n = Number(data.count) || 0;
         const sessions = Array.isArray(data.sessions) ? data.sessions : [];
         updateDisplay(n, sessions);
-        lastSynced = n;
       }
     } catch (e) {
-      lastSynced = 0;
       updateDisplay(0, []);
     }
   }
@@ -190,11 +191,16 @@ window.PreviewRemoteViewers = (function () {
   async function init() {
     ensureWidget();
     await fetchInitial();
-    ready = true;
+  }
+
+  /** Call before WebSocket connects so applyUpdate never runs before the widget exists. */
+  function prewarm() {
+    ensureWidget();
   }
 
   return {
     init: init,
-    applyUpdate: applyUpdate
+    applyUpdate: applyUpdate,
+    prewarm: prewarm
   };
 })();
