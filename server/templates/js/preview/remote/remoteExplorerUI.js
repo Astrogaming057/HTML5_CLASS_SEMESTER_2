@@ -146,6 +146,44 @@ window.PreviewRemoteExplorer = (function () {
     return '…' + k.slice(-6);
   }
 
+  /** Aligned key / value lines for monospace terminal panel */
+  function formatTerminalKvRows(rows) {
+    const keyW = Math.min(
+      Math.max(14, ...rows.map(function (r) { return String(r[0]).length; })),
+      26
+    );
+    return rows
+      .map(function (kv) {
+        const k = String(kv[0]);
+        const v = String(kv[1] == null ? '—' : kv[1]);
+        return k.padEnd(keyW) + '  ' + v;
+      })
+      .join('\n');
+  }
+
+  /** ASCII box + rows + fake shell prompt */
+  function buildTerminalPanel(bannerLine, rowPairs) {
+    const inner = 40;
+    const bar = '─'.repeat(inner + 2);
+    const top = '┌' + bar + '┐';
+    const blink = String(bannerLine).slice(0, inner).padEnd(inner);
+    const mid = '│ ' + blink + ' │';
+    const bot = '└' + bar + '┘';
+    return (
+      top +
+      '\n' +
+      mid +
+      '\n' +
+      bot +
+      '\n\n' +
+      formatTerminalKvRows(rowPairs) +
+      '\n\n' +
+      'user@remote:~$ '
+    );
+  }
+
+  const TERMINAL_ALERT = { terminal: true, title: '$ remote' };
+
   function syncSessionAfterDeviceRemoved(deviceId) {
     const sid = String(deviceId);
     if (sess.getTargetDeviceId() === sid) {
@@ -257,32 +295,32 @@ window.PreviewRemoteExplorer = (function () {
             return;
           }
           if (act === 'status') {
-            const lines = [
-              'Device: ' + (dev.name || id),
-              'Online (recent heartbeat): ' + (online ? 'yes' : 'no'),
-              'Disabled: ' + (disabled ? 'yes' : 'no'),
-              'Reverse tunnel agent on proxy: ' + (agentOn ? 'connected' : 'not connected'),
-              'Last seen: ' + formatLastSeen(dev.lastSeen),
-              'Base URL: ' + (dev.baseUrl || '—')
-            ];
+            const text = buildTerminalPanel('connection status', [
+              ['device', String(dev.name || id)],
+              ['online', online ? 'yes' : 'no'],
+              ['disabled', disabled ? 'yes' : 'no'],
+              ['agent_proxy', agentOn ? 'connected' : 'not connected'],
+              ['last_seen', formatLastSeen(dev.lastSeen)],
+              ['base_url', dev.baseUrl || '—']
+            ]);
             if (window.PreviewUtils.customAlert) {
-              await window.PreviewUtils.customAlert(lines.join('\n'));
+              await window.PreviewUtils.customAlert(text, TERMINAL_ALERT);
             }
             return;
           }
           if (act === 'info') {
-            const lines = [
-              'Name: ' + (dev.name || '—'),
-              'ID: ' + id,
-              'Device key: ' + maskKey(dev.deviceKey),
-              'Base URL: ' + (dev.baseUrl || '—'),
-              'Last seen: ' + formatLastSeen(dev.lastSeen),
-              'Online: ' + online,
-              'Disabled: ' + disabled,
-              'Agent (proxy): ' + (agentOn ? 'connected' : 'not connected')
-            ];
+            const text = buildTerminalPanel('device record', [
+              ['name', dev.name || '—'],
+              ['id', String(id)],
+              ['device_key', maskKey(dev.deviceKey)],
+              ['base_url', dev.baseUrl || '—'],
+              ['last_seen', formatLastSeen(dev.lastSeen)],
+              ['online', online ? 'yes' : 'no'],
+              ['disabled', disabled ? 'yes' : 'no'],
+              ['agent', agentOn ? 'connected' : 'not connected']
+            ]);
             if (window.PreviewUtils.customAlert) {
-              await window.PreviewUtils.customAlert(lines.join('\n'));
+              await window.PreviewUtils.customAlert(text, TERMINAL_ALERT);
             }
             return;
           }
@@ -313,7 +351,11 @@ window.PreviewRemoteExplorer = (function () {
           }
         } catch (err) {
           if (window.PreviewUtils.customAlert) {
-            await window.PreviewUtils.customAlert((err && err.message) || String(err));
+            const msg = (err && err.message) || String(err);
+            await window.PreviewUtils.customAlert(
+              buildTerminalPanel('error', [['message', msg]]),
+              TERMINAL_ALERT
+            );
           }
         }
       });

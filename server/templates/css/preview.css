@@ -2813,6 +2813,60 @@ body.resizing .resizer {
   gap: 10px;
 }
 
+/* Terminal-style alert — theme vars like other custom prompts; monospace for “shell” text */
+.custom-prompt-dialog--terminal .custom-prompt-content--terminal {
+  max-width: min(520px, 96vw);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.custom-prompt-dialog--terminal .custom-prompt-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.custom-prompt-dialog--terminal .custom-prompt-header span {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.custom-prompt-dialog--terminal .custom-prompt-body {
+  padding: 14px 20px 18px;
+  background: var(--bg-primary);
+}
+
+.custom-prompt-dialog--terminal .custom-confirm-message-terminal {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: min(62vh, 420px);
+  overflow-y: auto;
+}
+
+.custom-prompt-dialog--terminal .custom-prompt-footer {
+  padding: 15px 20px;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.custom-prompt-dialog--terminal #customConfirmOk {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
 .cache-comparison-dialog {
   position: fixed;
   top: 0;

@@ -671,13 +671,14 @@
   </div>
   
   <div id="customConfirmDialog" class="custom-prompt-dialog" style="display: none;">
-    <div class="custom-prompt-content">
+    <div class="custom-prompt-content" id="customConfirmContent">
       <div class="custom-prompt-header">
-        <span>Confirm</span>
+        <span id="customConfirmTitle">Confirm</span>
         <button class="custom-prompt-close" id="customConfirmClose">✕</button>
       </div>
       <div class="custom-prompt-body">
-        <p id="customConfirmMessage" style="margin: 0; color: #cccccc;"></p>
+        <p id="customConfirmMessage" class="custom-confirm-message-plain" style="margin: 0; color: #cccccc;"></p>
+        <pre id="customConfirmMessageTerminal" class="custom-confirm-message-terminal" hidden></pre>
       </div>
       <div class="custom-prompt-footer">
         <button class="btn btn-primary" id="customConfirmOk">OK</button>

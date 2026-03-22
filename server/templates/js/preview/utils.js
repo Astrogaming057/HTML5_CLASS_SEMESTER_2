@@ -118,7 +118,9 @@ window.PreviewUtils = {
       const discardBtn = document.getElementById('customConfirmDiscard');
       const cancelBtn = document.getElementById('customConfirmCancel');
       const closeBtn = document.getElementById('customConfirmClose');
-      
+
+      window.PreviewUtils.resetConfirmDialogPresentation();
+
       messageEl.textContent = message;
       dialog.style.display = 'flex';
       
@@ -177,12 +179,39 @@ window.PreviewUtils = {
   },
 
   /**
-   * Simple OK-only dialog (Electron webviews often block window.alert).
+   * Reset shared confirm/alert dialog out of "terminal" presentation (used by customConfirm + customAlert).
    */
-  customAlert(message) {
+  resetConfirmDialogPresentation() {
+    const dialog = document.getElementById('customConfirmDialog');
+    const plainEl = document.getElementById('customConfirmMessage');
+    const preEl = document.getElementById('customConfirmMessageTerminal');
+    const titleEl = document.getElementById('customConfirmTitle');
+    const contentEl = document.getElementById('customConfirmContent');
+    if (dialog) dialog.classList.remove('custom-prompt-dialog--terminal');
+    if (contentEl) contentEl.classList.remove('custom-prompt-content--terminal');
+    if (plainEl) {
+      plainEl.removeAttribute('hidden');
+      plainEl.style.display = '';
+    }
+    if (preEl) {
+      preEl.setAttribute('hidden', '');
+      preEl.textContent = '';
+    }
+    if (titleEl) titleEl.textContent = 'Confirm';
+  },
+
+  /**
+   * Simple OK-only dialog (Electron webviews often block window.alert).
+   * @param {string} message
+   * @param {{ terminal?: boolean, title?: string }} [options] - terminal: monospace + shell styling; title: header (default "remote")
+   */
+  customAlert(message, options) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('customConfirmDialog');
       const messageEl = document.getElementById('customConfirmMessage');
+      const preEl = document.getElementById('customConfirmMessageTerminal');
+      const titleEl = document.getElementById('customConfirmTitle');
+      const contentEl = document.getElementById('customConfirmContent');
       const okBtn = document.getElementById('customConfirmOk');
       const discardBtn = document.getElementById('customConfirmDiscard');
       const cancelBtn = document.getElementById('customConfirmCancel');
@@ -193,9 +222,30 @@ window.PreviewUtils = {
         return;
       }
 
+      const opts = options && typeof options === 'object' ? options : {};
+      const asTerminal = !!opts.terminal;
+
+      window.PreviewUtils.resetConfirmDialogPresentation();
+
       const prevCancelDisplay = cancelBtn.style.display;
       const prevDiscardDisplay = discardBtn ? discardBtn.style.display : '';
-      messageEl.textContent = message;
+
+      if (asTerminal && preEl && titleEl) {
+        dialog.classList.add('custom-prompt-dialog--terminal');
+        if (contentEl) contentEl.classList.add('custom-prompt-content--terminal');
+        titleEl.textContent = opts.title || 'remote';
+        messageEl.setAttribute('hidden', '');
+        messageEl.textContent = '';
+        preEl.removeAttribute('hidden');
+        preEl.textContent = message == null ? '' : String(message);
+      } else {
+        messageEl.textContent = message == null ? '' : String(message);
+        if (preEl) {
+          preEl.setAttribute('hidden', '');
+          preEl.textContent = '';
+        }
+      }
+
       dialog.style.display = 'flex';
       cancelBtn.style.display = 'none';
       if (discardBtn) discardBtn.style.display = 'none';
@@ -208,6 +258,7 @@ window.PreviewUtils = {
         closeBtn.onclick = null;
         dialog.onclick = null;
         dialog.onkeydown = null;
+        window.PreviewUtils.resetConfirmDialogPresentation();
         resolve();
       };
 
