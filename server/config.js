@@ -23,6 +23,9 @@ const REMOTE_DEVICE_KEY = process.env.REMOTE_DEVICE_KEY
   ? String(process.env.REMOTE_DEVICE_KEY).trim()
   : '';
 
+/** Dev only: set to "1" if wss:// to proxy uses a self-signed cert (outbound agent). */
+const REMOTE_PROXY_TLS_INSECURE = process.env.REMOTE_PROXY_TLS_INSECURE === '1';
+
 module.exports = {
   PORT: process.env.PORT || 3000,
   BASE_DIR: baseDir,
@@ -30,6 +33,7 @@ module.exports = {
   REMOTE_PROXY_URL,
   REMOTE_AGENT_TOKEN,
   REMOTE_DEVICE_KEY,
+  REMOTE_PROXY_TLS_INSECURE,
   WATCH_OPTIONS: {
     ignored: /(^|[\/\\])\../,
     persistent: true,

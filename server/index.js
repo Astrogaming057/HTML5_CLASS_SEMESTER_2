@@ -14,7 +14,7 @@ const { setupStatusRoutes } = require('./templates/status/statusHandler');
 const logger = require('./utils/logger');
 const { cleanupCache } = require('./utils/cacheCleanup');
 const ServerCommands = require('./utils/serverCommands');
-const { startRemoteAgent } = require('./remoteAgent');
+const remoteAgent = require('./remoteAgent');
 
 // Detect mode: check for APP_MODE environment variable or if running from Electron
 // Defaults to 'browser' mode if not specified
@@ -131,6 +131,8 @@ server.listen(config.PORT, () => {
     baseDir: config.BASE_DIR,
     mode: serverMode
   });
+
+  global.__remoteAgent = remoteAgent.startFromEnv(config);
 
   // Only setup auto-launcher in browser mode
   if (serverMode === 'browser') {

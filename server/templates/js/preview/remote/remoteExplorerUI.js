@@ -193,8 +193,10 @@ window.PreviewRemoteExplorer = (function () {
   async function renderDropdown() {
     const d = ensureDropdown();
     if (!d) return;
+    const loggedIn = !!sess.getToken();
     let proxyDebug = false;
     let serverDebug = false;
+    let agentStatus = null;
     try {
       const [proxySt, modeRes] = await Promise.all([
         auth.fetchProxyRemoteStatus(),
@@ -208,7 +210,13 @@ window.PreviewRemoteExplorer = (function () {
       proxyDebug = false;
       serverDebug = false;
     }
-    const loggedIn = !!sess.getToken();
+    if (loggedIn && auth.fetchLocalAgentStatus) {
+      try {
+        agentStatus = await auth.fetchLocalAgentStatus();
+      } catch (e) {
+        agentStatus = null;
+      }
+    }
     const registered = !!sess.getRegisteredLocalDeviceId() ||
       (devicesCache && devicesCache.some(deviceIsThisPc));
     let html = '';
@@ -227,6 +235,21 @@ window.PreviewRemoteExplorer = (function () {
     html += '<button type="button" class="remote-dd-item" data-action="local">Use Local</button>';
     html += '<span class="remote-dd-desc">Files and tools on this machine</span>';
     if (loggedIn) {
+      html += '<div class="remote-dd-section">This PC → proxy tunnel</div>';
+      if (agentStatus && agentStatus.connected) {
+        html += '<div class="remote-dd-desc">Outbound agent: <strong>connected</strong> (' +
+          escapeHtml(agentStatus.proxyHost || 'proxy') + ')</div>';
+      } else if (agentStatus && agentStatus.connecting) {
+        html += '<div class="remote-dd-desc">Outbound agent: connecting…</div>';
+      } else if (agentStatus && agentStatus.configured) {
+        const err = (agentStatus.lastError || agentStatus.lastCloseReason || '').trim();
+        html += '<div class="remote-dd-desc remote-dd-debug-warn" role="status">Outbound agent: <strong>not connected</strong>' +
+          (err ? ' — ' + escapeHtml(err) : '. Open the terminal where HTMLCLASS runs for details.') + '</div>';
+      } else if (agentStatus === null) {
+        html += '<div class="remote-dd-desc">Outbound agent: status unavailable (restart the HTMLCLASS server).</div>';
+      } else {
+        html += '<div class="remote-dd-desc">Outbound agent: waiting — ensure PROXY_BASE is set and sign in again.</div>';
+      }
       if (!registered) {
         html += '<button type="button" class="remote-dd-item" data-action="register-pc">Register This PC</button>';
         html += '<span class="remote-dd-desc">Allow access via your account</span>';
@@ -295,7 +318,7 @@ window.PreviewRemoteExplorer = (function () {
     const defaultUrl =
       typeof window !== 'undefined' && window.location ? window.location.origin : 'http://127.0.0.1:3000';
     const baseUrlRaw = await window.PreviewUtils.customPrompt(
-      'URL of this HTMLCLASS server as seen from the proxy machine (use LAN IP if the proxy is on another PC, e.g. http://192.168.1.10:3000 — not localhost)',
+      'URL of this HTMLCLASS server as seen from the proxy (LAN IP if proxy is on another PC). If the proxy cannot reach you directly, use anything valid (e.g. http://127.0.0.1:3000) — traffic can still use the reverse tunnel once you are signed in.',
       defaultUrl
     );
     if (baseUrlRaw === null) return;
@@ -331,6 +354,9 @@ window.PreviewRemoteExplorer = (function () {
 
   function init() {
     bindAuthModal();
+    if (sess.getToken()) {
+      auth.pushLocalAgentConfig();
+    }
     const btn = document.getElementById('remoteExplorerBtn');
     if (!btn) return;
     btn.addEventListener('click', async function () {

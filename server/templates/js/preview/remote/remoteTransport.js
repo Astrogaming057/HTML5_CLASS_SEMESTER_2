@@ -30,10 +30,21 @@ window.PreviewRemoteTransport = (function () {
     }
   }
 
+  /**
+   * Paths under /__api__/remote/* must stay on the preview origin (this machine's
+   * HTMLCLASS server). They must NOT go through the tunnel — e.g. agent-config
+   * starts the outbound reverse agent; tunneling it would deadlock (502).
+   */
+  function isLocalRemoteControlPath(path) {
+    return path.indexOf('/__api__/remote/') === 0;
+  }
+
   function shouldRewriteUrl(urlStr) {
     if (!isRemote() || typeof urlStr !== 'string') return false;
     const path = pathFromAnyUrl(urlStr);
-    return path.indexOf('/__') === 0;
+    if (path.indexOf('/__') !== 0) return false;
+    if (isLocalRemoteControlPath(path)) return false;
+    return true;
   }
 
   function rewriteUrl(urlStr) {
@@ -109,6 +120,7 @@ window.PreviewRemoteTransport = (function () {
         ? new URL(src)
         : new URL(src, window.location.origin);
       if (u.pathname.indexOf('/__') !== 0) return src;
+      if (isLocalRemoteControlPath(u.pathname + u.search)) return src;
       return rewriteUrl(u.pathname + u.search + u.hash);
     } catch (e) {
       return src;

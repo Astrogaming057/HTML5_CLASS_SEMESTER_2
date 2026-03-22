@@ -1,5 +1,6 @@
 const store = require('./store');
 const auth = require('./auth');
+const reverseTunnel = require('./reverseTunnel');
 
 function refreshDevice(deviceId) {
   const d = store.findDeviceById(deviceId);
@@ -35,8 +36,12 @@ function setupAgentConnection(ws, req, deviceOnlineMs) {
   const tickMs = Math.min(15000, Math.max(5000, deviceOnlineMs / 6));
   refreshDevice(deviceId);
   const iv = setInterval(() => refreshDevice(deviceId), tickMs);
+
+  reverseTunnel.registerDevice(deviceId, ws);
+  ws.on('message', (buf) => reverseTunnel.onDeviceMessage(deviceId, buf));
   ws.on('close', () => {
     clearInterval(iv);
+    reverseTunnel.unregisterDevice(deviceId, ws);
   });
   ws.on('error', () => {});
   return deviceId;

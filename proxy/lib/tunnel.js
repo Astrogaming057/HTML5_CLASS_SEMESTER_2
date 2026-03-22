@@ -1,6 +1,7 @@
 const httpProxy = require('http-proxy');
 const store = require('./store');
 const auth = require('./auth');
+const reverseTunnel = require('./reverseTunnel');
 
 function normalizeBaseUrl(url) {
   if (!url || typeof url !== 'string') return '';
@@ -42,12 +43,19 @@ function attachTunnelHttp(app, proxy) {
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
-    const target = normalizeBaseUrl(device.baseUrl);
-    if (!target) {
-      res.status(502).json({ error: 'Device has no baseUrl' });
-      return;
-    }
-    proxy.web(req, res, { target });
+    reverseTunnel.tryHttpForward(device.id, req, res).then((viaReverse) => {
+      if (viaReverse) return;
+      const target = normalizeBaseUrl(device.baseUrl);
+      if (!target) {
+        res.status(502).json({
+          error: 'Bad gateway',
+          detail:
+            'No reverse agent connected and device has no reachable baseUrl. Open the preview on this PC and sign in to Remote Explorer so the server can connect to the proxy.'
+        });
+        return;
+      }
+      proxy.web(req, res, { target });
+    });
   });
 }
 
@@ -88,6 +96,9 @@ function handleTunnelUpgrade(req, socket, head, proxy) {
   const device = verifyDeviceAccess(deviceId, payload.sub);
   if (!device) {
     socket.destroy();
+    return true;
+  }
+  if (reverseTunnel.handleUpgradeReverse(device.id, req, socket, head)) {
     return true;
   }
   const target = normalizeBaseUrl(device.baseUrl);

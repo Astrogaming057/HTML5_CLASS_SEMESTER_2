@@ -37,6 +37,10 @@ The proxy forwards requests to each device’s **`baseUrl`** (set when you regis
 
 Re-register the device (Remote Explorer → Register This PC) and enter the correct LAN URL. With `PROXY_DEBUG=1`, tunnel errors log to stderr with `ECONNREFUSED` / `ENOTFOUND` hints.
 
+### Reverse tunnel (no port forwarding)
+
+If the proxy **cannot** reach your PC’s `baseUrl` (NAT, no port forwarding, proxy on another network), keep the HTMLCLASS **server** running and sign in via Remote Explorer. The preview calls **`POST /__api__/remote/agent-config`** with your proxy JWT and device key; the server opens an **outbound** WebSocket to **`/agent`**. HTTP and WebSocket traffic to **`/tunnel/:deviceId/...`** is then forwarded through that connection instead of direct HTTP to `baseUrl`.
+
 ## Device list (online only)
 
 **Recommended:** each HTMLCLASS **Node server** opens a persistent WebSocket to **`/agent`** (see below). The proxy updates **`lastSeen`** on connect and on an interval while that socket stays up.

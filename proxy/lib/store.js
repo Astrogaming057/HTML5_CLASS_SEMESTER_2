@@ -17,6 +17,22 @@ function load() {
     const data = JSON.parse(raw);
     if (!Array.isArray(data.users)) data.users = [];
     if (!Array.isArray(data.devices)) data.devices = [];
+    const defaultBase =
+      process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:3000';
+    let fixedBaseUrl = false;
+    for (const d of data.devices) {
+      if (
+        d.baseUrl == null ||
+        typeof d.baseUrl !== 'string' ||
+        !String(d.baseUrl).trim()
+      ) {
+        d.baseUrl = defaultBase;
+        fixedBaseUrl = true;
+      }
+    }
+    if (fixedBaseUrl) {
+      save(data);
+    }
     return data;
   } catch (e) {
     return { users: [], devices: [] };

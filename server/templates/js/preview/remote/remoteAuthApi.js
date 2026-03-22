@@ -26,6 +26,54 @@ window.PreviewRemoteAuthApi = (function () {
     }
   }
 
+  /** Tell the local HTMLCLASS server to connect outbound to the proxy (reverse tunnel + presence). */
+  async function pushLocalAgentConfig() {
+    const t = sess.getToken();
+    if (!t) return;
+    const base = (cfg.PROXY_BASE || '').trim();
+    if (!base) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[Remote] Set PreviewRemoteConfig.PROXY_BASE to your proxy URL (e.g. http://127.0.0.1:3030) so the server can connect.'
+        );
+      }
+      return;
+    }
+    try {
+      const res = await fetch('/__api__/remote/agent-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proxyUrl: base,
+          token: t,
+          deviceKey: sess.deviceKey()
+        })
+      });
+      const data = await parseJson(res);
+      if (!res.ok) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[Remote] agent-config failed', res.status, data.error || data);
+        }
+        return;
+      }
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[Remote] agent-config request failed', e.message || e);
+      }
+    }
+  }
+
+  async function fetchLocalAgentStatus() {
+    try {
+      const res = await fetch('/__api__/remote/agent-status', { cache: 'no-cache' });
+      const data = await parseJson(res);
+      if (!res.ok || !data.agent) return null;
+      return data.agent;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function login(username, password) {
     const res = await fetch(proxyUrl(cfg.PATHS.login), {
       method: 'POST',
@@ -42,6 +90,7 @@ window.PreviewRemoteAuthApi = (function () {
       throw new Error('No token in response');
     }
     sess.setSession(token, user);
+    await pushLocalAgentConfig();
     return { token, user };
   }
 
@@ -61,6 +110,7 @@ window.PreviewRemoteAuthApi = (function () {
       throw new Error('No token in response');
     }
     sess.setSession(token, user);
+    await pushLocalAgentConfig();
     return { token, user };
   }
 
@@ -103,6 +153,7 @@ window.PreviewRemoteAuthApi = (function () {
     if (id) {
       sess.setRegisteredLocalDeviceId(String(id));
     }
+    await pushLocalAgentConfig();
     return dev;
   }
 
@@ -164,6 +215,8 @@ window.PreviewRemoteAuthApi = (function () {
     logout,
     proxyUrl,
     fetchProxyRemoteStatus,
-    sendHeartbeat
+    sendHeartbeat,
+    pushLocalAgentConfig,
+    fetchLocalAgentStatus
   };
 })();

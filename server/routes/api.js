@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
 const appConfig = require('../config');
+const remoteAgentModule = require('../remoteAgent');
 const { Client: SshClient } = require('ssh2');
 
 // Optional minification libraries
@@ -82,6 +83,34 @@ function setupAPI(baseDir) {
       isBrowserMode: mode === 'browser',
       debug: !!appConfig.DEBUG
     });
+  });
+
+  /**
+   * Push proxy login + device key from the browser to this Node process so it can
+   * open the outbound /agent WebSocket (presence + reverse tunnel when direct HTTP fails).
+   */
+  router.post('/remote/agent-config', (req, res) => {
+    try {
+      const result = remoteAgentModule.reconfigure(req.body || {});
+      if (!result.ok) {
+        res.status(400).json({ success: false, error: result.error || 'Invalid config' });
+        return;
+      }
+      res.json({ success: true });
+    } catch (e) {
+      logger.error('remote agent-config failed', e);
+      res.status(500).json({ success: false, error: e.message || 'Server error' });
+    }
+  });
+
+  /** Whether this Node process has an outbound /agent WebSocket to the proxy (for debugging). */
+  router.get('/remote/agent-status', (req, res) => {
+    try {
+      const status = remoteAgentModule.getAgentStatus();
+      res.json({ success: true, agent: status });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || 'Server error' });
+    }
   });
 
   router.get('/files', async (req, res) => {
