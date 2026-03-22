@@ -12,10 +12,24 @@ const debug =
   process.env.HTMLCLASS_DEBUG === '1' ||
   process.env.HTMLCLASS_DEBUG === 'true';
 
+/** Server-side remote proxy agent (optional): keeps WSS /agent open for presence */
+const REMOTE_PROXY_URL = process.env.REMOTE_PROXY_URL
+  ? String(process.env.REMOTE_PROXY_URL).trim()
+  : '';
+const REMOTE_AGENT_TOKEN = process.env.REMOTE_AGENT_TOKEN
+  ? String(process.env.REMOTE_AGENT_TOKEN).trim()
+  : '';
+const REMOTE_DEVICE_KEY = process.env.REMOTE_DEVICE_KEY
+  ? String(process.env.REMOTE_DEVICE_KEY).trim()
+  : '';
+
 module.exports = {
   PORT: process.env.PORT || 3000,
   BASE_DIR: baseDir,
   DEBUG: debug,
+  REMOTE_PROXY_URL,
+  REMOTE_AGENT_TOKEN,
+  REMOTE_DEVICE_KEY,
   WATCH_OPTIONS: {
     ignored: /(^|[\/\\])\../,
     persistent: true,

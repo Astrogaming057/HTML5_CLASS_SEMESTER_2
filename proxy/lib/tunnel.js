@@ -51,56 +51,59 @@ function attachTunnelHttp(app, proxy) {
   });
 }
 
-function attachTunnelWs(server, proxy) {
-  server.on('upgrade', (req, socket, head) => {
-    const raw = req.url || '';
-    if (raw.indexOf('/tunnel/') !== 0) return;
+function handleTunnelUpgrade(req, socket, head, proxy) {
+  const raw = req.url || '';
+  if (raw.indexOf('/tunnel/') !== 0) {
+    return false;
+  }
 
-    let pathname = raw;
-    let search = '';
-    const q = raw.indexOf('?');
-    if (q >= 0) {
-      pathname = raw.slice(0, q);
-      search = raw.slice(q);
-    }
+  let pathname = raw;
+  let search = '';
+  const q = raw.indexOf('?');
+  if (q >= 0) {
+    pathname = raw.slice(0, q);
+    search = raw.slice(q);
+  }
 
-    const parts = pathname.split('/').filter(Boolean);
-    if (parts.length < 2 || parts[0] !== 'tunnel') return;
-    const deviceId = parts[1];
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length < 2 || parts[0] !== 'tunnel') {
+    return false;
+  }
+  const deviceId = parts[1];
 
-    const params = new URLSearchParams(search.replace(/^\?/, ''));
-    let token = params.get('token');
-    if (!token) {
-      token = auth.bearerFromAuthHeader(req.headers.authorization);
-    }
-    if (!token) {
-      socket.destroy();
-      return;
-    }
-    const payload = auth.verifyToken(token);
-    if (!payload || !payload.sub) {
-      socket.destroy();
-      return;
-    }
-    const device = verifyDeviceAccess(deviceId, payload.sub);
-    if (!device) {
-      socket.destroy();
-      return;
-    }
-    const target = normalizeBaseUrl(device.baseUrl);
-    if (!target) {
-      socket.destroy();
-      return;
-    }
+  const params = new URLSearchParams(search.replace(/^\?/, ''));
+  let token = params.get('token');
+  if (!token) {
+    token = auth.bearerFromAuthHeader(req.headers.authorization);
+  }
+  if (!token) {
+    socket.destroy();
+    return true;
+  }
+  const payload = auth.verifyToken(token);
+  if (!payload || !payload.sub) {
+    socket.destroy();
+    return true;
+  }
+  const device = verifyDeviceAccess(deviceId, payload.sub);
+  if (!device) {
+    socket.destroy();
+    return true;
+  }
+  const target = normalizeBaseUrl(device.baseUrl);
+  if (!target) {
+    socket.destroy();
+    return true;
+  }
 
-    req.url = '/';
-    proxy.ws(req, socket, head, { target });
-  });
+  req.url = '/';
+  proxy.ws(req, socket, head, { target });
+  return true;
 }
 
 module.exports = {
   normalizeBaseUrl,
   attachTunnelHttp,
-  attachTunnelWs,
+  handleTunnelUpgrade,
   createProxy
 };

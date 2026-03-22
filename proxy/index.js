@@ -1,9 +1,12 @@
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const WebSocket = require('ws');
 const auth = require('./lib/auth');
 const store = require('./lib/store');
 const tunnel = require('./lib/tunnel');
+const agentConnection = require('./lib/agentConnection');
+const { pathnameOnly } = require('./lib/agentSocket');
 
 const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
@@ -200,7 +203,21 @@ proxy.on('error', (err, req, res) => {
 tunnel.attachTunnelHttp(app, proxy);
 
 const server = http.createServer(app);
-tunnel.attachTunnelWs(server, proxy);
+const agentWss = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const path = pathnameOnly(req.url || '');
+  if (path === '/agent') {
+    agentWss.handleUpgrade(req, socket, head, (ws) => {
+      agentConnection.setupAgentConnection(ws, req, DEVICE_ONLINE_MS);
+    });
+    return;
+  }
+  const handled = tunnel.handleTunnelUpgrade(req, socket, head, proxy);
+  if (!handled) {
+    socket.destroy();
+  }
+});
 
 const PORT = Number(process.env.PORT) || 3030;
 server.listen(PORT, () => {

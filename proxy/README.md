@@ -39,7 +39,21 @@ Re-register the device (Remote Explorer → Register This PC) and enter the corr
 
 ## Device list (online only)
 
-Each registered PC must **POST `/api/devices/heartbeat`** about every 20 seconds (the preview does this while you are logged in). **`GET /api/devices`** only returns devices whose **`lastSeen`** is within **`DEVICE_ONLINE_MS`** (default 90s). Offline machines are hidden until they send a heartbeat again.
+**Recommended:** each HTMLCLASS **Node server** opens a persistent WebSocket to **`/agent`** (see below). The proxy updates **`lastSeen`** on connect and on an interval while that socket stays up.
+
+**Optional:** **`POST /api/devices/heartbeat`** still works if you can’t run the server agent.
+
+**`GET /api/devices`** only lists devices whose **`lastSeen`** is within **`DEVICE_ONLINE_MS`** (default 90s).
+
+### Server-side agent (HTMLCLASS)
+
+On the machine running HTMLCLASS, set:
+
+- **`REMOTE_PROXY_URL`** — proxy base URL, e.g. `http://127.0.0.1:3030` or `https://your-proxy.example.com`
+- **`REMOTE_AGENT_TOKEN`** — JWT from **`POST /api/auth/login`** on the proxy (same user who registered the device)
+- **`REMOTE_DEVICE_KEY`** — the **`deviceKey`** shown when you registered this PC
+
+The server connects to **`wss://…/agent?deviceKey=…`** with **`Authorization: Bearer …`** and reconnects if the link drops. No browser heartbeat is required for presence.
 
 ## Device registration
 

@@ -341,9 +341,6 @@ window.PreviewRemoteExplorer = (function () {
       await refreshDevices();
       await toggleDropdown();
     });
-    if (window.PreviewRemoteHeartbeat && typeof window.PreviewRemoteHeartbeat.start === 'function') {
-      window.PreviewRemoteHeartbeat.start();
-    }
   }
 
   return {

@@ -14,6 +14,7 @@ const { setupStatusRoutes } = require('./templates/status/statusHandler');
 const logger = require('./utils/logger');
 const { cleanupCache } = require('./utils/cacheCleanup');
 const ServerCommands = require('./utils/serverCommands');
+const { startRemoteAgent } = require('./remoteAgent');
 
 // Detect mode: check for APP_MODE environment variable or if running from Electron
 // Defaults to 'browser' mode if not specified
@@ -171,7 +172,12 @@ server.listen(config.PORT, () => {
 
 const shutdown = () => {
   logger.info('Shutting down gracefully...');
-  
+
+  if (global.__remoteAgent && typeof global.__remoteAgent.stop === 'function') {
+    global.__remoteAgent.stop();
+    global.__remoteAgent = null;
+  }
+
   // Clear cleanup intervals
   if (global.__cleanupInterval) {
     clearInterval(global.__cleanupInterval);
