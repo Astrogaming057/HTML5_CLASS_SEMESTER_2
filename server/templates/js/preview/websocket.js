@@ -66,7 +66,16 @@ window.PreviewWebSocket = (function() {
           }
 
           if (data.type === 'remoteViewersUpdate') {
-            if (window.PreviewRemoteViewers && typeof window.PreviewRemoteViewers.applyUpdate === 'function') {
+            const remoteUi =
+              window.PreviewRemoteTransport &&
+              typeof window.PreviewRemoteTransport.isRemote === 'function' &&
+              window.PreviewRemoteTransport.isRemote();
+            if (remoteUi) {
+              /* Counts for *this* PC come from PreviewRemoteViewers’ second WS to local HTMLCLASS. */
+            } else if (
+              window.PreviewRemoteViewers &&
+              typeof window.PreviewRemoteViewers.applyUpdate === 'function'
+            ) {
               window.PreviewRemoteViewers.applyUpdate(data);
             }
           }

@@ -1547,9 +1547,6 @@ require(['vs/editor/editor.main'], function() {
   setupDragAndDrop();
   setupTerminal();
   setupCompiler();
-  if (window.PreviewRemoteViewers && typeof window.PreviewRemoteViewers.prewarm === 'function') {
-    window.PreviewRemoteViewers.prewarm();
-  }
   setupWebSocket();
   if (window.PreviewClientSessions && typeof window.PreviewClientSessions.init === 'function') {
     window.PreviewClientSessions.init();

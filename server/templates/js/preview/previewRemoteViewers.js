@@ -1,7 +1,16 @@
 /**
  * Remote tunnel viewers: count + popover with IP, proxy account, time, UA (from proxy).
+ *
+ * While Remote Explorer is viewing *another* PC, the main preview WebSocket is tunneled to that
+ * device, so we open a second WebSocket to this page origin (local HTMLCLASS) to keep receiving
+ * `remoteViewersUpdate` for **this** machine’s outbound agent.
  */
 window.PreviewRemoteViewers = (function () {
+  let lastSynced = null;
+  /** True after first fetchInitial — avoids false toasts and fixes sync when server `previous` ≠ client state (e.g. remote session). */
+  let baselineEstablished = false;
+  let homeViewerWs = null;
+  let homeViewerReconnectTimer = null;
   let widgetEl = null;
   let popoverEl = null;
   let countEl = null;
@@ -29,7 +38,9 @@ window.PreviewRemoteViewers = (function () {
     countEl.textContent = String(n);
     countEl.setAttribute(
       'title',
-      n + ' remote tunnel viewer(s) (WebSocket streams via proxy)'
+      isRemoteExplorerViewingOtherPc()
+        ? n + ' viewer(s) of this PC via tunnel (live while remote)'
+        : n + ' remote tunnel viewer(s) (WebSocket streams via proxy)'
     );
 
     if (n === 0) {
@@ -90,6 +101,96 @@ window.PreviewRemoteViewers = (function () {
     renderList(count, sessions);
   }
 
+  function isRemoteExplorerViewingOtherPc() {
+    return (
+      window.PreviewRemoteTransport &&
+      typeof window.PreviewRemoteTransport.isRemote === 'function' &&
+      window.PreviewRemoteTransport.isRemote()
+    );
+  }
+
+  function getLocalPreviewWebSocketUrl() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host;
+  }
+
+  function stopHomeViewerSocket() {
+    if (homeViewerReconnectTimer) {
+      clearTimeout(homeViewerReconnectTimer);
+      homeViewerReconnectTimer = null;
+    }
+    if (homeViewerWs) {
+      try {
+        homeViewerWs.onclose = function () {};
+        homeViewerWs.close();
+      } catch (e) {
+        /* ignore */
+      }
+      homeViewerWs = null;
+    }
+  }
+
+  function scheduleHomeViewerSocketReconnect() {
+    if (homeViewerReconnectTimer) return;
+    if (!isRemoteExplorerViewingOtherPc()) return;
+    homeViewerReconnectTimer = setTimeout(function () {
+      homeViewerReconnectTimer = null;
+      startHomeViewerSocket();
+    }, 1200);
+  }
+
+  /**
+   * Second WS to local HTMLCLASS — only used while tunneled to another device — so “who’s viewing my PC”
+   * still updates live. Ignores all other message types so local file/sync events don’t mix with remote.
+   */
+  function startHomeViewerSocket() {
+    if (!isRemoteExplorerViewingOtherPc()) {
+      stopHomeViewerSocket();
+      return;
+    }
+    if (homeViewerWs && homeViewerWs.readyState === WebSocket.OPEN) return;
+    stopHomeViewerSocket();
+    try {
+      const ws = new WebSocket(getLocalPreviewWebSocketUrl());
+      homeViewerWs = ws;
+      ws.onmessage = function (event) {
+        if (!isRemoteExplorerViewingOtherPc()) return;
+        try {
+          const dataString =
+            typeof event.data === 'string' ? event.data : event.data.toString();
+          if (!dataString || !dataString.trim().startsWith('{')) return;
+          const data = JSON.parse(dataString);
+          if (data.type === 'remoteViewersUpdate') {
+            applyUpdate(data);
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      };
+      ws.onclose = function () {
+        if (homeViewerWs === ws) homeViewerWs = null;
+        scheduleHomeViewerSocketReconnect();
+      };
+      ws.onerror = function () {
+        try {
+          ws.close();
+        } catch (e) {
+          /* ignore */
+        }
+      };
+    } catch (e) {
+      scheduleHomeViewerSocketReconnect();
+    }
+  }
+
+  function syncHomeViewerSocket() {
+    if (isRemoteExplorerViewingOtherPc()) {
+      startHomeViewerSocket();
+    } else {
+      stopHomeViewerSocket();
+    }
+  }
+
   function ensureWidget() {
     if (widgetEl) return;
     const mount = document.getElementById('remoteViewersMount');
@@ -104,7 +205,7 @@ window.PreviewRemoteViewers = (function () {
       '</button>' +
       '<div class="client-sessions-popover status-bar-menu-popover" id="remoteViewersPopover" hidden>' +
       '<div class="client-sessions-popover-title">Remote tunnel viewers</div>' +
-      '<p class="client-sessions-popover-hint">Who is viewing this machine through the proxy reverse tunnel. ' +
+      '<p class="client-sessions-popover-hint" id="remoteViewersPopoverHint">Who is viewing this machine through the proxy reverse tunnel. ' +
       'IP and browser come from the connection; <strong>Account</strong> is the signed-in proxy user.</p>' +
       '<ul class="client-sessions-list" id="remoteViewersList"></ul>' +
       '</div>';
@@ -114,6 +215,13 @@ window.PreviewRemoteViewers = (function () {
     countEl = document.getElementById('remoteViewerCount');
     listEl = document.getElementById('remoteViewersList');
     popoverEl = document.getElementById('remoteViewersPopover');
+    const hintEl = document.getElementById('remoteViewersPopoverHint');
+    if (hintEl && isRemoteExplorerViewingOtherPc()) {
+      hintEl.innerHTML =
+        '<strong>This PC</strong> (your outbound agent): who is viewing <em>this computer</em> through the tunnel. ' +
+        'While you edit another device, counts here stay for your machine. ' +
+        'IP / <strong>Account</strong> come from the proxy.';
+    }
     const trigger = document.getElementById('remoteViewersTrigger');
 
     trigger.addEventListener('click', function (e) {
@@ -143,28 +251,40 @@ window.PreviewRemoteViewers = (function () {
 
   function applyUpdate(data) {
     ensureWidget();
-    if (!countEl) return;
-    const count = Number(data.count) || 0;
-    const previous =
-      data.previous !== undefined && data.previous !== null
-        ? Number(data.previous)
-        : count;
+    const count = Math.max(0, Number(data.count) || 0);
     const sessions = Array.isArray(data.sessions) ? data.sessions : [];
     updateDisplay(count, sessions);
 
-    /**
-     * Proxy only sends remote_viewers when the tunnel viewer count changes; it sets
-     * previous = count before the change and count = new total. Toast when that
-     * differs (do not require previous === lastSynced — that broke when fetch
-     * was stale or a WS message arrived before init() finished).
-     */
-    const serverReportedChange = count !== previous;
-    if (serverReportedChange) {
+    if (!baselineEstablished) {
+      lastSynced = count;
+      return;
+    }
+
+    if (lastSynced === null) {
+      lastSynced = count;
+      return;
+    }
+
+    if (count !== lastSynced) {
       const title =
-        count > previous ? 'Remote viewer connected' : 'Remote viewer disconnected';
-      const sub =
-        (count === 1 ? '1 remote viewer' : count + ' remote viewers') +
-        ' via tunnel · your PC';
+        count > lastSynced ? 'Remote viewer connected' : 'Remote viewer disconnected';
+      let sub =
+        (count === 1 ? '1 remote viewer' : count + ' remote viewers') + ' via tunnel';
+      if (count > lastSynced && sessions.length > 0) {
+        const newest = sessions[sessions.length - 1];
+        const ip = newest && newest.ip ? String(newest.ip) : '';
+        const acct =
+          newest && newest.account ? String(newest.account).trim() : '';
+        if (ip) {
+          sub =
+            'New viewer: ' +
+            ip +
+            (acct ? ' · ' + acct : '') +
+            ' — ' +
+            count +
+            ' total';
+        }
+      }
       if (
         window.PreviewStatusBar &&
         typeof window.PreviewStatusBar.showStatusToast === 'function'
@@ -172,6 +292,7 @@ window.PreviewRemoteViewers = (function () {
         window.PreviewStatusBar.showStatusToast(title, sub);
       }
     }
+    lastSynced = count;
   }
 
   async function fetchInitial() {
@@ -179,11 +300,16 @@ window.PreviewRemoteViewers = (function () {
       const res = await fetch('/__api__/remote/tunnel-viewers', { cache: 'no-cache' });
       const data = await res.json();
       if (data && data.success) {
-        const n = Number(data.count) || 0;
+        const n = Math.max(0, Number(data.count) || 0);
         const sessions = Array.isArray(data.sessions) ? data.sessions : [];
         updateDisplay(n, sessions);
+        lastSynced = n;
+      } else {
+        lastSynced = 0;
+        updateDisplay(0, []);
       }
     } catch (e) {
+      lastSynced = 0;
       updateDisplay(0, []);
     }
   }
@@ -191,16 +317,13 @@ window.PreviewRemoteViewers = (function () {
   async function init() {
     ensureWidget();
     await fetchInitial();
-  }
-
-  /** Call before WebSocket connects so applyUpdate never runs before the widget exists. */
-  function prewarm() {
-    ensureWidget();
+    baselineEstablished = true;
+    syncHomeViewerSocket();
   }
 
   return {
     init: init,
     applyUpdate: applyUpdate,
-    prewarm: prewarm
+    syncHomeViewerSocket: syncHomeViewerSocket
   };
 })();
