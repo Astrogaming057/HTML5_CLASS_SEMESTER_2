@@ -1,6 +1,7 @@
 const store = require('./store');
 const auth = require('./auth');
 const reverseTunnel = require('./reverseTunnel');
+const dbg = require('./debug');
 
 function refreshDevice(deviceId) {
   const d = store.findDeviceById(deviceId);
@@ -37,13 +38,27 @@ function setupAgentConnection(ws, req, deviceOnlineMs) {
   refreshDevice(deviceId);
   const iv = setInterval(() => refreshDevice(deviceId), tickMs);
 
+  if (dbg.isProxyDebug()) {
+    dbg.logWss(
+      `/agent open device=${String(deviceId).slice(0, 8)}… key=${String(deviceKey).slice(-6)}`
+    );
+  }
   reverseTunnel.registerDevice(deviceId, ws);
   ws.on('message', (buf) => reverseTunnel.onDeviceMessage(deviceId, buf));
-  ws.on('close', () => {
+  ws.on('close', (code, reason) => {
+    if (dbg.isProxyDebug()) {
+      dbg.logWss(
+        `/agent close device=${String(deviceId).slice(0, 8)}… code=${code} reason=${String(reason || '').slice(0, 60)}`
+      );
+    }
     clearInterval(iv);
     reverseTunnel.unregisterDevice(deviceId, ws);
   });
-  ws.on('error', () => {});
+  ws.on('error', (err) => {
+    if (dbg.isProxyDebug()) {
+      dbg.logWss(`/agent socket error device=${String(deviceId).slice(0, 8)}… ${err && err.message}`);
+    }
+  });
   return deviceId;
 }
 

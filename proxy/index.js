@@ -7,6 +7,7 @@ const store = require('./lib/store');
 const tunnel = require('./lib/tunnel');
 const agentConnection = require('./lib/agentConnection');
 const { pathnameOnly } = require('./lib/agentSocket');
+const proxyDbg = require('./lib/debug');
 
 const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
@@ -202,10 +203,32 @@ proxy.on('error', (err, req, res) => {
 
 tunnel.attachTunnelHttp(app, proxy);
 
+if (PROXY_DEBUG) {
+  proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
+    const t = options && options.target;
+    const href =
+      t &&
+      (t.href ||
+        (t.protocol && t.host ? `${t.protocol}//${t.host}` : '') ||
+        String(t));
+    proxyDbg.logWss(
+      `direct-tunnel proxyReqWs target=${href || '?'} url=${proxyDbg.safeUrlForLog(req && req.url)}`
+    );
+  });
+  proxy.on('open', () => {
+    proxyDbg.logWss('direct-tunnel WS upstream open (http-proxy pipe active)');
+  });
+}
+
 const server = http.createServer(app);
 const agentWss = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
+  if (PROXY_DEBUG) {
+    process.stdout.write(
+      `[proxy-wss] upgrade ${req.method} ${proxyDbg.safeUrlForLog(req.url)}\n`
+    );
+  }
   const path = pathnameOnly(req.url || '');
   if (path === '/agent') {
     agentWss.handleUpgrade(req, socket, head, (ws) => {
@@ -222,6 +245,6 @@ server.on('upgrade', (req, socket, head) => {
 const PORT = Number(process.env.PORT) || 3030;
 server.listen(PORT, () => {
   process.stdout.write(
-    `HTMLCLASS proxy listening on http://0.0.0.0:${PORT}${PROXY_DEBUG ? ' (PROXY_DEBUG: verbose / status exposure)' : ''}\n`
+    `HTMLCLASS proxy listening on http://0.0.0.0:${PORT}${PROXY_DEBUG ? ' (PROXY_DEBUG: HTTP + [proxy-wss] WebSocket traffic)' : ''}\n`
   );
 });

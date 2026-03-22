@@ -18,6 +18,34 @@ function verifyDeviceAccess(deviceId, userId) {
   return d;
 }
 
+/** Same as WS tunnel: Bearer header, or ?token= for img/iframe/script (no custom headers). */
+function tunnelHttpToken(req) {
+  let token = auth.bearerFromAuthHeader(req.headers.authorization);
+  if (token) return token;
+  try {
+    const urlPath = req.url || '';
+    const q = urlPath.indexOf('?');
+    if (q === -1) return null;
+    const params = new URLSearchParams(urlPath.slice(q + 1));
+    return params.get('token');
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Remove token from query before forwarding to device (avoid leaking into logs/origin). */
+function stripTunnelTokenFromReqUrl(urlPath) {
+  if (!urlPath || urlPath.indexOf('token=') === -1) return urlPath;
+  try {
+    const u = new URL(urlPath, 'http://x');
+    if (!u.searchParams.has('token')) return urlPath;
+    u.searchParams.delete('token');
+    return u.pathname + u.search + u.hash;
+  } catch (e) {
+    return urlPath;
+  }
+}
+
 function createProxy() {
   return httpProxy.createProxyServer({
     changeOrigin: true,
@@ -28,7 +56,7 @@ function createProxy() {
 
 function attachTunnelHttp(app, proxy) {
   app.use('/tunnel/:deviceId', (req, res) => {
-    const token = auth.bearerFromAuthHeader(req.headers.authorization);
+    const token = tunnelHttpToken(req);
     if (!token) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
@@ -42,6 +70,9 @@ function attachTunnelHttp(app, proxy) {
     if (!device) {
       res.status(403).json({ error: 'Forbidden' });
       return;
+    }
+    if (req.url) {
+      req.url = stripTunnelTokenFromReqUrl(req.url);
     }
     reverseTunnel.tryHttpForward(device.id, req, res).then((viaReverse) => {
       if (viaReverse) return;

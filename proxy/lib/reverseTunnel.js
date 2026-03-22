@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const WebSocket = require('ws');
+const dbg = require('./debug');
 
 /** deviceId -> agent WebSocket (HTMLCLASS server outbound connection) */
 const deviceSockets = new Map();
@@ -9,6 +10,12 @@ const pendingHttp = new Map();
 const pendingWsStreams = new Map();
 
 function sendJson(ws, obj) {
+  if (dbg.isProxyDebug() && obj && typeof obj.type === 'string') {
+    let extra = '';
+    if (obj.id) extra += ` id=${String(obj.id).slice(0, 10)}`;
+    if (obj.streamId) extra += ` stream=${String(obj.streamId).slice(0, 10)}`;
+    dbg.logWss(`reverse agent→device type=${obj.type}${extra}`);
+  }
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
     return true;
@@ -75,6 +82,11 @@ function hasAgentForDevice(deviceId) {
 }
 
 function onDeviceMessage(deviceId, data) {
+  if (dbg.isProxyDebug()) {
+    dbg.logWss(
+      `reverse device→agent device=${String(deviceId).slice(0, 8)}… ${dbg.summarizeWsPayload(data)}`
+    );
+  }
   let msg;
   try {
     msg = JSON.parse(data.toString());
@@ -186,8 +198,18 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
     const path = req.url || '/';
     const headers = sanitizeHeaders(req.headers);
     pendingWsStreams.set(streamId, { clientWs, deviceId });
+    if (dbg.isProxyDebug()) {
+      dbg.logWss(
+        `reverse tunnel-ws browser open stream=${streamId.slice(0, 10)}… device=${String(deviceId).slice(0, 8)}… path=${dbg.safeUrlForLog(path)}`
+      );
+    }
 
     clientWs.on('message', (data, isBinary) => {
+      if (dbg.isProxyDebug()) {
+        dbg.logWss(
+          `reverse tunnel-ws browser→agent frame len=${data.length} binary=${!!isBinary} stream=${streamId.slice(0, 10)}…`
+        );
+      }
       sendJson(ws, {
         type: 'ws_client_frame',
         streamId,
@@ -195,11 +217,19 @@ function handleUpgradeReverse(deviceId, req, socket, head) {
         binary: !!isBinary
       });
     });
-    clientWs.on('close', () => {
+    clientWs.on('close', (code, reason) => {
+      if (dbg.isProxyDebug()) {
+        dbg.logWss(
+          `reverse tunnel-ws browser close stream=${streamId.slice(0, 10)}… code=${code} reason=${String(reason || '').slice(0, 40)}`
+        );
+      }
       sendJson(ws, { type: 'ws_client_close', streamId });
       pendingWsStreams.delete(streamId);
     });
     clientWs.on('error', () => {
+      if (dbg.isProxyDebug()) {
+        dbg.logWss(`reverse tunnel-ws browser error stream=${streamId.slice(0, 10)}…`);
+      }
       sendJson(ws, { type: 'ws_client_close', streamId });
       pendingWsStreams.delete(streamId);
     });

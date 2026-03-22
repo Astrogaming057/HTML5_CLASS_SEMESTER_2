@@ -18,11 +18,15 @@ npm run proxy
 
 Default port **3030** (`PORT` env). Set **`JWT_SECRET`** in production.
 
-**Debug:** set `PROXY_DEBUG=1` or `HTMLCLASS_PROXY_DEBUG=true`, or run **`start-proxy-debug.bat`** from the repo root. Logs each request; `GET /api/remote/status` includes `proxyDebug: true` so the preview client can warn in the Remote Explorer menu.
+**Debug:** set `PROXY_DEBUG=1` or `HTMLCLASS_PROXY_DEBUG=true`, or run **`start-proxy-debug.bat`** from the repo root. Logs each HTTP request and **`[proxy-wss]`** lines for WebSocket upgrades, `/agent` (reverse) traffic, tunnel browser↔agent frames, and direct **http-proxy** WebSocket tunnels. `GET /api/remote/status` includes `proxyDebug: true` so the preview client can warn in the Remote Explorer menu.
 
 ## Data
 
 `proxy/data/store.json` is created automatically (users + devices). Add `data/` to backups if needed.
+
+## Tunnel HTTP auth (fetch vs img/iframe)
+
+`Authorization: Bearer <jwt>` works for **`fetch`** and XHR. Subresources (**`<img src>`**, **`<iframe src>`**, **`<script src>`**) cannot send custom headers, so the preview appends **`?token=<jwt>`** to tunnel URLs. The proxy accepts either form, then **strips** `token` from the query before forwarding to the device.
 
 ## Tunnel body streaming (POST/PUT)
 

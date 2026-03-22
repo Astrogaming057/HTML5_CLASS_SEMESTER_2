@@ -52,7 +52,14 @@ window.PreviewRemoteTransport = (function () {
     if (!tb) return urlStr;
     const path = pathFromAnyUrl(urlStr);
     if (path.indexOf('/__') !== 0) return urlStr;
-    return tb + path;
+    let out = tb + path;
+    // img/iframe/script cannot send Authorization; proxy accepts ?token= (same as WebSocket tunnel)
+    const t = sess.getToken();
+    if (t) {
+      const join = out.indexOf('?') === -1 ? '?' : '&';
+      out += join + 'token=' + encodeURIComponent(t);
+    }
+    return out;
   }
 
   function mergeAuth(init) {
