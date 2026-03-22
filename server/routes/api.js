@@ -2038,6 +2038,110 @@ function setupAPI(baseDir) {
     return null;
   }
 
+  function parseGitShortstat(stdout) {
+    const s = String(stdout || '').trim();
+    if (!s) {
+      return { filesChanged: 0, insertions: 0, deletions: 0 };
+    }
+    const fm = s.match(/(\d+) files? changed/);
+    const im = s.match(/(\d+) insertions?\(\+\)/) || s.match(/(\d+) insertions?/);
+    const dm = s.match(/(\d+) deletions?\(-\)/) || s.match(/(\d+) deletions?/);
+    return {
+      filesChanged: fm ? parseInt(fm[1], 10) : 0,
+      insertions: im ? parseInt(im[1], 10) : 0,
+      deletions: dm ? parseInt(dm[1], 10) : 0,
+    };
+  }
+
+  /** Lines from `git show --name-status --pretty=format:` (tab-separated). */
+  function parseGitShowNameStatus(stdout) {
+    const files = [];
+    const lines = String(stdout || '').split(/\r?\n/);
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      const parts = t.split('\t');
+      if (parts.length < 2) continue;
+      const statusRaw = parts[0].trim();
+      if (parts.length === 2) {
+        files.push({ status: statusRaw, path: parts[1].trim() });
+      } else {
+        files.push({
+          status: statusRaw,
+          oldPath: parts[1].trim(),
+          path: parts[parts.length - 1].trim(),
+        });
+      }
+    }
+    return files;
+  }
+
+  /** Lines from `git show --numstat --pretty=format:` (ins \\t del \\t path). */
+  function parseGitShowNumstat(stdout) {
+    const map = new Map();
+    const lines = String(stdout || '').split(/\r?\n/);
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t) continue;
+      const parts = t.split('\t');
+      if (parts.length < 3) continue;
+      const insStr = parts[0];
+      const delStr = parts[1];
+      const filePath = parts.slice(2).join('\t').trim();
+      let insertions = null;
+      let deletions = null;
+      if (insStr === '-' && delStr === '-') {
+        insertions = null;
+        deletions = null;
+      } else {
+        insertions = insStr === '-' ? 0 : parseInt(insStr, 10) || 0;
+        deletions = delStr === '-' ? 0 : parseInt(delStr, 10) || 0;
+      }
+      map.set(filePath, { insertions, deletions });
+    }
+    return map;
+  }
+
+  function mergeFilesWithNumstat(files, numMap) {
+    return files.map((f) => {
+      let stats = numMap.get(f.path);
+      if (stats == null && f.oldPath) {
+        stats = numMap.get(f.oldPath);
+      }
+      if (stats == null) {
+        stats = { insertions: null, deletions: null };
+      }
+      return {
+        status: f.status,
+        path: f.path,
+        oldPath: f.oldPath,
+        insertions: stats.insertions,
+        deletions: stats.deletions,
+      };
+    });
+  }
+
+  function buildGithubCommitUrl(remoteUrl, fullHash) {
+    if (!remoteUrl || !fullHash) return '';
+    const s = String(remoteUrl).trim();
+    const gitSsh = /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i.exec(s);
+    if (gitSsh) {
+      const repo = gitSsh[2].replace(/\.git$/i, '');
+      return `https://github.com/${gitSsh[1]}/${repo}/commit/${fullHash}`;
+    }
+    const sshUrl = /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i.exec(s);
+    if (sshUrl) {
+      const repo = sshUrl[2].replace(/\.git$/i, '');
+      return `https://github.com/${sshUrl[1]}/${repo}/commit/${fullHash}`;
+    }
+    const https = /^https?:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i.exec(s);
+    if (https) {
+      const repo = https[2].replace(/\.git$/i, '');
+      return `https://github.com/${https[1]}/${repo}/commit/${fullHash}`;
+    }
+    return '';
+  }
+
   router.get('/git/repo-status', async (req, res) => {
     try {
       await runGitCmd(['rev-parse', '--is-inside-work-tree']);
@@ -2251,6 +2355,185 @@ function setupAPI(baseDir) {
       });
     }
     res.json({ success: true, isRepo: true, branch: branch, commits: commits });
+  });
+
+  router.get('/git/commit-info', async (req, res) => {
+    const raw = req.query && req.query.hash != null ? String(req.query.hash) : '';
+    const hashInput = raw.trim();
+    if (!/^[0-9a-fA-F]{7,40}$/.test(hashInput)) {
+      return res.json({ success: false, error: 'Invalid hash' });
+    }
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a git repository' });
+    }
+    let fullHash = '';
+    try {
+      const { stdout } = await runGitCmd(['rev-parse', '--verify', `${hashInput}^{commit}`]);
+      fullHash = stdout.trim();
+    } catch (_e) {
+      return res.json({ success: false, error: 'Invalid commit' });
+    }
+    let author = '';
+    let email = '';
+    let dateIso = '';
+    let subject = '';
+    try {
+      const { stdout: m1 } = await runGitCmd([
+        'log',
+        '-1',
+        '--format=%an%x01%ae%x01%aI%x01%s',
+        '--no-patch',
+        fullHash,
+      ]);
+      const p1 = m1.split('\x01');
+      author = (p1[0] || '').trim();
+      email = (p1[1] || '').trim();
+      dateIso = (p1[2] || '').trim();
+      subject = (p1[3] || '').trim();
+    } catch (error) {
+      logger.error('API: git commit-info meta', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      return res.json({ success: false, error: msg.trim() });
+    }
+    let body = '';
+    try {
+      const { stdout: b1 } = await runGitCmd(['log', '-1', '--format=%B', '--no-patch', fullHash]);
+      body = String(b1 || '').trim();
+    } catch (_e) {
+      body = '';
+    }
+    let filesChanged = 0;
+    let insertions = 0;
+    let deletions = 0;
+    try {
+      const { stdout: st } = await runGitCmd(['show', '-s', '--shortstat', '--format=', fullHash]);
+      const parsed = parseGitShortstat(st);
+      filesChanged = parsed.filesChanged;
+      insertions = parsed.insertions;
+      deletions = parsed.deletions;
+    } catch (_e) {
+      /* merge-only or empty */
+    }
+    const branches = [];
+    try {
+      const { stdout: br } = await runGitCmd(['branch', '-a', '--contains', fullHash]);
+      br.split(/\r?\n/).forEach((line) => {
+        const t = line.replace(/^\*?\s+/, '').trim();
+        if (t && !t.includes('->')) branches.push(t);
+      });
+    } catch (_e) {
+      /* ignore */
+    }
+    let remoteUrl = '';
+    try {
+      const { stdout: ru } = await runGitCmd(['remote', 'get-url', 'origin']);
+      remoteUrl = ru.trim();
+    } catch (_e) {
+      /* no origin */
+    }
+    const githubCommitUrl = buildGithubCommitUrl(remoteUrl, fullHash);
+    res.json({
+      success: true,
+      hash: fullHash,
+      shortHash: fullHash.slice(0, 7),
+      author,
+      email,
+      date: dateIso,
+      subject,
+      body,
+      filesChanged,
+      insertions,
+      deletions,
+      branches,
+      remoteUrl,
+      githubCommitUrl,
+    });
+  });
+
+  router.get('/git/commit-files', async (req, res) => {
+    const raw = req.query && req.query.hash != null ? String(req.query.hash) : '';
+    const hashInput = raw.trim();
+    if (!/^[0-9a-fA-F]{7,40}$/.test(hashInput)) {
+      return res.json({ success: false, error: 'Invalid hash' });
+    }
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a git repository' });
+    }
+    let fullHash = '';
+    try {
+      const { stdout } = await runGitCmd(['rev-parse', '--verify', `${hashInput}^{commit}`]);
+      fullHash = stdout.trim();
+    } catch (_e) {
+      return res.json({ success: false, error: 'Invalid commit' });
+    }
+    let files = [];
+    try {
+      const { stdout } = await runGitCmd([
+        '-c',
+        'core.quotepath=false',
+        'show',
+        '--pretty=format:',
+        '--name-status',
+        fullHash,
+      ]);
+      files = parseGitShowNameStatus(stdout || '');
+    } catch (error) {
+      logger.error('API: git commit-files', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      return res.json({ success: false, error: msg.trim() });
+    }
+    if (files.length === 0) {
+      try {
+        const { stdout: mOut } = await runGitCmd([
+          '-c',
+          'core.quotepath=false',
+          'show',
+          '-m',
+          '--pretty=format:',
+          '--name-status',
+          fullHash,
+        ]);
+        files = parseGitShowNameStatus(mOut || '');
+      } catch (_e) {
+        /* leave empty */
+      }
+    }
+    let numMap = new Map();
+    try {
+      const { stdout: ns1 } = await runGitCmd([
+        '-c',
+        'core.quotepath=false',
+        'show',
+        '--pretty=format:',
+        '--numstat',
+        fullHash,
+      ]);
+      numMap = parseGitShowNumstat(ns1 || '');
+    } catch (_e) {
+      /* ignore */
+    }
+    if (files.length > 0 && numMap.size === 0) {
+      try {
+        const { stdout: ns2 } = await runGitCmd([
+          '-c',
+          'core.quotepath=false',
+          'show',
+          '-m',
+          '--pretty=format:',
+          '--numstat',
+          fullHash,
+        ]);
+        numMap = parseGitShowNumstat(ns2 || '');
+      } catch (_e) {
+        /* ignore */
+      }
+    }
+    files = mergeFilesWithNumstat(files, numMap);
+    res.json({ success: true, hash: fullHash, files });
   });
 
   router.get('/git/modified', async (req, res) => {

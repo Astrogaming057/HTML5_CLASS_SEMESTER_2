@@ -4926,17 +4926,33 @@ body.resizing .resizer {
   padding: 6px 8px 10px;
 }
 
-.git-graph-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 4px 0;
+.git-graph-block {
   border-bottom: 1px solid var(--border-primary);
-  font-size: 12px;
 }
 
-.git-graph-row:last-child {
+.git-graph-block:last-child {
   border-bottom: none;
+}
+
+.git-graph-block.is-expanded > .git-graph-row {
+  outline: 1px solid var(--border-active);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
+
+.git-graph-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  position: relative;
+  cursor: pointer;
+}
+
+.git-graph-row:focus-visible {
+  outline: 1px solid var(--border-active);
+  outline-offset: 2px;
 }
 
 .git-graph-rail {
@@ -4944,9 +4960,29 @@ body.resizing .resizer {
   width: 14px;
   display: flex;
   justify-content: center;
-  padding-top: 2px;
-  border-left: 2px solid var(--status-info);
+  align-items: flex-start;
+  padding-top: 4px;
   margin-left: 4px;
+  position: relative;
+  align-self: stretch;
+}
+
+/* Per-row trunk so the line spans full scroll content (list ::after only matched viewport height). */
+.git-graph-rail::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: -1px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--status-info);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.git-graph-block:last-child .git-graph-row .git-graph-rail::before {
+  bottom: 0;
 }
 
 .git-graph-dot {
@@ -4954,8 +4990,10 @@ body.resizing .resizer {
   height: 8px;
   border-radius: 50%;
   background: var(--status-info);
-  margin-left: -5px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
 }
 
 .git-graph-dot.is-head {
@@ -4999,6 +5037,362 @@ body.resizing .resizer {
   background: rgba(100, 149, 237, 0.25);
   color: var(--text-primary);
   white-space: nowrap;
+}
+
+/* Expanded commit: files changed */
+.git-graph-expanded {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  padding: 2px 0 8px 0;
+}
+
+/* [hidden] must win over display:flex so click-to-collapse works */
+.git-graph-expanded[hidden] {
+  display: none !important;
+}
+
+.git-graph-expand-rail {
+  flex-shrink: 0;
+  width: 14px;
+  margin-left: 4px;
+  position: relative;
+  align-self: stretch;
+  min-height: 12px;
+}
+
+.git-graph-expand-rail::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--status-info);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.git-graph-file-list {
+  flex: 1;
+  min-width: 0;
+}
+
+.git-graph-file-loading,
+.git-graph-file-error {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.git-graph-file-error {
+  color: var(--status-error, #f85149);
+}
+
+.git-graph-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.git-graph-file-stats {
+  flex-shrink: 0;
+  min-width: 6.5em;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.git-graph-file-stats-ins {
+  color: #3fb950;
+  font-weight: 600;
+}
+
+.git-graph-file-stats-del {
+  color: #f85149;
+  font-weight: 600;
+}
+
+.git-graph-file-stats-muted {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.git-graph-file-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.git-graph-file-icon-js {
+  background: #f7df1e;
+  color: #111;
+}
+
+.git-graph-file-icon-ts {
+  background: #3178c6;
+  color: #fff;
+}
+
+.git-graph-file-icon-css {
+  background: #264de4;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.git-graph-file-icon-html {
+  background: #e34f26;
+  color: #fff;
+  font-size: 9px;
+}
+
+.git-graph-file-icon-json {
+  background: #cbcbcb;
+  color: #222;
+}
+
+.git-graph-file-icon-md {
+  background: #519aba;
+  color: #fff;
+  font-size: 9px;
+}
+
+.git-graph-file-icon-py {
+  background: #3776ab;
+  color: #ffd43b;
+  font-size: 9px;
+}
+
+.git-graph-file-icon-file {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.git-graph-file-mid {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.git-graph-file-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.git-graph-file-dir {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.git-graph-file-status {
+  flex-shrink: 0;
+  min-width: 1.2em;
+  text-align: right;
+  font-weight: 800;
+  font-size: 11px;
+  color: #e3b341;
+}
+
+/* Commit row hover popover (GRAPH) */
+.git-graph-popover {
+  position: fixed;
+  z-index: 10026;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+/* [hidden] must win over display:flex or close/hide does nothing visually */
+.git-graph-popover[hidden] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.git-graph-popover::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid var(--border-primary);
+  pointer-events: none;
+}
+
+.git-graph-popover-inner {
+  padding: 12px 14px 10px;
+  overflow: auto;
+  overflow-x: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.git-graph-popover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.git-graph-popover-author {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.git-graph-popover-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: -6px -6px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.git-graph-popover-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-graph-popover-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.git-graph-popover-message {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+}
+
+.git-graph-popover-stats {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.git-graph-popover-stat-ins {
+  color: #3fb950;
+}
+
+.git-graph-popover-stat-del {
+  color: #f85149;
+}
+
+.git-graph-popover-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.git-graph-popover-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(100, 149, 237, 0.25);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.git-graph-popover-pill.is-remote {
+  background: rgba(163, 99, 255, 0.22);
+}
+
+.git-graph-popover-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-primary);
+  font-size: 11px;
+}
+
+.git-graph-popover-hash {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.git-graph-popover-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.git-graph-popover-copy:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-graph-popover-footer-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border-primary);
+  flex-shrink: 0;
+}
+
+.git-graph-popover-github {
+  color: var(--status-info);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.git-graph-popover-github:hover {
+  text-decoration: underline;
 }
 
 .git-panel-tabs {
