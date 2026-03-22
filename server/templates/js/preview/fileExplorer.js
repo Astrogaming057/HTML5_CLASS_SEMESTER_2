@@ -111,6 +111,110 @@ window.PreviewFileExplorer = (function() {
       return modifiedFiles;
     },
 
+    normalizeExplorerPath(p) {
+      return String(p || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    },
+
+    emptyGitState() {
+      return {
+        isRepo: false,
+        fileU: new Set(),
+        fileM: new Set(),
+        folderU: new Set(),
+        folderM: new Set(),
+      };
+    },
+
+    async getGitExplorerState() {
+      const empty = module.emptyGitState();
+      try {
+        const res = await fetch('/__api__/git/repo-status');
+        const data = await res.json();
+        if (!data.success || !data.isRepo || !Array.isArray(data.files)) {
+          return empty;
+        }
+        const fileU = new Set();
+        const fileM = new Set();
+        const folderU = new Set();
+        const folderM = new Set();
+        const addAncestors = (p, set) => {
+          const norm = module.normalizeExplorerPath(p);
+          if (!norm) return;
+          let i = norm.lastIndexOf('/');
+          while (i > 0) {
+            const prefix = norm.slice(0, i);
+            set.add(prefix);
+            i = prefix.lastIndexOf('/');
+          }
+        };
+        for (const f of data.files) {
+          const p = module.normalizeExplorerPath(f.path);
+          if (!p) continue;
+          if (f.untracked) {
+            fileU.add(p);
+            addAncestors(p, folderU);
+          } else {
+            fileM.add(p);
+            addAncestors(p, folderM);
+          }
+        }
+        return { isRepo: true, fileU, fileM, folderU, folderM };
+      } catch (_e) {
+        return empty;
+      }
+    },
+
+    gitFileBadge(normPath, gitState) {
+      if (!gitState || !gitState.isRepo) return null;
+      const n = module.normalizeExplorerPath(normPath);
+      if (gitState.fileU.has(n)) return 'U';
+      if (gitState.fileM.has(n)) return 'M';
+      return null;
+    },
+
+    gitFolderBadge(folderNorm, gitState) {
+      if (!gitState || !gitState.isRepo) return null;
+      const fn = module.normalizeExplorerPath(folderNorm);
+      if (gitState.folderU.has(fn)) return 'U';
+      if (gitState.folderM.has(fn)) return 'M';
+      return null;
+    },
+
+    appendExplorerBadges(item, localDirty, gitLetter) {
+      const wrap = document.createElement('span');
+      wrap.className = 'file-tree-status-badges';
+      if (localDirty) {
+        const s = document.createElement('span');
+        s.className = 'file-tree-badge file-tree-badge-local';
+        s.textContent = 'L';
+        s.title = 'Editor cache differs from saved file on disk';
+        wrap.appendChild(s);
+      }
+      if (gitLetter === 'U') {
+        const s = document.createElement('span');
+        s.className = 'file-tree-badge file-tree-badge-git-u';
+        s.textContent = 'U';
+        s.title = 'Untracked (Git)';
+        wrap.appendChild(s);
+      } else if (gitLetter === 'M') {
+        const s = document.createElement('span');
+        s.className = 'file-tree-badge file-tree-badge-git-m';
+        s.textContent = 'M';
+        s.title = 'Changed in Git';
+        wrap.appendChild(s);
+      }
+      if (wrap.childNodes.length) {
+        item.appendChild(wrap);
+      }
+    },
+
+    applyExplorerRowTint(item, localDirty, gitLetter) {
+      item.classList.remove('file-tree-local-l', 'file-tree-git-m', 'file-tree-git-u');
+      if (localDirty) item.classList.add('file-tree-local-l');
+      if (gitLetter === 'U') item.classList.add('file-tree-git-u');
+      else if (gitLetter === 'M') item.classList.add('file-tree-git-m');
+    },
+
     async loadTreeChildren(normPath, childrenWrap, ctx) {
       childrenWrap.innerHTML = '<div class="file-tree-loading">Loading...</div>';
       try {
@@ -133,6 +237,9 @@ window.PreviewFileExplorer = (function() {
     async renderTreeLevel(files, container, ctx) {
       const list = module.prepareFileList(files);
       if (list.length === 0) return;
+      if (!ctx.gitState) {
+        ctx.gitState = await module.getGitExplorerState();
+      }
       const modifiedFiles = await module.collectModifiedFiles(list);
       const filePath = typeof ctx.getFilePath === 'function' ? ctx.getFilePath() : ctx.getFilePath;
       for (const file of list) {
@@ -176,14 +283,11 @@ window.PreviewFileExplorer = (function() {
       item.appendChild(chevronSpacer);
       item.appendChild(icon);
       item.appendChild(name);
-      
-      if (modifiedFiles.has(file.path)) {
-        const modifiedIndicator = document.createElement('span');
-        modifiedIndicator.className = 'file-tree-modified';
-        modifiedIndicator.textContent = 'M';
-        modifiedIndicator.title = 'Modified (unsaved changes)';
-        item.appendChild(modifiedIndicator);
-      }
+
+      const localDirty = modifiedFiles.has(file.path);
+      const gitLetter = module.gitFileBadge(file.path, ctx.gitState);
+      module.appendExplorerBadges(item, localDirty, gitLetter);
+      module.applyExplorerRowTint(item, localDirty, gitLetter);
       
       item.setAttribute('draggable', 'true');
       item.draggable = true;
@@ -281,6 +385,10 @@ window.PreviewFileExplorer = (function() {
       row.appendChild(chevron);
       row.appendChild(icon);
       row.appendChild(name);
+
+      const folderGitLetter = module.gitFolderBadge(norm, ctx.gitState);
+      module.appendExplorerBadges(row, false, folderGitLetter);
+      module.applyExplorerRowTint(row, false, folderGitLetter);
       
       row.setAttribute('draggable', 'true');
       row.draggable = true;
@@ -440,7 +548,8 @@ window.PreviewFileExplorer = (function() {
           moveFileToFolder,
           handleFileDrop,
           showParentFolderDropZone,
-          hideParentFolderDropZone
+          hideParentFolderDropZone,
+          gitState: null,
         };
         fileTree.innerHTML = '';
         const list = module.prepareFileList(files);
@@ -550,7 +659,9 @@ window.PreviewFileExplorer = (function() {
           }
         });
       
+      const gitPromise = module.getGitExplorerState();
       await Promise.all(checkPromises);
+      const gitState = await gitPromise;
       
       files.forEach(file => {
         const item = document.createElement('div');
@@ -581,15 +692,14 @@ window.PreviewFileExplorer = (function() {
         
         item.appendChild(icon);
         item.appendChild(name);
-        
-        // Add "M" indicator for modified files
-        if (!file.isDirectory && modifiedFiles.has(file.path)) {
-          const modifiedIndicator = document.createElement('span');
-          modifiedIndicator.className = 'file-tree-modified';
-          modifiedIndicator.textContent = 'M';
-          modifiedIndicator.title = 'Modified (unsaved changes)';
-          item.appendChild(modifiedIndicator);
-        }
+
+        const localDirty = !file.isDirectory && modifiedFiles.has(file.path);
+        const norm = module.normalizeExplorerPath(file.path);
+        const gitLetter = file.isDirectory
+          ? module.gitFolderBadge(norm, gitState)
+          : module.gitFileBadge(norm, gitState);
+        module.appendExplorerBadges(item, localDirty, gitLetter);
+        module.applyExplorerRowTint(item, localDirty, gitLetter);
         
         item.setAttribute('draggable', 'true');
         item.draggable = true;

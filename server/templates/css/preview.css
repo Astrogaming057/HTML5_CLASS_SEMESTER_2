@@ -1338,14 +1338,60 @@ body.preview-browser-titlebar .electron-title-controls {
   white-space: nowrap;
 }
 
-.file-tree-modified {
-  color: #d4a574;
-  font-weight: 600;
-  font-size: 12px;
+.file-tree-status-badges {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   margin-left: auto;
-  padding: 0 4px;
-  opacity: 0.9;
   flex-shrink: 0;
+}
+
+.file-tree-badge {
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.file-tree-badge-local {
+  color: #d4a574;
+  background: rgba(212, 165, 116, 0.2);
+}
+
+.file-tree-badge-git-m {
+  color: #e6c566;
+  background: rgba(230, 197, 102, 0.18);
+}
+
+.file-tree-badge-git-u {
+  color: #7eb3e8;
+  background: rgba(107, 155, 214, 0.2);
+}
+
+.file-tree-item.file-tree-local-l .file-tree-item-name {
+  color: #d4a574;
+}
+
+.file-tree-item.file-tree-git-m .file-tree-item-name {
+  color: #e6c566;
+}
+
+.file-tree-item.file-tree-git-u .file-tree-item-name {
+  color: #8ab4e8;
+}
+
+.file-tree-item.active.file-tree-local-l .file-tree-item-name,
+.file-tree-item.active.file-tree-git-m .file-tree-item-name,
+.file-tree-item.active.file-tree-git-u .file-tree-item-name {
+  color: inherit;
+}
+
+.file-tree-item.active .file-tree-badge-local,
+.file-tree-item.active .file-tree-badge-git-m,
+.file-tree-item.active .file-tree-badge-git-u {
+  opacity: 1;
 }
 
 .file-tree-folder {
@@ -5010,11 +5056,15 @@ body.resizing .resizer {
   font-size: 18px;
   cursor: pointer;
   padding: 0;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 2;
 }
 
 .git-panel-close:hover {

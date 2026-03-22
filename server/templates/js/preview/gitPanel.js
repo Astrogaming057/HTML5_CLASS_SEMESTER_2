@@ -459,10 +459,21 @@ window.PreviewGitPanel = (function () {
     }
   }
 
+  function closePanel() {
+    isVisible = false;
+    if (panel) {
+      panel.style.display = 'none';
+    }
+  }
+
   function setupEventHandlers() {
-    const closeBtn = document.getElementById('gitPanelClose');
+    const closeBtn = panel ? panel.querySelector('#gitPanelClose') : document.getElementById('gitPanelClose');
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => toggle());
+      closeBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closePanel();
+      });
     }
 
     document.getElementById('gitTabLocal')?.addEventListener('click', () => setActiveTab('local'));
@@ -656,12 +667,7 @@ window.PreviewGitPanel = (function () {
       setActiveTab('repo');
     },
 
-    hide() {
-      if (panel) {
-        isVisible = false;
-        panel.style.display = 'none';
-      }
-    },
+    hide: closePanel,
 
     refresh() {
       if (activeTab === 'repo') {
