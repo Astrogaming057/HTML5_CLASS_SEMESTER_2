@@ -48,11 +48,75 @@ window.PreviewGitStatusBar = (function () {
 
 window.PreviewGitPanel = (function () {
   let panel = null;
+  /** Wrapper: source control + commit graph (fills explorer when open). */
+  let gitStackEl = null;
   let isVisible = false;
   let activeTab = 'local';
 
   /** @type {{ path: string, name: string }[]} */
   let localStagedFiles = [];
+
+  function setExplorerSourceControlMode(on) {
+    const filesPane = document.getElementById('explorerFilesPane');
+    const stack = document.getElementById('gitExplorerStack');
+    if (filesPane) filesPane.hidden = !!on;
+    if (stack) stack.hidden = !on;
+  }
+
+  async function refreshGraph() {
+    const list = document.getElementById('gitGraphList');
+    if (!list) return;
+    list.innerHTML = '<div class="git-loading">Loading\u2026</div>';
+    try {
+      const r = await fetch('/__api__/git/log?limit=100');
+      const data = await r.json();
+      if (!data.success || !data.isRepo) {
+        list.innerHTML = '<div class="git-empty">Open a Git repository to see commit history.</div>';
+        return;
+      }
+      if (!data.commits || data.commits.length === 0) {
+        list.innerHTML = '<div class="git-empty">No commits yet.</div>';
+        return;
+      }
+      const branch = data.branch || '';
+      list.innerHTML = '';
+      data.commits.forEach(function (c) {
+        const row = document.createElement('div');
+        row.className = 'git-graph-row';
+        const rail = document.createElement('div');
+        rail.className = 'git-graph-rail';
+        const dot = document.createElement('span');
+        dot.className = 'git-graph-dot' + (c.isHead ? ' is-head' : '');
+        rail.appendChild(dot);
+        const main = document.createElement('div');
+        main.className = 'git-graph-main';
+        const msg = document.createElement('div');
+        msg.className = 'git-graph-msg';
+        msg.textContent = c.subject || '(no message)';
+        msg.title = (c.hash || '').slice(0, 12);
+        main.appendChild(msg);
+        const meta = document.createElement('div');
+        meta.className = 'git-graph-meta';
+        meta.textContent = c.author || '';
+        main.appendChild(meta);
+        const tags = document.createElement('div');
+        tags.className = 'git-graph-tags';
+        if (c.isHead && branch) {
+          const pill = document.createElement('span');
+          pill.className = 'git-graph-branch-pill';
+          pill.textContent = branch;
+          pill.title = 'HEAD';
+          tags.appendChild(pill);
+        }
+        row.appendChild(rail);
+        row.appendChild(main);
+        row.appendChild(tags);
+        list.appendChild(row);
+      });
+    } catch (_e) {
+      list.innerHTML = '<div class="git-empty">Could not load history.</div>';
+    }
+  }
 
   async function getModifiedFiles() {
     try {
@@ -294,6 +358,7 @@ window.PreviewGitPanel = (function () {
     }
     if (input) input.value = '';
     await refreshRepoTab();
+    await refreshGraph();
   }
 
   async function repoFetch() {
@@ -417,19 +482,40 @@ window.PreviewGitPanel = (function () {
       '</div></div>' +
       '</div></div>';
 
-    const fileExplorerPanel = document.getElementById('fileExplorerPanel');
-    const fileTree = document.getElementById('fileTree');
-    if (fileExplorerPanel && fileTree) {
-      const terminalPanel = document.getElementById('terminalPanel');
-      if (terminalPanel && terminalPanel.parentNode === fileExplorerPanel) {
-        fileExplorerPanel.insertBefore(panel, terminalPanel);
-      } else {
-        fileExplorerPanel.appendChild(panel);
-      }
-    } else if (fileExplorerPanel) {
-      fileExplorerPanel.appendChild(panel);
+    const graphPanel = document.createElement('div');
+    graphPanel.id = 'gitGraphPanel';
+    graphPanel.className = 'git-graph-panel';
+    graphPanel.innerHTML =
+      '<div class="git-graph-header">' +
+      '<span class="git-graph-title">GRAPH</span>' +
+      '<div class="git-graph-toolbar">' +
+      '<button type="button" class="git-btn git-btn-small" id="gitGraphFetchBtn" title="Fetch">Fetch</button>' +
+      '<button type="button" class="git-btn git-btn-small" id="gitGraphPullBtn" title="Pull">Pull</button>' +
+      '<button type="button" class="git-btn git-btn-small" id="gitGraphPushBtn" title="Push">Push</button>' +
+      '<button type="button" class="git-btn git-btn-small" id="gitGraphRefreshBtn" title="Refresh graph">\u21bb</button>' +
+      '</div></div>' +
+      '<div class="git-graph-list" id="gitGraphList"></div>';
+
+    gitStackEl = document.createElement('div');
+    gitStackEl.id = 'gitExplorerStack';
+    gitStackEl.className = 'git-explorer-stack';
+    gitStackEl.hidden = true;
+    gitStackEl.appendChild(panel);
+    gitStackEl.appendChild(graphPanel);
+
+    const explorerBody = document.getElementById('explorerBody');
+    if (explorerBody) {
+      explorerBody.appendChild(gitStackEl);
     } else {
-      document.body.appendChild(panel);
+      const fileExplorerPanel = document.getElementById('fileExplorerPanel');
+      const terminalPanel = document.getElementById('terminalPanel');
+      if (fileExplorerPanel && terminalPanel && terminalPanel.parentNode === fileExplorerPanel) {
+        fileExplorerPanel.insertBefore(gitStackEl, terminalPanel);
+      } else if (fileExplorerPanel) {
+        fileExplorerPanel.appendChild(gitStackEl);
+      } else {
+        document.body.appendChild(gitStackEl);
+      }
     }
 
     setupEventHandlers();
@@ -461,9 +547,7 @@ window.PreviewGitPanel = (function () {
 
   function closePanel() {
     isVisible = false;
-    if (panel) {
-      panel.style.display = 'none';
-    }
+    setExplorerSourceControlMode(false);
   }
 
   function setupEventHandlers() {
@@ -494,6 +578,20 @@ window.PreviewGitPanel = (function () {
     document.getElementById('gitRepoCommitBtn')?.addEventListener('click', () => repoCommit());
     document.getElementById('gitRepoStageAllBtn')?.addEventListener('click', () => repoStageAll());
     document.getElementById('gitRepoUnstageAllBtn')?.addEventListener('click', () => repoUnstageAll());
+
+    document.getElementById('gitGraphRefreshBtn')?.addEventListener('click', () => refreshGraph());
+    document.getElementById('gitGraphFetchBtn')?.addEventListener('click', async function () {
+      await repoFetch();
+      await refreshGraph();
+    });
+    document.getElementById('gitGraphPullBtn')?.addEventListener('click', async function () {
+      await repoPull();
+      await refreshGraph();
+    });
+    document.getElementById('gitGraphPushBtn')?.addEventListener('click', async function () {
+      await repoPush();
+      await refreshGraph();
+    });
   }
 
   function renderLocalModifiedFiles(files) {
@@ -639,32 +737,35 @@ window.PreviewGitPanel = (function () {
 
   return {
     toggle() {
-      const panelEl = createPanel();
+      createPanel();
       isVisible = !isVisible;
 
       if (isVisible) {
-        panelEl.style.display = 'flex';
+        setExplorerSourceControlMode(true);
         setActiveTab(activeTab);
+        refreshGraph();
         if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.refresh === 'function') {
           PreviewGitStatusBar.refresh();
         }
       } else {
-        panelEl.style.display = 'none';
+        closePanel();
       }
     },
 
     show() {
-      const panelEl = createPanel();
+      createPanel();
       isVisible = true;
-      panelEl.style.display = 'flex';
+      setExplorerSourceControlMode(true);
       setActiveTab(activeTab);
+      refreshGraph();
     },
 
     showRepoTab() {
-      const panelEl = createPanel();
+      createPanel();
       isVisible = true;
-      panelEl.style.display = 'flex';
+      setExplorerSourceControlMode(true);
       setActiveTab('repo');
+      refreshGraph();
     },
 
     hide: closePanel,

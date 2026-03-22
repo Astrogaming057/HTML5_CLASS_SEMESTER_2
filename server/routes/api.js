@@ -2188,6 +2188,71 @@ function setupAPI(baseDir) {
     }
   });
 
+  router.get('/git/log', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: true, isRepo: false, branch: '', commits: [] });
+    }
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 80, 1), 200);
+    let headHash = '';
+    try {
+      const { stdout: hOut } = await runGitCmd(['rev-parse', 'HEAD']);
+      headHash = hOut.trim();
+    } catch (_e) {
+      /* empty repo */
+    }
+    let branch = '';
+    try {
+      const { stdout: bOut } = await runGitCmd(['branch', '--show-current']);
+      branch = bOut.trim();
+    } catch (_e) {
+      /* detached */
+    }
+    const sep = '\x01';
+    const fmt = '%H' + sep + '%s' + sep + '%an' + sep + '%ai';
+    let stdout = '';
+    try {
+      const out = await runGitCmd([
+        '-c',
+        'core.quotepath=false',
+        'log',
+        '-n',
+        String(limit),
+        '--pretty=format:' + fmt,
+      ]);
+      stdout = out.stdout || '';
+    } catch (error) {
+      logger.warn('API: git log empty or error', { message: error.message });
+      return res.json({
+        success: true,
+        isRepo: true,
+        branch: branch,
+        commits: [],
+        error: (error.stderr && String(error.stderr)) || error.message,
+      });
+    }
+    const commits = [];
+    const lines = stdout.split(/\r?\n/).filter((l) => l.length > 0);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const p = line.split(sep);
+      if (p.length < 4) continue;
+      const hash = p[0];
+      const subject = p[1] || '';
+      const author = p[2] || '';
+      const date = p[3] || '';
+      commits.push({
+        hash: hash,
+        subject: subject,
+        author: author,
+        date: date,
+        isHead: !!(headHash && hash === headHash),
+      });
+    }
+    res.json({ success: true, isRepo: true, branch: branch, commits: commits });
+  });
+
   router.get('/git/modified', async (req, res) => {
     try {
       const editorDir = path.join(baseDir, 'ide_editor_cache');

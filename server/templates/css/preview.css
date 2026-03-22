@@ -890,6 +890,42 @@ body.preview-browser-titlebar .electron-title-controls {
   color: var(--text-inverse);
 }
 
+.explorer-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explorer-files-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explorer-files-pane[hidden] {
+  display: none !important;
+}
+
+.git-explorer-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.git-explorer-stack[hidden] {
+  display: none !important;
+}
+
+.explorer-files-pane .file-tree {
+  flex: 1;
+}
+
 .file-tree {
   flex: 1;
   overflow-y: auto;
@@ -4835,15 +4871,134 @@ body.resizing .resizer {
   padding: 6px 14px;
 }
 
-/* Git Panel */
+/* Git Panel — fills upper part of explorer beside commit graph */
 .git-panel {
-  display: none;
+  display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border-primary);
-  max-height: 400px;
+  border-bottom: 1px solid var(--border-primary);
   overflow: hidden;
+}
+
+.git-graph-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 38%;
+  min-height: 140px;
+  max-height: 55%;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.git-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.git-graph-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.git-graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.git-graph-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px 10px;
+}
+
+.git-graph-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+}
+
+.git-graph-row:last-child {
+  border-bottom: none;
+}
+
+.git-graph-rail {
+  flex-shrink: 0;
+  width: 14px;
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+  border-left: 2px solid var(--status-info);
+  margin-left: 4px;
+}
+
+.git-graph-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-info);
+  margin-left: -5px;
+  flex-shrink: 0;
+}
+
+.git-graph-dot.is-head {
+  background: var(--border-active);
+  box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.35);
+}
+
+.git-graph-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.git-graph-msg {
+  color: var(--text-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.git-graph-meta {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.git-graph-tags {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 1px;
+}
+
+.git-graph-branch-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(100, 149, 237, 0.25);
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .git-panel-tabs {
