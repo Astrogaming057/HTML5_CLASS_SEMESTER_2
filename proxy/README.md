@@ -24,6 +24,23 @@ Default port **3030** (`PORT` env). Set **`JWT_SECRET`** in production.
 
 `proxy/data/store.json` is created automatically (users + devices). Add `data/` to backups if needed.
 
+## Tunnel body streaming (POST/PUT)
+
+`express.json()` must **not** run on `/tunnel/*` or the request body is consumed before `http-proxy` can forward it — saves and other POSTs would break with **502**. The proxy skips JSON parsing for tunnel paths.
+
+## Tunnel returns 502
+
+The proxy forwards requests to each device’s **`baseUrl`** (set when you register the PC). That URL must be reachable **from the machine running the proxy**, not from your browser.
+
+- If the proxy and HTMLCLASS run on **the same PC**, `http://127.0.0.1:3000` or `http://localhost:3000` is fine.
+- If the proxy runs on **another machine**, the registered URL must be **`http://<LAN-IP>:3000`** of the PC that runs HTMLCLASS (e.g. `http://192.168.1.10:3000`). Using `localhost` here makes the proxy connect to **itself**, which causes **502**.
+
+Re-register the device (Remote Explorer → Register This PC) and enter the correct LAN URL. With `PROXY_DEBUG=1`, tunnel errors log to stderr with `ECONNREFUSED` / `ENOTFOUND` hints.
+
+## Device list (online only)
+
+Each registered PC must **POST `/api/devices/heartbeat`** about every 20 seconds (the preview does this while you are logged in). **`GET /api/devices`** only returns devices whose **`lastSeen`** is within **`DEVICE_ONLINE_MS`** (default 90s). Offline machines are hidden until they send a heartbeat again.
+
 ## Device registration
 
 Each machine sends `baseUrl` (browser `origin`) so the proxy knows where to forward `/tunnel/:deviceId/...` (e.g. `http://127.0.0.1:3000`).

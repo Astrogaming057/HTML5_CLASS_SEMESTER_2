@@ -12,6 +12,7 @@ window.PreviewRemoteConfig = {
     me: '/api/auth/me',
     devices: '/api/devices',
     registerDevice: '/api/devices/register',
-    remoteStatus: '/api/remote/status'
+    remoteStatus: '/api/remote/status',
+    heartbeat: '/api/devices/heartbeat'
   }
 };

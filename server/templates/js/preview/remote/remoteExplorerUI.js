@@ -292,8 +292,17 @@ window.PreviewRemoteExplorer = (function () {
     if (!ok) return;
     const name = await window.PreviewUtils.customPrompt('Name for this PC', '');
     if (!name || !String(name).trim()) return;
+    const defaultUrl =
+      typeof window !== 'undefined' && window.location ? window.location.origin : 'http://127.0.0.1:3000';
+    const baseUrlRaw = await window.PreviewUtils.customPrompt(
+      'URL of this HTMLCLASS server as seen from the proxy machine (use LAN IP if the proxy is on another PC, e.g. http://192.168.1.10:3000 — not localhost)',
+      defaultUrl
+    );
+    if (baseUrlRaw === null) return;
+    const urlToUse =
+      baseUrlRaw && String(baseUrlRaw).trim() ? String(baseUrlRaw).trim() : defaultUrl;
     try {
-      await auth.registerDevice(String(name).trim());
+      await auth.registerDevice(String(name).trim(), urlToUse);
       await refreshDevices();
     } catch (e) {
       if (window.PreviewUtils.customAlert) {
@@ -332,6 +341,9 @@ window.PreviewRemoteExplorer = (function () {
       await refreshDevices();
       await toggleDropdown();
     });
+    if (window.PreviewRemoteHeartbeat && typeof window.PreviewRemoteHeartbeat.start === 'function') {
+      window.PreviewRemoteHeartbeat.start();
+    }
   }
 
   return {

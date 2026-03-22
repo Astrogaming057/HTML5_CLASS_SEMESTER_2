@@ -9,9 +9,25 @@ const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
   process.env.HTMLCLASS_PROXY_DEBUG === 'true';
 
+const DEVICE_ONLINE_MS =
+  Number(process.env.DEVICE_ONLINE_MS) > 0 ? Number(process.env.DEVICE_ONLINE_MS) : 90 * 1000;
+
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
+
+function pathNoQuery(u) {
+  const s = u || '';
+  const q = s.indexOf('?');
+  return q === -1 ? s : s.slice(0, q);
+}
+
+app.use((req, res, next) => {
+  const p = pathNoQuery(req.originalUrl || req.url || '');
+  if (p.startsWith('/tunnel/')) {
+    return next();
+  }
+  return express.json({ limit: '10mb' })(req, res, next);
+});
 
 if (PROXY_DEBUG) {
   app.use((req, res, next) => {
@@ -97,13 +113,37 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 });
 
 app.get('/api/devices', authMiddleware, (req, res) => {
-  const list = store.listDevicesForUser(req.userId).map((d) => ({
-    id: d.id,
-    name: d.name,
-    deviceKey: d.deviceKey,
-    baseUrl: d.baseUrl
-  }));
+  const now = Date.now();
+  const list = store
+    .listDevicesForUser(req.userId)
+    .filter((d) => {
+      const seen = typeof d.lastSeen === 'number' ? d.lastSeen : 0;
+      return now - seen < DEVICE_ONLINE_MS;
+    })
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      deviceKey: d.deviceKey,
+      baseUrl: d.baseUrl,
+      lastSeen: d.lastSeen
+    }));
   res.json({ devices: list });
+});
+
+app.post('/api/devices/heartbeat', authMiddleware, (req, res) => {
+  const deviceKey = (req.body && req.body.deviceKey) ? String(req.body.deviceKey) : '';
+  if (!deviceKey) {
+    res.status(400).json({ error: 'deviceKey required' });
+    return;
+  }
+  const d = store.findDeviceByUserAndKey(req.userId, deviceKey);
+  if (!d) {
+    res.status(404).json({ error: 'Device not registered' });
+    return;
+  }
+  d.lastSeen = Date.now();
+  store.updateDevice(d);
+  res.json({ ok: true });
 });
 
 app.post('/api/devices/register', authMiddleware, (req, res) => {
@@ -115,10 +155,12 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     return;
   }
   const baseUrl = tunnel.normalizeBaseUrl(baseUrlRaw || process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:3000');
+  const now = Date.now();
   const existing = store.findDeviceByUserAndKey(req.userId, deviceKey);
   if (existing) {
     existing.name = name;
     existing.baseUrl = baseUrl;
+    existing.lastSeen = now;
     store.updateDevice(existing);
     res.json({ device: { id: existing.id, name: existing.name, deviceKey: existing.deviceKey, baseUrl: existing.baseUrl } });
     return;
@@ -128,7 +170,8 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     userId: req.userId,
     name,
     deviceKey,
-    baseUrl
+    baseUrl,
+    lastSeen: now
   };
   store.addDevice(device);
   res.json({ device: { id: device.id, name: device.name, deviceKey: device.deviceKey, baseUrl: device.baseUrl } });
@@ -136,9 +179,21 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
 
 const proxy = tunnel.createProxy();
 proxy.on('error', (err, req, res) => {
+  if (PROXY_DEBUG) {
+    const addr = err && (err.address || err.hostname);
+    const port = err && err.port;
+    process.stderr.write(
+      `[proxy tunnel error] ${err.code || 'ERR'} ${err.message || ''}${addr ? ` addr=${addr}:${port || ''}` : ''} path=${req && (req.url || req.originalUrl)}` +
+        '\n'
+    );
+  }
   if (res && typeof res.writeHead === 'function' && !res.headersSent) {
     res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Bad gateway' }));
+    const body = { error: 'Bad gateway' };
+    if (PROXY_DEBUG && err && err.message) {
+      body.detail = `${err.code || ''} ${err.message}`.trim();
+    }
+    res.end(JSON.stringify(body));
   }
 });
 

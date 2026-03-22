@@ -13,8 +13,9 @@ A reference server implementation lives in the repo at **`/proxy`** (see `proxy/
 | POST | `/api/auth/login` | `{ "username", "password" }` → `{ "token" or "accessToken", "user"? }` |
 | POST | `/api/auth/register` | Same shape as login |
 | GET | `/api/auth/me` | `Authorization: Bearer <token>` |
-| GET | `/api/devices` | Bearer → `{ "devices": [ { "id", "name", "deviceKey"? } ] }` |
-| POST | `/api/devices/register` | `{ "name", "deviceKey", "baseUrl"? }` — `baseUrl` is the target HTMLCLASS origin (e.g. `http://192.168.x.x:3000`) |
+| GET | `/api/devices` | Bearer → **only devices online in the last ~90s** (see heartbeat). |
+| POST | `/api/devices/register` | `{ "name", "deviceKey", "baseUrl"? }` — **`baseUrl` must be reachable from the proxy host** (use the LAN IP of the HTMLCLASS PC, not `localhost`, when the proxy runs elsewhere). Otherwise tunnel requests return **502**. |
+| POST | `/api/devices/heartbeat` | Bearer + `{ "deviceKey" }` — call from the preview client every ~20s while logged in so the device stays listed. |
 
 ## Tunnel (when a remote device is selected)
 

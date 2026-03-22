@@ -57,6 +57,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'remote', 'remoteTransport.js'),
         'utf-8'
       );
+      const remoteHeartbeatJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteHeartbeat.js'),
+        'utf-8'
+      );
       const remoteExplorerUIJs = await fs.readFile(
         path.join(previewModulesDir, 'remote', 'remoteExplorerUI.js'),
         'utf-8'
@@ -233,6 +237,8 @@ async function loadPreviewTemplates() {
         remoteSessionJs,
         remoteAuthApiJs,
         remoteTransportJs,
+        '// Remote Heartbeat',
+        remoteHeartbeatJs,
         remoteExplorerUIJs,
         '// Settings',
         settingsJs,

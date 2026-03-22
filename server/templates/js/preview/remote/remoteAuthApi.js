@@ -77,14 +77,21 @@ window.PreviewRemoteAuthApi = (function () {
     return Array.isArray(list) ? list : [];
   }
 
-  async function registerDevice(name) {
+  async function registerDevice(name, baseUrlOverride) {
+    let base =
+      typeof baseUrlOverride === 'string' && baseUrlOverride.trim()
+        ? baseUrlOverride.trim()
+        : '';
+    if (!base && typeof window !== 'undefined' && window.location) {
+      base = window.location.origin;
+    }
     const res = await fetch(proxyUrl(cfg.PATHS.registerDevice), {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
         name: name,
         deviceKey: sess.deviceKey(),
-        baseUrl: typeof window !== 'undefined' && window.location ? window.location.origin : ''
+        baseUrl: base
       })
     });
     const data = await parseJson(res);
@@ -117,6 +124,21 @@ window.PreviewRemoteAuthApi = (function () {
     sess.setTargetDeviceId(null);
   }
 
+  async function sendHeartbeat() {
+    const t = sess.getToken();
+    if (!t) return;
+    const res = await fetch(proxyUrl(cfg.PATHS.heartbeat), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ deviceKey: sess.deviceKey() })
+    });
+    if (!res.ok) {
+      if (res.status === 404) return;
+      const data = await parseJson(res);
+      throw new Error(data.message || data.error || 'Heartbeat failed');
+    }
+  }
+
   async function fetchProxyRemoteStatus() {
     try {
       const res = await fetch(proxyUrl(cfg.PATHS.remoteStatus), {
@@ -141,6 +163,7 @@ window.PreviewRemoteAuthApi = (function () {
     fetchMe,
     logout,
     proxyUrl,
-    fetchProxyRemoteStatus
+    fetchProxyRemoteStatus,
+    sendHeartbeat
   };
 })();
