@@ -2142,6 +2142,20 @@ function setupAPI(baseDir) {
     return '';
   }
 
+  function parseGitRemoteMeta(url) {
+    if (!url || typeof url !== 'string') return { remoteUrl: '', gitOwner: '', gitRepo: '' };
+    const s = url.trim();
+    const ssh = /^git@[^:]+:([^/]+)\/(.+?)(?:\.git)?$/i.exec(s);
+    if (ssh) {
+      return { remoteUrl: s, gitOwner: ssh[1], gitRepo: ssh[2].replace(/\.git$/i, '') };
+    }
+    const https = /^https?:\/\/[^/]+\/([^/]+)\/(.+?)(?:\.git)?(?:\/.*)?$/i.exec(s);
+    if (https) {
+      return { remoteUrl: s, gitOwner: https[1], gitRepo: https[2].replace(/\.git$/i, '') };
+    }
+    return { remoteUrl: s, gitOwner: '', gitRepo: '' };
+  }
+
   router.get('/git/repo-status', async (req, res) => {
     try {
       await runGitCmd(['rev-parse', '--is-inside-work-tree']);
@@ -2156,6 +2170,14 @@ function setupAPI(baseDir) {
       } catch (_e) {
         /* detached or empty */
       }
+      let remoteUrl = '';
+      try {
+        const { stdout: ru } = await runGitCmd(['remote', 'get-url', 'origin']);
+        remoteUrl = (ru || '').trim();
+      } catch (_e) {
+        /* no origin */
+      }
+      const remoteMeta = parseGitRemoteMeta(remoteUrl);
       const { stdout: stOut } = await runGitCmd(['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-b']);
       const parsed = parseGitStatusPorcelain(stOut);
       const b = parsed.branch;
@@ -2172,6 +2194,9 @@ function setupAPI(baseDir) {
         detached: b.detached,
         noCommits: b.noCommits,
         files: parsed.files,
+        remoteUrl: remoteMeta.remoteUrl,
+        gitOwner: remoteMeta.gitOwner,
+        gitRepo: remoteMeta.gitRepo
       });
     } catch (error) {
       logger.error('API: git repo-status', error);

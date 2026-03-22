@@ -4499,6 +4499,115 @@ body.resizing .resizer {
   margin-top: 8px;
 }
 
+.discord-presence-button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.discord-presence-button-row .setting-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.discord-presence-variables {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  background: var(--bg-secondary, #2d2d2d);
+}
+
+.discord-presence-variables summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.discord-presence-var-list {
+  margin: 8px 0 0 18px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.discord-presence-var-list code {
+  font-size: 12px;
+}
+
+.discord-presence-actions {
+  margin-top: 12px;
+}
+
+.discord-presence-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-dropdown-section.settings-discord-dropdown {
+  margin-top: 0;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-secondary, #2d2d2d);
+}
+
+.settings-dropdown-section.settings-discord-dropdown > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #252526);
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.settings-dropdown-section.settings-discord-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-dropdown-title {
+  font-size: 14px;
+}
+
+.settings-dropdown-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.settings-dropdown-body {
+  padding: 12px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.editor-status-discord {
+  font-size: 11px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-status-discord.is-discord-live {
+  color: var(--accent-color, #00ff88);
+}
+
+.editor-status-discord.is-discord-error {
+  color: #ff8585;
+}
+
+.editor-status-discord.is-discord-off {
+  opacity: 0.75;
+}
+
+.editor-status-discord.is-discord-connecting {
+  color: #e6c86e;
+}
+
 .setting-input {
   flex: 1;
   padding: 8px 12px;

@@ -3,6 +3,7 @@ const path = require('path');
 const { spawn, exec } = require('child_process');
 const http = require('http');
 const fs = require('fs');
+const discordRichPresence = require('./discordRichPresence');
 
 // Get app data path - use Local AppData consistently for both packaged and dev
 function getAppDataPath() {
@@ -922,6 +923,8 @@ ipcMain.handle('window-is-maximized', () => {
   return mainWindow.isMaximized();
 });
 
+discordRichPresence.registerIpc(ipcMain, loadAppConfig, saveAppConfig);
+
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -970,6 +973,13 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopServer();
+  try {
+    void discordRichPresence.destroy().catch(function (e) {
+      console.error('[Discord RPC] destroy:', e);
+    });
+  } catch (e) {
+    console.error('[Discord RPC] destroy:', e);
+  }
 });
 
 // Handle app termination

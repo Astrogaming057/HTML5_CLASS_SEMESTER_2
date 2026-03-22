@@ -1677,8 +1677,23 @@ require(['vs/editor/editor.main'], function() {
   if (window.PreviewStatusBar && typeof window.PreviewStatusBar.init === 'function') {
     window.PreviewStatusBar.init(editor);
   }
+  if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.init === 'function') {
+    PreviewGitStatusBar.init();
+  }
   if (window.PreviewProblemsPanel && typeof window.PreviewProblemsPanel.init === 'function') {
     window.PreviewProblemsPanel.init(editor);
+  }
+  if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.init === 'function') {
+    window.PreviewDiscordPresence.init({
+      editor: editor,
+      getFilePath: function () {
+        return filePathRef.current;
+      },
+      getCurrentDir: function () {
+        return currentDirRef.currentDir;
+      },
+      getLanguage: getLanguage
+    });
   }
   
   PreviewTabManager.initialize(
@@ -2219,9 +2234,6 @@ require(['vs/editor/editor.main'], function() {
     gitPanelBtn.addEventListener('click', () => {
       PreviewGitPanel.toggle();
     });
-  }
-  if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.init === 'function') {
-    PreviewGitStatusBar.init();
   }
   const statusGitBranch = document.getElementById('statusGitBranch');
   if (statusGitBranch && window.PreviewGitPanel && typeof PreviewGitPanel.showRepoTab === 'function') {

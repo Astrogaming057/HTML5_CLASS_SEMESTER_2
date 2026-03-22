@@ -216,6 +216,80 @@ window.PreviewSettings = (function() {
           }
         }
         
+        const discordGroup = document.getElementById('discordPresenceGroup');
+        if (discordGroup) {
+          if (window.electronAPI && window.electronAPI.isElectron && window.electronAPI.discordGetConfig) {
+            discordGroup.style.display = 'block';
+            try {
+              const res = await window.electronAPI.discordGetConfig();
+              const c = (res && res.config) || {};
+              const setVal = function (id, v) {
+                const el = document.getElementById(id);
+                if (el) el.value = v != null ? v : '';
+              };
+              const setChk = function (id, v) {
+                const el = document.getElementById(id);
+                if (el) el.checked = !!v;
+              };
+              setChk('discordPresenceEnabled', c.enabled);
+              setVal('discordPresenceAppName', c.appName != null ? c.appName : 'Astro Code');
+              setVal('discordPresenceClientId', c.clientId || '');
+              const iconSel = document.getElementById('discordPresenceEditorIconId');
+              if (iconSel) {
+                const vid = String(c.editorIconId != null ? c.editorIconId : 'vscode').trim() || 'vscode';
+                const has = Array.prototype.some.call(iconSel.options, function (o) {
+                  return o.value === vid;
+                });
+                if (has) {
+                  iconSel.value = vid;
+                } else {
+                  const opt = document.createElement('option');
+                  opt.value = vid;
+                  opt.textContent = vid;
+                  iconSel.appendChild(opt);
+                  iconSel.value = vid;
+                }
+              }
+              setVal('discordPresenceIdleTimeoutSec', c.idleTimeoutSec != null ? c.idleTimeoutSec : 300);
+              setChk('discordPresenceShowElapsed', c.showElapsed !== false);
+              setVal('discordPresenceDetailsTemplate', c.details != null ? c.details : '');
+              setVal('discordPresenceStateTemplate', c.state != null ? c.state : '');
+              setVal('discordPresenceIdleDetailsTemplate', c.idleDetails != null ? c.idleDetails : '');
+              setVal('discordPresenceIdleStateTemplate', c.idleState != null ? c.idleState : '');
+              setVal('discordPresenceLargeImageKey', c.largeImageKey || '');
+              setVal('discordPresenceLargeImageText', c.largeImageText || '');
+              setVal('discordPresenceSmallImageKey', c.smallImageKey || '');
+              setVal('discordPresenceSmallImageText', c.smallImageText || '');
+              setVal('discordPresenceButton1Label', c.button1Label || '');
+              setVal('discordPresenceButton1Url', c.button1Url || '');
+              setVal('discordPresenceButton2Label', c.button2Label || '');
+              setVal('discordPresenceButton2Url', c.button2Url || '');
+              const st = document.getElementById('discordPresenceConnectionStatus');
+              if (st) {
+                const parts = [];
+                let rpcLine = 'RPC: Disconnected';
+                if (!res.enabled) rpcLine = 'RPC: Off';
+                else if (!res.clientIdConfigured) rpcLine = 'RPC: No App ID';
+                else if (res.connecting) rpcLine = 'RPC: Connecting...';
+                else if (res.connected) rpcLine = 'RPC Connected';
+                else rpcLine = 'RPC: Disconnected';
+                parts.push(rpcLine);
+                if (res.lastSummary) {
+                  parts.push('Last: ' + res.lastSummary);
+                }
+                if (res.lastError) {
+                  parts.push('Error: ' + res.lastError);
+                }
+                st.textContent = parts.join(' — ');
+              }
+            } catch (e) {
+              console.error('Discord presence settings load failed:', e);
+            }
+          } else {
+            discordGroup.style.display = 'none';
+          }
+        }
+        
         settingsPanel.style.display = 'flex';
         
         const pageTheme = document.getElementById('pageTheme');

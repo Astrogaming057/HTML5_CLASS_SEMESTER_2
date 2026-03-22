@@ -893,6 +893,8 @@
       </button>
     </div>
     <div class="editor-status-bar-right">
+      <button type="button" class="editor-status-item editor-status-btn editor-status-discord" id="statusDiscordRpc" title="" aria-label="Rich Presence (RPC)" hidden>RPC</button>
+      <span class="editor-status-sep editor-status-sep-tight" id="statusDiscordSep" aria-hidden="true" hidden></span>
       <div id="remoteViewersMount" class="remote-viewers-mount"></div>
       <span class="editor-status-sep editor-status-sep-tight" aria-hidden="true"></span>
       <div id="clientSessionsMount" class="client-sessions-mount"></div>
@@ -1264,6 +1266,89 @@ You can copy any theme file and modify it, or create your own!"></textarea>
               <button class="btn btn-secondary btn-restart-later" id="workingDirectoryRestartLaterBtn">Restart Later</button>
             </div>
           </div>
+        </div>
+        
+        <div class="setting-group" id="discordPresenceGroup" style="display: none;">
+          <details class="settings-dropdown-section settings-discord-dropdown" open>
+            <summary class="settings-dropdown-summary">
+              <span class="settings-dropdown-title">Discord Rich Presence</span>
+              <span class="settings-dropdown-hint">Live Discord RPC</span>
+            </summary>
+            <div class="settings-dropdown-body">
+          <p class="setting-description discord-presence-status" id="discordPresenceConnectionStatus" aria-live="polite"></p>
+          <label class="setting-toggle">
+            <input type="checkbox" id="discordPresenceEnabled">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable Discord Rich Presence</span>
+          </label>
+          <p class="setting-description">Display name shown in templates (e.g. <code>{app_name}</code>)</p>
+          <input type="text" id="discordPresenceAppName" class="setting-input" placeholder="Astro Code" maxlength="64">
+          <label class="setting-label">Application ID (Client ID)</label>
+          <input type="text" id="discordPresenceClientId" class="setting-input" placeholder="782685898163617802 (VSCord default)" inputmode="numeric" autocomplete="off">
+          <label class="setting-label">VSCord-style editor icon</label>
+          <p class="setting-description">Used for <code>{app_id}</code> in small/idle images (same filenames as VSCord: <code>vscode.png</code>, <code>cursor.png</code>, …).</p>
+          <select id="discordPresenceEditorIconId" class="setting-input">
+            <option value="vscode">VS Code</option>
+            <option value="vscode-insiders">VS Code Insiders</option>
+            <option value="cursor">Cursor</option>
+            <option value="vscodium">VSCodium</option>
+            <option value="vscodium-insiders">VSCodium Insiders</option>
+            <option value="antigravity">Antigravity</option>
+          </select>
+          <label class="setting-label">Idle timeout (seconds)</label>
+          <input type="number" id="discordPresenceIdleTimeoutSec" class="setting-input" min="30" max="86400" step="1" value="300">
+          <p class="setting-description">After this long without typing or moving the cursor, presence switches to the idle templates.</p>
+          <label class="setting-toggle">
+            <input type="checkbox" id="discordPresenceShowElapsed">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show elapsed time for active session</span>
+          </label>
+          <label class="setting-label">Details (active)</label>
+          <input type="text" id="discordPresenceDetailsTemplate" class="setting-input" maxlength="128" placeholder="Editing {file_name}">
+          <label class="setting-label">State (active)</label>
+          <input type="text" id="discordPresenceStateTemplate" class="setting-input" maxlength="128" placeholder="{workspace} · {lang} · Ln {current_line}, Col {current_column} · {problems_summary}">
+          <label class="setting-label">Details (idle)</label>
+          <input type="text" id="discordPresenceIdleDetailsTemplate" class="setting-input" maxlength="128" placeholder="Away">
+          <label class="setting-label">State (idle)</label>
+          <input type="text" id="discordPresenceIdleStateTemplate" class="setting-input" maxlength="128" placeholder="{app_name}">
+          <label class="setting-label">Large image (URL or asset key)</label>
+          <input type="text" id="discordPresenceLargeImageKey" class="setting-input" placeholder="https://…/icons/{lang_icon}.png">
+          <label class="setting-label">Large image text</label>
+          <input type="text" id="discordPresenceLargeImageText" class="setting-input" maxlength="128" placeholder="Editing a {Lang} file">
+          <label class="setting-label">Small image (URL or asset key)</label>
+          <input type="text" id="discordPresenceSmallImageKey" class="setting-input" placeholder="https://static.astroslounge.com/…/1774217076368.webp">
+          <label class="setting-label">Small image text</label>
+          <input type="text" id="discordPresenceSmallImageText" class="setting-input" maxlength="128" placeholder="{app_name}">
+          <label class="setting-label">Button 1</label>
+          <div class="discord-presence-button-row">
+            <input type="text" id="discordPresenceButton1Label" class="setting-input" placeholder="Label" maxlength="32">
+            <input type="url" id="discordPresenceButton1Url" class="setting-input" placeholder="https://…">
+          </div>
+          <label class="setting-label">Button 2</label>
+          <div class="discord-presence-button-row">
+            <input type="text" id="discordPresenceButton2Label" class="setting-input" placeholder="Label" maxlength="32">
+            <input type="url" id="discordPresenceButton2Url" class="setting-input" placeholder="https://…">
+          </div>
+          <details class="discord-presence-variables">
+            <summary>Template variables</summary>
+            <p class="setting-description">Use placeholders in the same spirit as VSCord. Curly braces are replaced with live values.</p>
+            <ul class="discord-presence-var-list">
+              <li><code>{app_name}</code> — editor display name</li>
+              <li><code>{file_name}</code>, <code>{file_extension}</code>, <code>{folder_and_file}</code>, <code>{relative_file_path}</code></li>
+              <li><code>{workspace}</code>, <code>{workspace_folder}</code></li>
+              <li><code>{lang}</code>, <code>{lang_icon}</code> (VSCord icon basename), <code>{Lang}</code>, <code>{LANG}</code></li>
+              <li><code>{app_id}</code> — editor icon id (vscode, cursor, …)</li>
+              <li><code>{current_line}</code>, <code>{current_column}</code>, <code>{line_count}</code>, <code>{ln_col}</code> / <code>{line_col}</code> (e.g. Ln 12, Col 5)</li>
+              <li><code>{problems_summary}</code> — e.g. &ldquo;No problems&rdquo; or &ldquo;2 errors, 1 warning&rdquo;; <code>{problems_count}</code>, <code>{problems_errors}</code>, <code>{problems_warnings}</code>, <code>{problems_infos}</code>, <code>{problems_hints}</code></li>
+              <li><code>{git_branch}</code>, <code>{git_repo}</code>, <code>{git_owner}</code> (from the Git status bar / repo)</li>
+              <li><code>{empty}</code> — a single space</li>
+            </ul>
+          </details>
+          <div class="discord-presence-actions">
+            <button type="button" class="btn btn-secondary" id="discordPresenceResetDefaultsBtn">Reset Discord settings to defaults</button>
+          </div>
+            </div>
+          </details>
         </div>
         
         <div class="settings-actions">

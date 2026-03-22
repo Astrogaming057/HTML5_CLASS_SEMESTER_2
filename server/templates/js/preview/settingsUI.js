@@ -84,6 +84,67 @@ window.PreviewSettingsUI = (function() {
             }
           }
           
+          if (window.electronAPI && window.electronAPI.isElectron && window.electronAPI.discordSetConfig) {
+            try {
+              const gather = function (id) {
+                const el = document.getElementById(id);
+                return el ? el.value : '';
+              };
+              const gatherChk = function (id) {
+                const el = document.getElementById(id);
+                return el ? el.checked : false;
+              };
+              const idleSec = parseInt(String(gather('discordPresenceIdleTimeoutSec') || '300'), 10);
+              await window.electronAPI.discordSetConfig({
+                enabled: gatherChk('discordPresenceEnabled'),
+                appName: gather('discordPresenceAppName').trim() || 'Astro Code',
+                clientId: gather('discordPresenceClientId').trim(),
+                editorIconId: gather('discordPresenceEditorIconId').trim() || 'vscode',
+                idleTimeoutSec: Number.isFinite(idleSec) ? Math.min(86400, Math.max(30, idleSec)) : 300,
+                showElapsed: gatherChk('discordPresenceShowElapsed'),
+                details: gather('discordPresenceDetailsTemplate'),
+                state: gather('discordPresenceStateTemplate'),
+                idleDetails: gather('discordPresenceIdleDetailsTemplate'),
+                idleState: gather('discordPresenceIdleStateTemplate'),
+                largeImageKey: gather('discordPresenceLargeImageKey'),
+                largeImageText: gather('discordPresenceLargeImageText'),
+                smallImageKey: gather('discordPresenceSmallImageKey'),
+                smallImageText: gather('discordPresenceSmallImageText'),
+                button1Label: gather('discordPresenceButton1Label'),
+                button1Url: gather('discordPresenceButton1Url'),
+                button2Label: gather('discordPresenceButton2Label'),
+                button2Url: gather('discordPresenceButton2Url')
+              });
+              const r = await window.electronAPI.discordGetConfig();
+              const st = document.getElementById('discordPresenceConnectionStatus');
+              if (st) {
+                const parts = [];
+                let rpcLine = 'RPC: Disconnected';
+                if (!r.enabled) rpcLine = 'RPC: Off';
+                else if (!r.clientIdConfigured) rpcLine = 'RPC: No App ID';
+                else if (r.connecting) rpcLine = 'RPC: Connecting...';
+                else if (r.connected) rpcLine = 'RPC Connected';
+                else rpcLine = 'RPC: Disconnected';
+                parts.push(rpcLine);
+                if (r.lastSummary) {
+                  parts.push('Last: ' + r.lastSummary);
+                }
+                if (r.lastError) {
+                  parts.push('Error: ' + r.lastError);
+                }
+                st.textContent = parts.join(' — ');
+              }
+              if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.refreshConfig === 'function') {
+                window.PreviewDiscordPresence.refreshConfig();
+              }
+              if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.refreshStatusBar === 'function') {
+                window.PreviewDiscordPresence.refreshStatusBar();
+              }
+            } catch (e) {
+              console.error('Discord presence save failed:', e);
+            }
+          }
+          
           PreviewSettings.setSettings({
             autoRefreshPreview: autoRefreshPreview ? autoRefreshPreview.checked : true,
             pageTheme: pageTheme ? pageTheme.value : 'dark',
@@ -391,6 +452,71 @@ window.PreviewSettingsUI = (function() {
             if (restartPrompt) {
               restartPrompt.style.display = 'none';
             }
+          }
+        });
+      }
+      
+      const discordResetBtn = document.getElementById('discordPresenceResetDefaultsBtn');
+      if (discordResetBtn && window.electronAPI && window.electronAPI.discordResetConfig) {
+        discordResetBtn.addEventListener('click', async () => {
+          const confirmed = await customConfirm('Reset all Discord Rich Presence options to defaults?');
+          if (!confirmed) return;
+          try {
+            const res = await window.electronAPI.discordResetConfig();
+            const c = res.config || {};
+            const setVal = function (id, v) {
+              const el = document.getElementById(id);
+              if (el) el.value = v != null ? v : '';
+            };
+            const setChk = function (id, v) {
+              const el = document.getElementById(id);
+              if (el) el.checked = !!v;
+            };
+            setChk('discordPresenceEnabled', c.enabled);
+            setVal('discordPresenceAppName', c.appName != null ? c.appName : 'Astro Code');
+            setVal('discordPresenceClientId', c.clientId || '');
+            const iconSel = document.getElementById('discordPresenceEditorIconId');
+            if (iconSel) {
+              const vid = String(c.editorIconId != null ? c.editorIconId : 'vscode').trim() || 'vscode';
+              const has = Array.prototype.some.call(iconSel.options, function (o) {
+                return o.value === vid;
+              });
+              if (has) {
+                iconSel.value = vid;
+              } else {
+                const opt = document.createElement('option');
+                opt.value = vid;
+                opt.textContent = vid;
+                iconSel.appendChild(opt);
+                iconSel.value = vid;
+              }
+            }
+            setVal('discordPresenceIdleTimeoutSec', c.idleTimeoutSec != null ? c.idleTimeoutSec : 300);
+            setChk('discordPresenceShowElapsed', c.showElapsed !== false);
+            setVal('discordPresenceDetailsTemplate', c.details != null ? c.details : '');
+            setVal('discordPresenceStateTemplate', c.state != null ? c.state : '');
+            setVal('discordPresenceIdleDetailsTemplate', c.idleDetails != null ? c.idleDetails : '');
+            setVal('discordPresenceIdleStateTemplate', c.idleState != null ? c.idleState : '');
+            setVal('discordPresenceLargeImageKey', c.largeImageKey || '');
+            setVal('discordPresenceLargeImageText', c.largeImageText || '');
+            setVal('discordPresenceSmallImageKey', c.smallImageKey || '');
+            setVal('discordPresenceSmallImageText', c.smallImageText || '');
+            setVal('discordPresenceButton1Label', c.button1Label || '');
+            setVal('discordPresenceButton1Url', c.button1Url || '');
+            setVal('discordPresenceButton2Label', c.button2Label || '');
+            setVal('discordPresenceButton2Url', c.button2Url || '');
+            const st = document.getElementById('discordPresenceConnectionStatus');
+            if (st) {
+              st.textContent = 'RPC: Off';
+            }
+            if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.refreshConfig === 'function') {
+              window.PreviewDiscordPresence.refreshConfig();
+            }
+            if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.refreshStatusBar === 'function') {
+              window.PreviewDiscordPresence.refreshStatusBar();
+            }
+          } catch (e) {
+            console.error('Discord reset failed:', e);
           }
         });
       }

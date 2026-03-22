@@ -15,6 +15,12 @@ window.PreviewGitStatusBar = (function () {
       if (!data.success || !data.isRepo) {
         el.hidden = true;
         if (sep) sep.hidden = true;
+        window.__previewDiscordGitBranch = '';
+        window.__previewDiscordGitRepo = '';
+        window.__previewDiscordGitOwner = '';
+        if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.onGitMetadataUpdated === 'function') {
+          window.PreviewDiscordPresence.onGitMetadataUpdated();
+        }
         return;
       }
       el.hidden = false;
@@ -30,9 +36,18 @@ window.PreviewGitStatusBar = (function () {
       el.title = data.tracking
         ? data.branch + ' \u2194 ' + data.tracking + (data.files && data.files.length ? ' \u2014 ' + data.files.length + ' change(s)' : '')
         : (data.branch || '') + (data.files && data.files.length ? ' \u2014 ' + data.files.length + ' change(s)' : '');
+      window.__previewDiscordGitBranch = data.branch || '';
+      window.__previewDiscordGitRepo = data.gitRepo || '';
+      window.__previewDiscordGitOwner = data.gitOwner || '';
+      if (window.PreviewDiscordPresence && typeof window.PreviewDiscordPresence.onGitMetadataUpdated === 'function') {
+        window.PreviewDiscordPresence.onGitMetadataUpdated();
+      }
     } catch (_e) {
       el.hidden = true;
       if (sep) sep.hidden = true;
+      window.__previewDiscordGitBranch = '';
+      window.__previewDiscordGitRepo = '';
+      window.__previewDiscordGitOwner = '';
     }
   }
 

@@ -41,5 +41,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendCloseAborted: () => ipcRenderer.send('electron-close-aborted'),
   sendCloseProgress: (stage) => ipcRenderer.send('electron-close-progress', stage),
   /** Skip graceful teardown (unsaved risk); used by in-app “Force close” during hang */
-  forceCloseApp: () => ipcRenderer.send('electron-force-close')
+  forceCloseApp: () => ipcRenderer.send('electron-force-close'),
+  discordGetConfig: () => ipcRenderer.invoke('discord-get-config'),
+  discordSetConfig: (partial) => ipcRenderer.invoke('discord-set-config', partial),
+  discordUpdateActivity: (payload) => ipcRenderer.invoke('discord-update-activity', payload),
+  discordResetConfig: () => ipcRenderer.invoke('discord-reset-config'),
+  discordGetStatus: () => ipcRenderer.invoke('discord-get-status')
 });

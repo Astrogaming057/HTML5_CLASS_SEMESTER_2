@@ -221,6 +221,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'pingMonitor.js'),
         'utf-8'
       );
+      const discordPresenceJs = await fs.readFile(
+        path.join(previewModulesDir, 'discordPresence.js'),
+        'utf-8'
+      );
       const mainJs = await fs.readFile(
         path.join(jsDir, 'preview.js'),
         'utf-8'
@@ -340,6 +344,8 @@ async function loadPreviewTemplates() {
         bookmarkManagerJs,
         '// Ping Monitor',
         pingMonitorJs,
+        '// Discord Rich Presence (Electron)',
+        discordPresenceJs,
         '// Initialization',
         initializationJs,
         '// Main',
