@@ -5673,13 +5673,42 @@ body.resizing .resizer {
 }
 
 .git-btn {
+  appearance: none;
+  -webkit-appearance: none;
   padding: 6px 12px;
-  border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   font-family: inherit;
-  transition: background 0.2s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  /* Default: themed outline (not browser white) */
+  background: var(--git-btn-default-bg, var(--bg-tertiary));
+  color: var(--git-btn-default-text, var(--text-primary));
+  border: 1px solid var(--git-btn-default-border, var(--border-primary));
+}
+
+.git-btn:hover:not(:disabled) {
+  background: var(--git-btn-default-bg-hover, var(--bg-primary));
+  border-color: var(--git-btn-default-border-hover, var(--border-active));
+  color: var(--text-primary);
+}
+
+.git-btn:focus-visible {
+  outline: 2px solid var(--border-active);
+  outline-offset: 1px;
+}
+
+.git-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--git-btn-disabled-bg, var(--bg-secondary));
+  color: var(--text-tertiary);
+  border-color: var(--border-primary);
+}
+
+.git-btn:disabled:hover {
+  background: var(--git-btn-disabled-bg, var(--bg-secondary));
+  border-color: var(--border-primary);
 }
 
 .git-btn-small {
@@ -5690,19 +5719,34 @@ body.resizing .resizer {
 .git-btn-primary {
   background: var(--bg-button-primary);
   color: var(--text-button-primary);
+  border: 1px solid var(--git-btn-primary-border, transparent);
 }
 
-.git-btn-primary:hover {
+.git-btn-primary:hover:not(:disabled) {
   background: var(--bg-button-primary-hover);
+  border-color: var(--git-btn-primary-border, transparent);
 }
 
 .git-btn-secondary {
   background: var(--bg-button-secondary);
   color: var(--text-button);
+  border: 1px solid var(--git-btn-secondary-border, var(--border-primary));
 }
 
-.git-btn-secondary:hover {
+.git-btn-secondary:hover:not(:disabled) {
   background: var(--bg-button-secondary-hover);
+  border-color: var(--border-active);
+}
+
+/* Source control + graph: default actions use accent border (matches pink / themed explorers) */
+.git-panel .git-btn:not(.git-btn-primary):not(.git-btn-secondary):not(:disabled),
+.git-graph-panel .git-btn:not(.git-btn-primary):not(.git-btn-secondary):not(:disabled) {
+  border-color: var(--border-active);
+}
+
+.git-panel .git-btn:not(.git-btn-primary):not(.git-btn-secondary):not(:disabled):hover,
+.git-graph-panel .git-btn:not(.git-btn-primary):not(.git-btn-secondary):not(:disabled):hover {
+  border-color: var(--border-active);
 }
 
 .git-files-list {
