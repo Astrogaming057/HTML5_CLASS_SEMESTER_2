@@ -164,9 +164,6 @@ function onDeviceMessage(deviceId, data) {
       if (msg.appVersion != null && String(msg.appVersion).trim()) {
         device.appVersion = String(msg.appVersion).trim().slice(0, 48);
       }
-      if (msg.commit != null && String(msg.commit).trim()) {
-        device.appCommit = String(msg.commit).trim().slice(0, 64);
-      }
       device.buildReportedAt = Date.now();
       store.updateDevice(device);
     }

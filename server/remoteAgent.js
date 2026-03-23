@@ -408,8 +408,7 @@ function startRemoteAgent(opts) {
           JSON.stringify({
             type: 'agent_hello',
             name: bi.name,
-            appVersion: bi.version,
-            commit: bi.commit
+            appVersion: bi.version
           })
         );
       } catch (e) {

@@ -15,7 +15,7 @@ try {
   getBuildInfo = require('../server/utils/buildInfo').getBuildInfo;
 } catch (e) {
   getBuildInfo = function () {
-    return { name: 'astro-proxy', version: '0.0.0', commit: 'unknown' };
+    return { name: 'astro-proxy', version: '0.0.0' };
   };
 }
 
@@ -63,7 +63,6 @@ function proxyBuildPayload() {
     proxyDebug: PROXY_DEBUG,
     name: bi.name,
     version: bi.version,
-    commit: bi.commit,
     component: 'proxy'
   };
 }
@@ -154,7 +153,9 @@ app.get('/api/devices', authMiddleware, (req, res) => {
       lastSeen: d.lastSeen,
       online,
       disabled: !!d.disabled,
-      agentConnected: reverseTunnel.hasAgentForDevice(d.id)
+      agentConnected: reverseTunnel.hasAgentForDevice(d.id),
+      appVersion: d.appVersion != null ? d.appVersion : null,
+      buildReportedAt: typeof d.buildReportedAt === 'number' ? d.buildReportedAt : null
     };
   });
   list.sort(function (a, b) {
@@ -224,9 +225,6 @@ app.post('/api/devices/heartbeat', authMiddleware, (req, res) => {
   if (typeof body.appVersion === 'string' && body.appVersion.trim()) {
     d.appVersion = body.appVersion.trim().slice(0, 48);
   }
-  if (typeof body.appCommit === 'string' && body.appCommit.trim()) {
-    d.appCommit = body.appCommit.trim().slice(0, 64);
-  }
   d.buildReportedAt = Date.now();
   store.updateDevice(d);
   res.json({ ok: true });
@@ -246,17 +244,12 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     req.body && typeof req.body.appVersion === 'string' && req.body.appVersion.trim()
       ? req.body.appVersion.trim().slice(0, 48)
       : '';
-  const ac =
-    req.body && typeof req.body.appCommit === 'string' && req.body.appCommit.trim()
-      ? req.body.appCommit.trim().slice(0, 64)
-      : '';
   const existing = store.findDeviceByUserAndKey(req.userId, deviceKey);
   if (existing) {
     existing.name = name;
     existing.baseUrl = baseUrl;
     existing.lastSeen = now;
     if (av) existing.appVersion = av;
-    if (ac) existing.appCommit = ac;
     existing.buildReportedAt = now;
     store.updateDevice(existing);
     res.json({ device: { id: existing.id, name: existing.name, deviceKey: existing.deviceKey, baseUrl: existing.baseUrl } });
@@ -271,8 +264,7 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     lastSeen: now,
     disabled: false,
     appVersion: av || undefined,
-    appCommit: ac || undefined,
-    buildReportedAt: av || ac ? now : undefined
+    buildReportedAt: av ? now : undefined
   };
   store.addDevice(device);
   res.json({ device: { id: device.id, name: device.name, deviceKey: device.deviceKey, baseUrl: device.baseUrl } });

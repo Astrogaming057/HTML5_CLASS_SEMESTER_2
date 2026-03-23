@@ -1,10 +1,8 @@
 /**
- * App version + git commit for RPC/version headers and remote device comparison.
- * Set ASTRO_GIT_COMMIT or GIT_COMMIT in CI when .git is not present (e.g. packaged builds).
+ * App version from package.json (and optional build-info.json) for APIs and remote comparison.
  */
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 let cached = null;
 
@@ -35,20 +33,8 @@ function readOptionalBuildInfoJson(root) {
   }
 }
 
-function readGitShort(root) {
-  try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd: root,
-      encoding: 'utf8',
-      windowsHide: true
-    }).trim();
-  } catch (e) {
-    return '';
-  }
-}
-
 /**
- * @returns {{ name: string, version: string, commit: string }}
+ * @returns {{ name: string, version: string }}
  */
 function getBuildInfo() {
   if (cached) {
@@ -57,20 +43,15 @@ function getBuildInfo() {
   const root = repoRoot();
   const pkg = readPackageJson(root);
   const extra = readOptionalBuildInfoJson(root);
-  let commit =
-    process.env.ASTRO_GIT_COMMIT ||
-    process.env.GIT_COMMIT ||
-    (extra && extra.commit != null ? String(extra.commit).trim() : '');
-  if (!commit) {
-    commit = readGitShort(root);
-  }
   if (extra && extra.version != null && String(extra.version).trim()) {
     pkg.version = String(extra.version).trim();
   }
+  if (process.env.ASTRO_APP_VERSION && String(process.env.ASTRO_APP_VERSION).trim()) {
+    pkg.version = String(process.env.ASTRO_APP_VERSION).trim();
+  }
   cached = {
     name: pkg.name,
-    version: pkg.version,
-    commit: commit || 'unknown'
+    version: pkg.version
   };
   return cached;
 }

@@ -87,7 +87,6 @@ function setupAPI(baseDir) {
       isBrowserMode: mode === 'browser',
       debug: !!appConfig.DEBUG,
       version: bi.version,
-      commit: bi.commit,
       name: bi.name
     });
   });
@@ -99,7 +98,6 @@ function setupAPI(baseDir) {
       success: true,
       name: bi.name,
       version: bi.version,
-      commit: bi.commit,
       component: 'server'
     });
   });

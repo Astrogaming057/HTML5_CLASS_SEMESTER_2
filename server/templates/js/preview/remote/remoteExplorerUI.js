@@ -59,15 +59,14 @@ window.PreviewRemoteExplorer = (function () {
         const st = results[0] || {};
         const localBi = results[1] || {};
         const modeRes = results[2] || {};
-        const lc = normCommit(localBi.commit) || normCommit(modeRes.commit);
-        const pc = normCommit(st.commit);
-        if (commitsDiffer(lc, pc) && hint) {
+        const lv = normVersion(localBi.version) || normVersion(modeRes.version);
+        const pv = normVersion(st.version);
+        if (versionsDiffer(lv, pv) && hint) {
           hint.textContent +=
-            ' — Proxy build (' + (st.version || '?') + ' · ' + (pc || '?') +
+            ' — Proxy version (' +
+            (pv || '?') +
             ') differs from this app (' +
-            (localBi.version || modeRes.version || '?') +
-            ' · ' +
-            (lc || '?') +
+            (lv || '?') +
             '). Update the proxy or clients to avoid subtle bugs.';
           hint.classList.add('remote-auth-hint-warn');
         } else if (st.proxyDebug && hint) {
@@ -168,27 +167,24 @@ window.PreviewRemoteExplorer = (function () {
     return '…' + k.slice(-6);
   }
 
-  function normCommit(c) {
-    if (c == null || c === '') return '';
-    const s = String(c).trim();
+  function normVersion(v) {
+    if (v == null || v === '') return '';
+    const s = String(v).trim();
     if (!s || s === 'unknown') return '';
     return s;
   }
 
-  /** True when both sides report a commit and they differ (mixed deployments). */
-  function commitsDiffer(a, b) {
-    const x = normCommit(a);
-    const y = normCommit(b);
+  /** True when both sides report a version string and they differ. */
+  function versionsDiffer(a, b) {
+    const x = normVersion(a);
+    const y = normVersion(b);
     if (!x || !y) return false;
     return x !== y;
   }
 
   function formatBuildLine(bi) {
-    if (!bi || (!bi.version && !normCommit(bi.commit))) return '';
-    const v = bi.version != null ? String(bi.version) : '';
-    const c = normCommit(bi.commit);
-    if (v && c) return v + ' · ' + c;
-    return v || c || '';
+    if (!bi || !bi.version) return '';
+    return String(bi.version);
   }
 
   /** Aligned key / value lines for monospace terminal panel */
@@ -342,6 +338,7 @@ window.PreviewRemoteExplorer = (function () {
           if (act === 'status') {
             const text = buildTerminalPanel('connection status', [
               ['device', String(dev.name || id)],
+              ['app_version', dev.appVersion != null ? String(dev.appVersion) : '—'],
               ['online', online ? 'yes' : 'no'],
               ['disabled', disabled ? 'yes' : 'no'],
               ['agent_proxy', agentOn ? 'connected' : 'not connected'],
@@ -358,7 +355,6 @@ window.PreviewRemoteExplorer = (function () {
               ['name', dev.name || '—'],
               ['id', String(id)],
               ['app_version', dev.appVersion != null ? String(dev.appVersion) : '—'],
-              ['git_commit', dev.appCommit != null ? String(dev.appCommit) : '—'],
               ['device_key', maskKey(dev.deviceKey)],
               ['base_url', dev.baseUrl || '—'],
               ['last_seen', formatLastSeen(dev.lastSeen)],
@@ -494,7 +490,6 @@ window.PreviewRemoteExplorer = (function () {
     let proxyDebug = false;
     let serverDebug = false;
     let agentStatus = null;
-    let localCommit = '';
     let localVersion = '';
     let proxyStale = false;
     try {
@@ -523,11 +518,10 @@ window.PreviewRemoteExplorer = (function () {
       proxyDebug = !!(proxySt && proxySt.proxyDebug);
       serverDebug = !!modeRes.debug;
       agentStatus = agentFromParallel;
-      localCommit = normCommit((localBi && localBi.commit) || '') || normCommit(modeRes.commit || '');
       localVersion =
-        (localBi && localBi.version != null ? String(localBi.version) : '') ||
-        (modeRes.version != null ? String(modeRes.version) : '');
-      proxyStale = commitsDiffer(localCommit, proxySt && proxySt.commit);
+        normVersion(localBi && localBi.version) ||
+        normVersion(modeRes.version);
+      proxyStale = versionsDiffer(localVersion, proxySt && proxySt.version);
     } catch (e) {
       devicesCache = [];
       proxyDebug = false;
@@ -552,17 +546,17 @@ window.PreviewRemoteExplorer = (function () {
     if (proxyStale) {
       html += '<div class="remote-dd-version-warn" role="status">';
       html +=
-        '<div class="remote-dd-version-line"><strong>Proxy vs this app:</strong> different git commit. ' +
-        'Deploy the same repo version on the proxy and all devices, or expect odd remote bugs.</div>';
+        '<div class="remote-dd-version-line"><strong>Proxy vs this app:</strong> different package version. ' +
+        'Deploy the same app version on the proxy and all devices, or expect odd remote bugs.</div>';
       html += '</div>';
     }
     html += '<button type="button" class="remote-dd-item" data-action="local">Use Local</button>';
     html += '<span class="remote-dd-desc">Files and tools on this machine</span>';
-    const localLine = formatBuildLine({ version: localVersion, commit: localCommit });
+    const localLine = formatBuildLine({ version: localVersion });
     if (localLine) {
       html +=
-        '<div class="remote-dd-desc remote-dd-version-mono" title="This Astro Code backend (semver · git short hash)">' +
-        'This build: ' +
+        '<div class="remote-dd-desc remote-dd-version-mono" title="package.json version on this Astro Code backend">' +
+        'This app: v' +
         escapeHtml(localLine) +
         '</div>';
     }
@@ -600,9 +594,9 @@ window.PreviewRemoteExplorer = (function () {
           } else if (dev.online === false) {
             label += ' — offline';
           }
-          const devC = normCommit(dev.appCommit);
+          const devV = normVersion(dev.appVersion);
           const deviceStale =
-            !!devC && !!localCommit && commitsDiffer(localCommit, devC);
+            !!devV && !!localVersion && versionsDiffer(localVersion, devV);
           if (deviceStale) {
             label += ' — old build';
           }

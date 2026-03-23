@@ -9,8 +9,8 @@ window.PreviewRemoteAuthApi = (function () {
   let localBuildPromise = null;
 
   /**
-   * GET /__api__/version — semver + git hash for comparing devices and proxy.
-   * @returns {Promise<{ name?: string, version?: string, commit?: string }>}
+   * GET /__api__/version — package semver for comparing devices and proxy.
+   * @returns {Promise<{ name?: string, version?: string }>}
    */
   async function fetchLocalBuildInfo() {
     if (localBuildCache) {
@@ -26,8 +26,7 @@ window.PreviewRemoteAuthApi = (function () {
       .then(function (data) {
         const out = {
           name: data.name,
-          version: data.version,
-          commit: data.commit
+          version: data.version
         };
         localBuildCache = out;
         return out;
@@ -203,8 +202,7 @@ window.PreviewRemoteAuthApi = (function () {
         name: name,
         deviceKey: sess.deviceKey(),
         baseUrl: base,
-        appVersion: bi.version || '',
-        appCommit: bi.commit || ''
+        appVersion: bi.version || ''
       })
     });
     const data = await parseJson(res);
@@ -247,8 +245,7 @@ window.PreviewRemoteAuthApi = (function () {
       headers: authHeaders(),
       body: JSON.stringify({
         deviceKey: sess.deviceKey(),
-        appVersion: bi.version || '',
-        appCommit: bi.commit || ''
+        appVersion: bi.version || ''
       })
     });
     if (!res.ok) {
@@ -265,18 +262,17 @@ window.PreviewRemoteAuthApi = (function () {
         cache: 'no-cache'
       });
       if (!res.ok) {
-        return { proxyDebug: false, version: null, commit: null, name: null };
+        return { proxyDebug: false, version: null, name: null };
       }
       const data = await parseJson(res);
       return {
         proxyDebug: !!data.proxyDebug,
         version: data.version != null ? String(data.version) : null,
-        commit: data.commit != null ? String(data.commit) : null,
         name: data.name != null ? String(data.name) : null,
         component: data.component != null ? String(data.component) : null
       };
     } catch (e) {
-      return { proxyDebug: false, version: null, commit: null, name: null };
+      return { proxyDebug: false, version: null, name: null };
     }
   }
 
