@@ -4,23 +4,59 @@ window.PreviewFileExplorer = (function() {
   let renderFileTreeFn = null;
   /** Normalized folder paths (no leading slash, e.g. projects/foo) left expanded in tree mode */
   let treeExpandedPaths = new Set();
-  
+
+  const FS_EVENT_DEBOUNCE_MS = 320;
+  const FS_BATCH_MAX_REQUEUE = 50;
+  let fsBatchRequeueAttempts = 0;
+  let fsEventTimer = null;
+  const fsEventQueue = [];
+  /** Last tree render context for targeted folder refresh (WebSocket batch). */
+  let lastTreeCtx = null;
+  /** Last flat list render callbacks + dir for incremental merge. */
+  let lastFlatHandlers = null;
+
   const module = {
+    /** Same key for comparing explorer "current folder" (root '', '/', and trailing slashes). */
+    normalizeExplorerDirForCompare(d) {
+      const s = typeof d === 'string' ? d : String(d ?? '/');
+      let x = s.replace(/\\/g, '/').replace(/\/+/g, '/');
+      x = x.replace(/^\/+/, '');
+      if (!x) return '/';
+      return x.replace(/\/$/, '');
+    },
+
+    explorerDirsMatch(a, b) {
+      return module.normalizeExplorerDirForCompare(a) === module.normalizeExplorerDirForCompare(b);
+    },
+
+    /** Parent directory for a file path (API-style: '/' for project root files). */
+    parentDirFromFilePath(filePath) {
+      const parts = String(filePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+      parts.pop();
+      return parts.length === 0 ? '/' : parts.join('/');
+    },
+
     setupFileExplorer(getCurrentDir, loadFileTree) {
       const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
       loadFileTree(currentDir || '/');
     },
 
-    loadFileTree(dir, fileTree, currentDirRef, updateBackButton, saveState, renderFileTree, fetchDirectoryListing, expandTargetPath) {
+    loadFileTree(dir, fileTree, currentDirRef, updateBackButton, saveState, renderFileTree, fetchDirectoryListing, expandTargetPath, opts) {
       // Clear any pending render
       if (renderTimeout) {
         clearTimeout(renderTimeout);
         renderTimeout = null;
       }
-      
-      fileTree.innerHTML = '<div class="file-tree-loading">Loading...</div>';
-      
+
+      const silent = opts && opts.silent === true;
       const treeOn = PreviewSettings.getSettings().explorerTreeView === true;
+      if (!treeOn) {
+        lastFlatHandlers = null;
+      }
+
+      if (!silent) {
+        fileTree.innerHTML = '<div class="file-tree-loading">Loading...</div>';
+      }
       let dirStr = typeof dir === 'function' ? dir() : (typeof dir === 'string' ? dir : String(dir || '/'));
       
       if (treeOn) {
@@ -215,8 +251,13 @@ window.PreviewFileExplorer = (function() {
       else if (gitLetter === 'M') item.classList.add('file-tree-git-m');
     },
 
-    async loadTreeChildren(normPath, childrenWrap, ctx) {
-      childrenWrap.innerHTML = '<div class="file-tree-loading">Loading...</div>';
+    async loadTreeChildren(normPath, childrenWrap, ctx, opts) {
+      const silent = opts && opts.silent === true;
+      if (silent) {
+        childrenWrap.innerHTML = '';
+      } else {
+        childrenWrap.innerHTML = '<div class="file-tree-loading">Loading...</div>';
+      }
       try {
         const res = await fetch('/__api__/files?path=' + encodeURIComponent(normPath) + '&list=true');
         const data = await res.json();
@@ -237,11 +278,16 @@ window.PreviewFileExplorer = (function() {
     async renderTreeLevel(files, container, ctx) {
       const list = module.prepareFileList(files);
       if (list.length === 0) return;
-      if (!ctx.gitState) {
-        ctx.gitState = await module.getGitExplorerState();
+      /** One shared repo-status fetch for the whole tree (avoid serial wait before editor-cache checks). */
+      if (!ctx._gitExplorerPromise) {
+        ctx._gitExplorerPromise = module.getGitExplorerState();
       }
-      const modifiedFiles = await module.collectModifiedFiles(list);
       const filePath = typeof ctx.getFilePath === 'function' ? ctx.getFilePath() : ctx.getFilePath;
+      const [gitState, modifiedFiles] = await Promise.all([
+        ctx._gitExplorerPromise,
+        module.collectModifiedFiles(list)
+      ]);
+      ctx.gitState = gitState;
       for (const file of list) {
         if (!file.isDirectory) {
           module.appendTreeFileRow(container, file, filePath, modifiedFiles, ctx);
@@ -539,6 +585,7 @@ window.PreviewFileExplorer = (function() {
           isRendering = false;
           return;
         }
+        lastFlatHandlers = null;
         const ctx = {
           getFilePath,
           loadFileTree,
@@ -549,8 +596,11 @@ window.PreviewFileExplorer = (function() {
           handleFileDrop,
           showParentFolderDropZone,
           hideParentFolderDropZone,
+          fileTree,
           gitState: null,
+          _gitExplorerPromise: null
         };
+        lastTreeCtx = ctx;
         fileTree.innerHTML = '';
         const list = module.prepareFileList(files);
         await module.renderTreeLevel(list, fileTree, ctx);
@@ -591,6 +641,435 @@ window.PreviewFileExplorer = (function() {
         });
     },
 
+    createFlatFileRowElement(file, dir, filePath, modifiedFiles, gitState, h) {
+      const loadFileTree = h.loadFileTree;
+      const switchToFile = h.switchToFile;
+      const showContextMenu = h.showContextMenu;
+      const renameFile = h.renameFile;
+      const moveFileToFolder = h.moveFileToFolder;
+      const handleFileDrop = h.handleFileDrop;
+      const showParentFolderDropZone = h.showParentFolderDropZone;
+      const hideParentFolderDropZone = h.hideParentFolderDropZone;
+
+      const item = document.createElement('div');
+      item.className = 'file-tree-item' + (file.isDirectory ? ' file-tree-folder' : '');
+      item.dataset.path = file.path;
+      item.dataset.isDirectory = file.isDirectory;
+      item.dataset.name = file.name;
+
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
+      const normalizedFilepath = file.path.replace(/\/+/g, '/');
+      if (normalizedFilepath === normalizedCurrentPath) {
+        item.classList.add('active');
+      }
+
+      const icon = document.createElement('span');
+      if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon) {
+        PreviewFileIcons.applyToIcon(icon, file.name, !!file.isDirectory);
+      } else {
+        icon.className = 'file-tree-item-icon';
+        if (!file.isDirectory) {
+          icon.textContent = '📄';
+        }
+      }
+
+      const name = document.createElement('span');
+      name.className = 'file-tree-item-name';
+      name.textContent = file.name;
+
+      item.appendChild(icon);
+      item.appendChild(name);
+
+      const localDirty = !file.isDirectory && modifiedFiles.has(file.path);
+      const norm = module.normalizeExplorerPath(file.path);
+      const gitLetter = file.isDirectory
+        ? module.gitFolderBadge(norm, gitState)
+        : module.gitFileBadge(norm, gitState);
+      module.appendExplorerBadges(item, localDirty, gitLetter);
+      module.applyExplorerRowTint(item, localDirty, gitLetter);
+
+      item.setAttribute('draggable', 'true');
+      item.draggable = true;
+
+      let isDragging = false;
+
+      item.addEventListener('mousedown', () => {});
+
+      item.addEventListener('dragstart', (e) => {
+        if (!e.dataTransfer) {
+          console.error('dataTransfer not available in dragstart');
+          e.preventDefault();
+          return false;
+        }
+
+        isDragging = true;
+
+        e.dataTransfer.effectAllowed = 'move';
+
+        const fullPath = file.path;
+
+        try {
+          e.dataTransfer.setData('text/plain', fullPath);
+        } catch (err) {
+          console.error('Error setting drag data:', err);
+          e.preventDefault();
+          return false;
+        }
+
+        item.classList.add('dragging');
+
+        setTimeout(() => {
+          showParentFolderDropZone(dir);
+        }, 0);
+      });
+
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        hideParentFolderDropZone();
+        document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+          el.classList.remove('drag-over');
+        });
+        setTimeout(() => {
+          isDragging = false;
+        }, 100);
+      });
+
+      if (file.isDirectory) {
+        item.addEventListener('click', (e) => {
+          if (isDragging || item.classList.contains('dragging')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.stopPropagation();
+          loadFileTree(file.path);
+        });
+      } else {
+        item.addEventListener('click', (e) => {
+          if (isDragging || item.classList.contains('dragging')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.stopPropagation();
+          switchToFile(file.path);
+        });
+      }
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showContextMenu(e, file.path, file.isDirectory, file.name);
+      });
+
+      item.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        renameFile(file.path, file.name, file.isDirectory);
+      });
+
+      if (file.isDirectory) {
+        item.addEventListener('dragover', (e) => {
+          const hasTextPlain = e.dataTransfer.types.includes('text/plain');
+          if (hasTextPlain) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+            item.classList.add('drag-over');
+          }
+        }, false);
+
+        item.addEventListener('dragleave', (e) => {
+          if (!item.contains(e.relatedTarget)) {
+            e.preventDefault();
+            e.stopPropagation();
+            item.classList.remove('drag-over');
+          }
+        });
+
+        item.addEventListener('drop', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+          });
+
+          const draggedFilePath = e.dataTransfer.getData('text/plain');
+
+          if (draggedFilePath && draggedFilePath.trim()) {
+            if (draggedFilePath !== file.path && !file.path.startsWith(draggedFilePath + '/')) {
+              moveFileToFolder(draggedFilePath, file.path);
+            }
+          } else {
+            const dropped = e.dataTransfer.files;
+            if (dropped.length > 0) {
+              handleFileDrop(dropped, file.path);
+            }
+          }
+        });
+      }
+
+      return item;
+    },
+
+    updateFlatRowVisuals(item, file, filePath, modifiedFiles, gitState, h) {
+      item.className = 'file-tree-item' + (file.isDirectory ? ' file-tree-folder' : '');
+      item.dataset.path = file.path;
+      item.dataset.isDirectory = file.isDirectory ? 'true' : 'false';
+      item.dataset.name = file.name;
+
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
+      const normalizedFilepath = file.path.replace(/\/+/g, '/');
+      item.classList.toggle('active', normalizedFilepath === normalizedCurrentPath);
+
+      const nameEl = item.querySelector('.file-tree-item-name');
+      if (nameEl) nameEl.textContent = file.name;
+
+      const icon = (nameEl && nameEl.previousElementSibling) ? nameEl.previousElementSibling : item.children[0];
+      if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon && icon) {
+        PreviewFileIcons.applyToIcon(icon, file.name, !!file.isDirectory);
+      } else if (icon) {
+        icon.className = 'file-tree-item-icon';
+        icon.textContent = file.isDirectory ? '' : '📄';
+      }
+
+      item.querySelectorAll('.file-tree-status-badges').forEach(n => n.remove());
+
+      const localDirty = !file.isDirectory && modifiedFiles.has(file.path);
+      const norm = module.normalizeExplorerPath(file.path);
+      const gitLetter = file.isDirectory
+        ? module.gitFolderBadge(norm, gitState)
+        : module.gitFileBadge(norm, gitState);
+      module.appendExplorerBadges(item, localDirty, gitLetter);
+      module.applyExplorerRowTint(item, localDirty, gitLetter);
+    },
+
+    async mergeFlatListingIncremental(rawFiles, h) {
+      const files = module.prepareFileList(Array.isArray(rawFiles) ? rawFiles : []);
+      const fileTree = h.fileTree;
+      const dir = h.dir;
+      const filePath = typeof h.getFilePath === 'function' ? h.getFilePath() : h.getFilePath;
+
+      if (files.length === 0) {
+        fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+        lastFlatHandlers = null;
+        return;
+      }
+
+      const gitPromise = module.getGitExplorerState();
+      const [modifiedFiles, gitState] = await Promise.all([
+        module.collectModifiedFiles(files),
+        gitPromise
+      ]);
+
+      const normPath = (p) => String(p || '').replace(/\/+/g, '/');
+      const existingByPath = new Map();
+      for (const el of fileTree.querySelectorAll(':scope > .file-tree-item')) {
+        if (el.dataset.path === '__parent__') continue;
+        existingByPath.set(normPath(el.dataset.path), el);
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (const file of files) {
+        const p = normPath(file.path);
+        let el = existingByPath.get(p);
+        if (el) {
+          const wasDir = el.dataset.isDirectory === 'true';
+          if (wasDir !== !!file.isDirectory) {
+            existingByPath.delete(p);
+            el.remove();
+            el = module.createFlatFileRowElement(file, dir, filePath, modifiedFiles, gitState, h);
+          } else {
+            existingByPath.delete(p);
+            module.updateFlatRowVisuals(el, file, filePath, modifiedFiles, gitState, h);
+          }
+        } else {
+          el = module.createFlatFileRowElement(file, dir, filePath, modifiedFiles, gitState, h);
+        }
+        fragment.appendChild(el);
+      }
+      for (const el of existingByPath.values()) {
+        el.remove();
+      }
+
+      fileTree.appendChild(fragment);
+      const parentRow = fileTree.querySelector(':scope > .file-tree-item[data-path="__parent__"]');
+      if (parentRow) {
+        fileTree.insertBefore(parentRow, fileTree.firstChild);
+      }
+    },
+
+    shouldProcessFsEvent(data, getCurrentDir, treeOn) {
+      if (treeOn) return true;
+      const normalizePath = (p) => {
+        const pathStr = typeof p === 'function' ? p() : (typeof p === 'string' ? p : String(p || ''));
+        return pathStr.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
+      };
+      const eventPath = normalizePath(data.path);
+      const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
+      let currentDirNormalized = normalizePath(currentDir || '/');
+      if (!currentDirNormalized) {
+        currentDirNormalized = '/';
+      }
+      if (currentDirNormalized === '/') {
+        return true;
+      }
+      const isInCurrentDir = eventPath.startsWith(currentDirNormalized + '/') ||
+        eventPath === currentDirNormalized;
+      const isParentChange = currentDirNormalized.startsWith(eventPath + '/');
+      return isInCurrentDir || isParentChange;
+    },
+
+    collectAffectedParents(batch) {
+      const parents = new Set();
+      let needsRoot = false;
+      for (const ev of batch) {
+        const path = module.normalizeExplorerPath(ev.path);
+        if (!path) continue;
+        const slash = path.lastIndexOf('/');
+        const parent = slash === -1 ? '' : path.slice(0, slash);
+        parents.add(parent);
+        if (parent === '') needsRoot = true;
+      }
+      return { parents: Array.from(parents), needsRoot };
+    },
+
+    findTreeRowForNormPath(fileTree, normPath) {
+      for (const el of fileTree.querySelectorAll('.file-tree-item[data-is-directory="true"]')) {
+        if (module.normalizeExplorerPath(el.dataset.path) === normPath) {
+          return el;
+        }
+      }
+      return null;
+    },
+
+    _requeueFlatFsBatch(batch, getCurrentDir, loadFileTree) {
+      if (fsBatchRequeueAttempts >= FS_BATCH_MAX_REQUEUE) {
+        fsBatchRequeueAttempts = 0;
+        return;
+      }
+      fsBatchRequeueAttempts++;
+      fsEventQueue.unshift(...batch);
+      setTimeout(() => {
+        module.processFsEventBatch(getCurrentDir, loadFileTree);
+      }, 100);
+    },
+
+    async _refreshFlatFsBatch(batch, getCurrentDir, loadFileTree) {
+      const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
+      const dirStr = typeof currentDir === 'string' ? currentDir : String(currentDir || '/');
+      const curNorm = module.normalizeExplorerDirForCompare(dirStr);
+      const storedNorm = lastFlatHandlers ? module.normalizeExplorerDirForCompare(lastFlatHandlers.dir) : null;
+
+      if (!lastFlatHandlers) {
+        module._requeueFlatFsBatch(batch, getCurrentDir, loadFileTree);
+        return;
+      }
+
+      if (storedNorm !== curNorm) {
+        return;
+      }
+
+      if (isRendering) {
+        module._requeueFlatFsBatch(batch, getCurrentDir, loadFileTree);
+        return;
+      }
+
+      fsBatchRequeueAttempts = 0;
+
+      const apiPath = dirStr === '/' ? '/' : dirStr;
+      try {
+        const res = await fetch('/__api__/files?path=' + encodeURIComponent(apiPath) + '&list=true');
+        const data = await res.json();
+        if (!data.success || !data.files) {
+          return;
+        }
+        await module.mergeFlatListingIncremental(data.files, lastFlatHandlers);
+      } catch (e) {
+        console.error('Incremental FS refresh failed:', e);
+      }
+    },
+
+    _requeueTreeFsBatch(batch, getCurrentDir, loadFileTree) {
+      if (fsBatchRequeueAttempts >= FS_BATCH_MAX_REQUEUE) {
+        fsBatchRequeueAttempts = 0;
+        return;
+      }
+      fsBatchRequeueAttempts++;
+      fsEventQueue.unshift(...batch);
+      setTimeout(() => {
+        module.processFsEventBatch(getCurrentDir, loadFileTree);
+      }, 100);
+    },
+
+    async _refreshTreeFsBatch(batch, getCurrentDir, loadFileTree) {
+      const ctx = lastTreeCtx;
+      const fileTree = ctx?.fileTree || document.getElementById('fileTree');
+      if (!ctx || !fileTree) {
+        module._requeueTreeFsBatch(batch, getCurrentDir, loadFileTree);
+        return;
+      }
+      if (isRendering) {
+        module._requeueTreeFsBatch(batch, getCurrentDir, loadFileTree);
+        return;
+      }
+      fsBatchRequeueAttempts = 0;
+      const { parents, needsRoot } = module.collectAffectedParents(batch);
+      ctx._gitExplorerPromise = null;
+      try {
+        if (needsRoot) {
+          const res = await fetch('/__api__/files?path=' + encodeURIComponent('/') + '&list=true');
+          const data = await res.json();
+          if (!data.success || !data.files) {
+            return;
+          }
+          fileTree.innerHTML = '';
+          await module.renderTreeLevel(module.prepareFileList(data.files), fileTree, ctx);
+          return;
+        }
+        for (const parent of parents) {
+          const norm = module.normalizeExplorerPath(parent);
+          if (!norm) continue;
+          if (!treeExpandedPaths.has(norm)) continue;
+          const row = module.findTreeRowForNormPath(fileTree, norm);
+          if (!row) continue;
+          const branch = row.closest('.file-tree-branch');
+          const childrenWrap = branch && branch.querySelector('.file-tree-children');
+          if (!childrenWrap) continue;
+          await module.loadTreeChildren(norm, childrenWrap, ctx, { silent: true });
+        }
+      } catch (e) {
+        console.error('Tree FS refresh failed:', e);
+      }
+    },
+
+    processFsEventBatch(getCurrentDir, loadFileTree) {
+      const batch = fsEventQueue.splice(0);
+      if (batch.length === 0) return Promise.resolve();
+      const treeOn = typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView === true;
+      const relevant = batch.filter(ev => module.shouldProcessFsEvent(ev, getCurrentDir, treeOn));
+      if (relevant.length === 0) return Promise.resolve();
+      if (treeOn) {
+        return module._refreshTreeFsBatch(relevant, getCurrentDir, loadFileTree);
+      }
+      return module._refreshFlatFsBatch(relevant, getCurrentDir, loadFileTree);
+    },
+
+    handleFileSystemEvent(data, getCurrentDir, loadFileTree) {
+      if (!data || (data.type !== 'fileAdded' && data.type !== 'fileDeleted' &&
+          data.type !== 'directoryAdded' && data.type !== 'directoryDeleted')) {
+        return;
+      }
+      fsEventQueue.push(data);
+      if (fsEventTimer) clearTimeout(fsEventTimer);
+      fsEventTimer = setTimeout(() => {
+        fsEventTimer = null;
+        module.processFsEventBatch(getCurrentDir, loadFileTree).catch((err) => {
+          console.error('FS batch failed:', err);
+        });
+      }, FS_EVENT_DEBOUNCE_MS);
+    },
+
     async renderFileTree(files, dir, fileTree, getFilePath, loadFileTree, switchToFile, showContextMenu, renameFile, moveFileToFolder, handleFileDrop, showParentFolderDropZone, hideParentFolderDropZone) {
       // Prevent concurrent renders
       if (isRendering) {
@@ -611,6 +1090,7 @@ window.PreviewFileExplorer = (function() {
       try {
       if (!files || files.length === 0) {
         fileTree.innerHTML = '<div class="file-tree-loading">No files</div>';
+        lastFlatHandlers = null;
         isRendering = false;
         return;
       }
@@ -660,175 +1140,42 @@ window.PreviewFileExplorer = (function() {
         });
       
       const gitPromise = module.getGitExplorerState();
-      await Promise.all(checkPromises);
-      const gitState = await gitPromise;
-      
-      files.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'file-tree-item' + (file.isDirectory ? ' file-tree-folder' : '');
-        item.dataset.path = file.path;
-        item.dataset.isDirectory = file.isDirectory;
-        item.dataset.name = file.name;
-        
-        const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
-        const normalizedFilepath = file.path.replace(/\/+/g, '/');
-        if (normalizedFilepath === normalizedCurrentPath) {
-          item.classList.add('active');
-        }
-        
-        const icon = document.createElement('span');
-        if (window.PreviewFileIcons && PreviewFileIcons.applyToIcon) {
-          PreviewFileIcons.applyToIcon(icon, file.name, !!file.isDirectory);
-        } else {
-          icon.className = 'file-tree-item-icon';
-          if (!file.isDirectory) {
-            icon.textContent = '📄';
-          }
-        }
-        
-        const name = document.createElement('span');
-        name.className = 'file-tree-item-name';
-        name.textContent = file.name;
-        
-        item.appendChild(icon);
-        item.appendChild(name);
+      const [, gitState] = await Promise.all([Promise.all(checkPromises), gitPromise]);
 
-        const localDirty = !file.isDirectory && modifiedFiles.has(file.path);
-        const norm = module.normalizeExplorerPath(file.path);
-        const gitLetter = file.isDirectory
-          ? module.gitFolderBadge(norm, gitState)
-          : module.gitFileBadge(norm, gitState);
-        module.appendExplorerBadges(item, localDirty, gitLetter);
-        module.applyExplorerRowTint(item, localDirty, gitLetter);
-        
-        item.setAttribute('draggable', 'true');
-        item.draggable = true;
-        
-        let isDragging = false;
-        
-        item.addEventListener('mousedown', (e) => {
-        });
-        
-        item.addEventListener('dragstart', (e) => {
-          if (!e.dataTransfer) {
-            console.error('dataTransfer not available in dragstart');
-            e.preventDefault();
-            return false;
-          }
-          
-          isDragging = true;
-          
-          e.dataTransfer.effectAllowed = 'move';
-          
-          const fullPath = file.path;
-          
-          try {
-            e.dataTransfer.setData('text/plain', fullPath);
-          } catch (err) {
-            console.error('Error setting drag data:', err);
-            e.preventDefault();
-            return false;
-          }
-          
-          item.classList.add('dragging');
-          
-          setTimeout(() => {
-            showParentFolderDropZone(dir);
-          }, 0);
-        });
-        
-        item.addEventListener('dragend', (e) => {
-          item.classList.remove('dragging');
-          hideParentFolderDropZone();
-          document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
-            el.classList.remove('drag-over');
-          });
-          setTimeout(() => {
-            isDragging = false;
-          }, 100);
-        });
-        
-        if (file.isDirectory) {
-          item.addEventListener('click', (e) => {
-            if (isDragging || item.classList.contains('dragging')) {
-              e.preventDefault();
-              e.stopPropagation();
-              return;
-            }
-            e.stopPropagation();
-            loadFileTree(file.path);
-          });
-        } else {
-          item.addEventListener('click', (e) => {
-            if (isDragging || item.classList.contains('dragging')) {
-              e.preventDefault();
-              e.stopPropagation();
-              return;
-            }
-            e.stopPropagation();
-            switchToFile(file.path);
-          });
-        }
-        
-        item.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          showContextMenu(e, file.path, file.isDirectory, file.name);
-        });
-        
-        item.addEventListener('dblclick', (e) => {
-          e.stopPropagation();
-          renameFile(file.path, file.name, file.isDirectory);
-        });
-        
-        if (file.isDirectory) {
-          item.addEventListener('dragover', (e) => {
-            const hasTextPlain = e.dataTransfer.types.includes('text/plain');
-            if (hasTextPlain) {
-              e.preventDefault();
-              e.stopPropagation();
-              e.dataTransfer.dropEffect = 'move';
-              item.classList.add('drag-over');
-            }
-          }, false);
-          
-          item.addEventListener('dragleave', (e) => {
-            if (!item.contains(e.relatedTarget)) {
-              e.preventDefault();
-              e.stopPropagation();
-              item.classList.remove('drag-over');
-            }
-          });
-          
-          item.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            document.querySelectorAll('.file-tree-item.drag-over').forEach(el => {
-              el.classList.remove('drag-over');
-            });
-            
-            const draggedFilePath = e.dataTransfer.getData('text/plain');
-            
-            if (draggedFilePath && draggedFilePath.trim()) {
-              if (draggedFilePath !== file.path && !file.path.startsWith(draggedFilePath + '/')) {
-                moveFileToFolder(draggedFilePath, file.path);
-              }
-            } else {
-              const files = e.dataTransfer.files;
-              if (files.length > 0) {
-                handleFileDrop(files, file.path);
-              }
-            }
-          });
-        }
-        
+      const rowHandlers = {
+        loadFileTree,
+        switchToFile,
+        showContextMenu,
+        renameFile,
+        moveFileToFolder,
+        handleFileDrop,
+        showParentFolderDropZone,
+        hideParentFolderDropZone
+      };
+
+      files.forEach(file => {
+        const item = module.createFlatFileRowElement(file, dir, filePath, modifiedFiles, gitState, rowHandlers);
         fileTree.appendChild(item);
       });
-      
+
+      lastFlatHandlers = {
+        fileTree,
+        dir,
+        getFilePath,
+        loadFileTree,
+        switchToFile,
+        showContextMenu,
+        renameFile,
+        moveFileToFolder,
+        handleFileDrop,
+        showParentFolderDropZone,
+        hideParentFolderDropZone
+      };
+
       isRendering = false;
       } catch (error) {
         console.error('Error rendering file tree:', error);
+        lastFlatHandlers = null;
         isRendering = false;
       }
     },
@@ -1720,6 +2067,30 @@ window.PreviewFileExplorer = (function() {
       });
     },
 
+    async refreshCurrentDirectoryAfterMutation(getCurrentDir, loadFileTree) {
+      const dirStr = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
+      const treeOn = PreviewSettings.getSettings().explorerTreeView === true;
+      const norm = module.normalizeExplorerDirForCompare(dirStr);
+      if (!treeOn && lastFlatHandlers && module.normalizeExplorerDirForCompare(lastFlatHandlers.dir) === norm) {
+        if (isRendering) {
+          loadFileTree(dirStr, undefined, { silent: true });
+          return;
+        }
+        try {
+          const apiPath = dirStr === '/' ? '/' : dirStr;
+          const res = await fetch('/__api__/files?path=' + encodeURIComponent(apiPath) + '&list=true');
+          const data = await res.json();
+          if (data.success && data.files) {
+            await module.mergeFlatListingIncremental(data.files, lastFlatHandlers);
+            return;
+          }
+        } catch (e) {
+          console.error('Refresh after mutation failed:', e);
+        }
+      }
+      loadFileTree(dirStr, undefined, { silent: true });
+    },
+
     async deleteFile(path, isDirectory, customConfirm, getCurrentDir, loadFileTree, filePath, closeTabCallback) {
       const confirmed = await customConfirm(`Are you sure you want to delete ${isDirectory ? 'folder' : 'file'} "${path.split('/').pop()}"?`);
       if (!confirmed) {
@@ -1732,10 +2103,9 @@ window.PreviewFileExplorer = (function() {
         body: JSON.stringify({ path: path, isDirectory: isDirectory })
       })
       .then(res => res.json())
-      .then(data => {
+      .then(async (data) => {
         if (data.success) {
-          loadFileTree(getCurrentDir());
-          // Close the tab if the deleted file is open
+          await module.refreshCurrentDirectoryAfterMutation(getCurrentDir, loadFileTree);
           if (closeTabCallback && typeof closeTabCallback === 'function') {
             closeTabCallback(path);
           }

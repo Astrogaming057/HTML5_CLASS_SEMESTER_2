@@ -247,10 +247,15 @@ window.PreviewEvents = (function() {
           if (newPath !== filePathRef.current) {
             filePathRef.current = newPath;
             fileName.textContent = newPath.split('/').pop();
-            const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-            if (newDir !== currentDirRef.currentDir) {
+            const newDir = typeof PreviewFileExplorer !== 'undefined' && PreviewFileExplorer.parentDirFromFilePath
+              ? PreviewFileExplorer.parentDirFromFilePath(newPath)
+              : (newPath.split('/').slice(0, -1).join('/') || '/');
+            const dirsMatch = typeof PreviewFileExplorer !== 'undefined' && PreviewFileExplorer.explorerDirsMatch
+              ? PreviewFileExplorer.explorerDirsMatch(newDir, currentDirRef.currentDir)
+              : newDir === currentDirRef.currentDir;
+            if (!dirsMatch) {
               currentDirRef.currentDir = newDir;
-              loadFileTree(newDir);
+              loadFileTree(newDir, undefined, { silent: true });
             } else {
               updateActiveFileTreeItem(newPath);
             }

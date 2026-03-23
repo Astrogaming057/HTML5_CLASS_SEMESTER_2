@@ -1,6 +1,4 @@
 window.PreviewWebSocket = (function() {
-  let refreshTimeout = null;
-  
   return {
     setupWebSocket(wsRef, syncChannel, receivedLogIds, generateLogId, addPreviewLog, showServerUpdateNotification, handleFileSystemEvent, previewSettings, filePath, previewFrame, loadFileTree, isPreviewPinned, restartServerCallback) {
       let wsUrl;
@@ -228,54 +226,8 @@ window.PreviewWebSocket = (function() {
     },
 
     handleFileSystemEvent(data, getCurrentDir, loadFileTree) {
-      if (typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView) {
-        if (refreshTimeout) {
-          clearTimeout(refreshTimeout);
-        }
-        refreshTimeout = setTimeout(() => {
-          loadFileTree('/');
-          refreshTimeout = null;
-        }, 100);
-        return;
-      }
-
-      const normalizePath = (p) => {
-        const pathStr = typeof p === 'function' ? p() : (typeof p === 'string' ? p : String(p || ''));
-        const cleaned = pathStr.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
-        return cleaned;
-      };
-
-      const eventPath = normalizePath(data.path);
-      const currentDir = typeof getCurrentDir === 'function' ? getCurrentDir() : getCurrentDir;
-      let currentDirNormalized = normalizePath(currentDir || '/');
-
-      // Treat empty normalized path as root directory
-      if (!currentDirNormalized) {
-        currentDirNormalized = '/';
-      }
-
-      let isInCurrentDir = false;
-      let isParentChange = false;
-
-      if (currentDirNormalized === '/') {
-        // When viewing the project root, any file system change should refresh the tree
-        isInCurrentDir = true;
-        isParentChange = false;
-      } else {
-        isInCurrentDir = eventPath.startsWith(currentDirNormalized + '/') ||
-                         eventPath === currentDirNormalized;
-        isParentChange = currentDirNormalized.startsWith(eventPath + '/');
-      }
-      
-      if (isInCurrentDir || isParentChange) {
-        // Debounce rapid file system events to prevent multiple refreshes
-        if (refreshTimeout) {
-          clearTimeout(refreshTimeout);
-        }
-        refreshTimeout = setTimeout(() => {
-          loadFileTree(currentDir || '/');
-          refreshTimeout = null;
-        }, 100);
+      if (window.PreviewFileExplorer && typeof PreviewFileExplorer.handleFileSystemEvent === 'function') {
+        PreviewFileExplorer.handleFileSystemEvent(data, getCurrentDir, loadFileTree);
       }
     }
   };

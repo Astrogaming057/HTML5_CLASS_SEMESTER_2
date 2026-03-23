@@ -681,12 +681,13 @@ require(['vs/editor/editor.main'], function() {
   
   PreviewInitialization.initializeVisibility(resizerEditor, previewPanel);
   
-  function loadFileTree(dir, expandHint) {
+  function loadFileTree(dir, expandHint, opts) {
     PreviewFileExplorer.loadFileTree(
       dir, fileTree, currentDirRef, updateBackButton, saveState,
       renderFileTree,
       (d) => fetchDirectoryListing(d),
-      expandHint !== undefined && expandHint !== null ? expandHint : filePathRef.current
+      expandHint !== undefined && expandHint !== null ? expandHint : filePathRef.current,
+      opts
     );
     currentDir = currentDirRef.currentDir;
   }
@@ -737,7 +738,7 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function handleFileSystemEvent(data) {
-    PreviewWebSocket.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
+    PreviewFileExplorer.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
   }
   
   function setupDragAndDrop() {
@@ -892,8 +893,8 @@ require(['vs/editor/editor.main'], function() {
     window.history.replaceState({ file: newPath }, '', newUrl);
     
     // Update active file tree item (don't reload file tree here - let WebSocket handle it)
-    const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-    if (newDir === currentDirRef.currentDir) {
+    const newDir = PreviewFileExplorer.parentDirFromFilePath(newPath);
+    if (PreviewFileExplorer.explorerDirsMatch(newDir, currentDirRef.currentDir)) {
       // Only update the active item if we're in the same directory
       // The file tree will be refreshed by WebSocket events
       updateActiveFileTreeItem(newPath);
@@ -986,7 +987,7 @@ require(['vs/editor/editor.main'], function() {
   }
   
   function handleFileSystemEvent(data) {
-    PreviewWebSocket.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
+    PreviewFileExplorer.handleFileSystemEvent(data, () => currentDirRef.currentDir, loadFileTree);
   }
   
   function showServerUpdateNotification() {
@@ -1129,9 +1130,9 @@ require(['vs/editor/editor.main'], function() {
       const openTabs = PreviewTabManager.getOpenTabs();
       if (openTabs.includes(newPath)) {
         fileName.textContent = newPath.split('/').pop();
-        const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-        if (newDir !== currentDirRef.currentDir) {
-          loadFileTree(newDir);
+        const newDir = PreviewFileExplorer.parentDirFromFilePath(newPath);
+        if (!PreviewSettings.getSettings().explorerTreeView && !PreviewFileExplorer.explorerDirsMatch(newDir, currentDirRef.currentDir)) {
+          loadFileTree(newDir, undefined, { silent: true });
         } else {
           updateActiveFileTreeItem(newPath);
         }
@@ -1712,9 +1713,9 @@ require(['vs/editor/editor.main'], function() {
         if (filePath) {
           filePathRef.current = filePath;
           fileName.textContent = filePath.split('/').pop();
-          const newDir = filePath.split('/').slice(0, -1).join('/') || '';
-          if (newDir !== currentDirRef.currentDir) {
-            loadFileTree(newDir);
+          const newDir = PreviewFileExplorer.parentDirFromFilePath(filePath);
+          if (!PreviewSettings.getSettings().explorerTreeView && !PreviewFileExplorer.explorerDirsMatch(newDir, currentDirRef.currentDir)) {
+            loadFileTree(newDir, undefined, { silent: true });
           } else {
             updateActiveFileTreeItem(filePath);
           }

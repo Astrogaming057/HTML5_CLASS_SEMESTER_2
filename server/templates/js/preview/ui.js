@@ -246,7 +246,7 @@ window.PreviewUI = (function() {
       if (!currentDirStr || currentDirStr === '/') return currentDirStr;
       
       const parentDir = currentDirStr.split('/').slice(0, -1).join('/') || '/';
-      loadFileTree(parentDir);
+      loadFileTree(parentDir, undefined, { silent: true });
       updateBackButton();
       return parentDir;
     }

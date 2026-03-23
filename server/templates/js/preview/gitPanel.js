@@ -88,6 +88,12 @@ window.PreviewGitPanel = (function () {
   const GRAPH_POPOVER_SHOW_MS = 120;
   const GRAPH_POPOVER_HIDE_MS = 400;
 
+  const LS_GRAPH_H = 'astroGitGraphHeightPx';
+  const LS_GRAPH_COLLAPSED = 'astroGitGraphCollapsed';
+  const GRAPH_H_MIN = 80;
+  const GRAPH_H_MAX = 900;
+  let graphResizeActive = false;
+
   function formatRelativeTime(d) {
     if (!(d instanceof Date) || isNaN(d.getTime())) return '';
     const ms = Date.now() - d.getTime();
@@ -151,11 +157,13 @@ window.PreviewGitPanel = (function () {
       if (!n || n.nodeType !== 1) continue;
       if (graphPopoverEl && (n === graphPopoverEl || graphPopoverEl.contains(n))) return true;
       if (n.classList && n.classList.contains('git-graph-panel')) return true;
+      if (n.classList && n.classList.contains('git-graph-splitter')) return true;
     }
     const el = pointerEventRetargetToElement(e.target);
     if (!el || !el.closest) return false;
     if (el.closest('.git-graph-popover')) return true;
     if (el.closest('.git-graph-panel')) return true;
+    if (el.closest('.git-graph-splitter')) return true;
     return false;
   }
 
@@ -1124,7 +1132,10 @@ window.PreviewGitPanel = (function () {
     graphPanel.innerHTML =
       '<div class="git-graph-header">' +
       '<div class="git-graph-header-left">' +
+      '<div class="git-graph-title-row">' +
+      '<button type="button" class="git-graph-collapse-btn" id="gitGraphCollapseBtn" aria-expanded="true" aria-label="Collapse graph" title="Collapse graph">\u25bc</button>' +
       '<span class="git-graph-title">GRAPH</span>' +
+      '</div>' +
       '<span class="git-graph-sync-hint" id="gitGraphSyncHint" hidden></span>' +
       '</div>' +
       '<div class="git-graph-toolbar">' +
@@ -1133,13 +1144,23 @@ window.PreviewGitPanel = (function () {
       '<button type="button" class="git-btn git-btn-small" id="gitGraphPushBtn" title="Push">Push</button>' +
       '<button type="button" class="git-btn git-btn-small" id="gitGraphRefreshBtn" title="Refresh graph">\u21bb</button>' +
       '</div></div>' +
-      '<div class="git-graph-list" id="gitGraphList"></div>';
+      '<div class="git-graph-body">' +
+      '<div class="git-graph-list" id="gitGraphList"></div>' +
+      '</div>';
+
+    const graphSplitter = document.createElement('div');
+    graphSplitter.className = 'git-graph-splitter';
+    graphSplitter.id = 'gitGraphSplitter';
+    graphSplitter.setAttribute('role', 'separator');
+    graphSplitter.setAttribute('aria-orientation', 'horizontal');
+    graphSplitter.setAttribute('aria-label', 'Resize commit graph');
 
     gitStackEl = document.createElement('div');
     gitStackEl.id = 'gitExplorerStack';
     gitStackEl.className = 'git-explorer-stack';
     gitStackEl.hidden = true;
     gitStackEl.appendChild(panel);
+    gitStackEl.appendChild(graphSplitter);
     gitStackEl.appendChild(graphPanel);
 
     const explorerBody = document.getElementById('explorerBody');
@@ -1157,8 +1178,94 @@ window.PreviewGitPanel = (function () {
       }
     }
 
+    applyGitGraphLayoutFromStorage(graphPanel, graphSplitter);
+
     setupEventHandlers();
+    setupGitGraphResize(graphSplitter, graphPanel, gitStackEl);
     return panel;
+  }
+
+  function readGraphHeightPx() {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_GRAPH_H) : null;
+    const n = raw ? parseInt(raw, 10) : NaN;
+    if (Number.isFinite(n) && n >= GRAPH_H_MIN && n <= GRAPH_H_MAX) {
+      return n;
+    }
+    return 200;
+  }
+
+  function setGraphPanelHeightPx(gp, px) {
+    const h = Math.min(GRAPH_H_MAX, Math.max(GRAPH_H_MIN, Math.round(px)));
+    gp.style.flex = '0 0 ' + h + 'px';
+    gp.style.height = h + 'px';
+  }
+
+  function applyGitGraphLayoutFromStorage(graphPanel, splitter) {
+    if (!graphPanel) return;
+    setGraphPanelHeightPx(graphPanel, readGraphHeightPx());
+    const collapsed =
+      typeof localStorage !== 'undefined' && localStorage.getItem(LS_GRAPH_COLLAPSED) === '1';
+    if (collapsed) {
+      graphPanel.classList.add('is-collapsed');
+      if (splitter) splitter.hidden = true;
+      const btn = document.getElementById('gitGraphCollapseBtn');
+      if (btn) {
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = '\u25b6';
+        btn.title = 'Expand graph';
+        btn.setAttribute('aria-label', 'Expand graph');
+      }
+    } else if (splitter) {
+      splitter.hidden = false;
+    }
+  }
+
+  function setupGitGraphResize(splitter, graphPanel, stackEl) {
+    if (!splitter || !graphPanel || !stackEl) return;
+
+    function onPointerDown(e) {
+      if (graphPanel.classList.contains('is-collapsed')) return;
+      if (e.button !== 0) return;
+      e.preventDefault();
+      graphResizeActive = true;
+      const startY = e.clientY;
+      const startH = graphPanel.getBoundingClientRect().height;
+      splitter.setPointerCapture(e.pointerId);
+
+      function onMove(ev) {
+        if (!graphResizeActive) return;
+        const dy = ev.clientY - startY;
+        let next = startH + dy;
+        const stackH = stackEl.getBoundingClientRect().height;
+        const maxG = Math.min(GRAPH_H_MAX, Math.max(GRAPH_H_MIN, stackH - 120));
+        next = Math.min(Math.max(GRAPH_H_MIN, next), maxG);
+        setGraphPanelHeightPx(graphPanel, next);
+      }
+
+      function onUp(ev) {
+        graphResizeActive = false;
+        try {
+          splitter.releasePointerCapture(ev.pointerId);
+        } catch (_err) {
+          /* ignore */
+        }
+        splitter.removeEventListener('pointermove', onMove);
+        splitter.removeEventListener('pointerup', onUp);
+        splitter.removeEventListener('pointercancel', onUp);
+        const h = graphPanel.getBoundingClientRect().height;
+        try {
+          localStorage.setItem(LS_GRAPH_H, String(Math.round(h)));
+        } catch (_e) {
+          /* ignore */
+        }
+      }
+
+      splitter.addEventListener('pointermove', onMove);
+      splitter.addEventListener('pointerup', onUp);
+      splitter.addEventListener('pointercancel', onUp);
+    }
+
+    splitter.addEventListener('pointerdown', onPointerDown);
   }
 
   function setActiveTab(tab) {
@@ -1231,6 +1338,30 @@ window.PreviewGitPanel = (function () {
     document.getElementById('gitGraphPushBtn')?.addEventListener('click', async function () {
       await repoPush();
       await refreshGraph();
+    });
+
+    document.getElementById('gitGraphCollapseBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const gp = document.getElementById('gitGraphPanel');
+      const sp = document.getElementById('gitGraphSplitter');
+      const btn = document.getElementById('gitGraphCollapseBtn');
+      if (!gp || !btn) return;
+      const willCollapse = !gp.classList.contains('is-collapsed');
+      gp.classList.toggle('is-collapsed', willCollapse);
+      if (sp) sp.hidden = willCollapse;
+      btn.setAttribute('aria-expanded', willCollapse ? 'false' : 'true');
+      btn.textContent = willCollapse ? '\u25b6' : '\u25bc';
+      btn.title = willCollapse ? 'Expand graph' : 'Collapse graph';
+      btn.setAttribute('aria-label', willCollapse ? 'Expand graph' : 'Collapse graph');
+      try {
+        localStorage.setItem(LS_GRAPH_COLLAPSED, willCollapse ? '1' : '0');
+      } catch (_err) {
+        /* ignore */
+      }
+      if (!willCollapse) {
+        setGraphPanelHeightPx(gp, readGraphHeightPx());
+      }
     });
 
     document.getElementById('gitGraphList')?.addEventListener(

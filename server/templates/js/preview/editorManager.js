@@ -118,11 +118,21 @@ window.PreviewEditorManager = (function() {
       
       fileName.textContent = newPath.split('/').pop();
       
-      const newDir = newPath.split('/').slice(0, -1).join('/') || '';
-      if (newDir !== currentDir) {
-        loadFileTree(newDir);
-      } else {
+      const treeExplorer = typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView === true;
+      if (treeExplorer) {
         updateActiveFileTreeItem(newPath);
+      } else {
+        const newDirForApi = window.PreviewFileExplorer && typeof PreviewFileExplorer.parentDirFromFilePath === 'function'
+          ? PreviewFileExplorer.parentDirFromFilePath(newPath)
+          : (newPath.split('/').slice(0, -1).join('/') || '/');
+        const dirsMatch = window.PreviewFileExplorer && typeof PreviewFileExplorer.explorerDirsMatch === 'function'
+          ? PreviewFileExplorer.explorerDirsMatch(newDirForApi, currentDir)
+          : (newDirForApi === currentDir || (newDirForApi === '/' && (currentDir === '' || currentDir === '/')));
+        if (!dirsMatch) {
+          loadFileTree(newDirForApi, undefined, { silent: true });
+        } else {
+          updateActiveFileTreeItem(newPath);
+        }
       }
       
       loadFile(newPath);
