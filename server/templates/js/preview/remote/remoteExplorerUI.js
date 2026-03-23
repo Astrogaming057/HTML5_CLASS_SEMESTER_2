@@ -47,8 +47,30 @@ window.PreviewRemoteExplorer = (function () {
     if (hint) {
       hint.textContent = 'Connect to ' + (window.PreviewRemoteConfig.PROXY_BASE || 'proxy');
       hint.classList.remove('remote-auth-hint-warn');
-      auth.fetchProxyRemoteStatus().then(function (st) {
-        if (st.proxyDebug && hint) {
+      Promise.all([
+        auth.fetchProxyRemoteStatus().catch(function () { return {}; }),
+        auth.fetchLocalBuildInfo && typeof auth.fetchLocalBuildInfo === 'function'
+          ? auth.fetchLocalBuildInfo().catch(function () { return {}; })
+          : Promise.resolve({}),
+        fetch('/__api__/mode', { cache: 'no-cache' })
+          .then(function (r) { return r.ok ? r.json() : {}; })
+          .catch(function () { return {}; })
+      ]).then(function (results) {
+        const st = results[0] || {};
+        const localBi = results[1] || {};
+        const modeRes = results[2] || {};
+        const lc = normCommit(localBi.commit) || normCommit(modeRes.commit);
+        const pc = normCommit(st.commit);
+        if (commitsDiffer(lc, pc) && hint) {
+          hint.textContent +=
+            ' — Proxy build (' + (st.version || '?') + ' · ' + (pc || '?') +
+            ') differs from this app (' +
+            (localBi.version || modeRes.version || '?') +
+            ' · ' +
+            (lc || '?') +
+            '). Update the proxy or clients to avoid subtle bugs.';
+          hint.classList.add('remote-auth-hint-warn');
+        } else if (st.proxyDebug && hint) {
           hint.textContent += ' — Warning: proxy is in debug mode (logs may be exposed).';
           hint.classList.add('remote-auth-hint-warn');
         }
@@ -144,6 +166,29 @@ window.PreviewRemoteExplorer = (function () {
     if (!k || typeof k !== 'string') return '—';
     if (k.length <= 8) return '••••••••';
     return '…' + k.slice(-6);
+  }
+
+  function normCommit(c) {
+    if (c == null || c === '') return '';
+    const s = String(c).trim();
+    if (!s || s === 'unknown') return '';
+    return s;
+  }
+
+  /** True when both sides report a commit and they differ (mixed deployments). */
+  function commitsDiffer(a, b) {
+    const x = normCommit(a);
+    const y = normCommit(b);
+    if (!x || !y) return false;
+    return x !== y;
+  }
+
+  function formatBuildLine(bi) {
+    if (!bi || (!bi.version && !normCommit(bi.commit))) return '';
+    const v = bi.version != null ? String(bi.version) : '';
+    const c = normCommit(bi.commit);
+    if (v && c) return v + ' · ' + c;
+    return v || c || '';
   }
 
   /** Aligned key / value lines for monospace terminal panel */
@@ -312,6 +357,8 @@ window.PreviewRemoteExplorer = (function () {
             const text = buildTerminalPanel('device record', [
               ['name', dev.name || '—'],
               ['id', String(id)],
+              ['app_version', dev.appVersion != null ? String(dev.appVersion) : '—'],
+              ['git_commit', dev.appCommit != null ? String(dev.appCommit) : '—'],
               ['device_key', maskKey(dev.deviceKey)],
               ['base_url', dev.baseUrl || '—'],
               ['last_seen', formatLastSeen(dev.lastSeen)],
@@ -447,10 +494,17 @@ window.PreviewRemoteExplorer = (function () {
     let proxyDebug = false;
     let serverDebug = false;
     let agentStatus = null;
+    let localCommit = '';
+    let localVersion = '';
+    let proxyStale = false;
     try {
       const modeFetch = fetch('/__api__/mode', { cache: 'no-cache' })
         .then(function (r) { return r.ok ? r.json() : {}; })
         .catch(function () { return {}; });
+      const localBuildFetch =
+        auth.fetchLocalBuildInfo && typeof auth.fetchLocalBuildInfo === 'function'
+          ? auth.fetchLocalBuildInfo().catch(function () { return {}; })
+          : Promise.resolve({});
       const devicesFetch = loggedIn
         ? auth.fetchDevices().catch(function () { return []; })
         : Promise.resolve([]);
@@ -458,16 +512,22 @@ window.PreviewRemoteExplorer = (function () {
         loggedIn && auth.fetchLocalAgentStatus
           ? auth.fetchLocalAgentStatus().catch(function () { return null; })
           : Promise.resolve(null);
-      const [proxySt, modeRes, devicesList, agentFromParallel] = await Promise.all([
+      const [proxySt, modeRes, devicesList, agentFromParallel, localBi] = await Promise.all([
         auth.fetchProxyRemoteStatus(),
         modeFetch,
         devicesFetch,
-        agentFetch
+        agentFetch,
+        localBuildFetch
       ]);
       devicesCache = Array.isArray(devicesList) ? devicesList : [];
       proxyDebug = !!(proxySt && proxySt.proxyDebug);
       serverDebug = !!modeRes.debug;
       agentStatus = agentFromParallel;
+      localCommit = normCommit((localBi && localBi.commit) || '') || normCommit(modeRes.commit || '');
+      localVersion =
+        (localBi && localBi.version != null ? String(localBi.version) : '') ||
+        (modeRes.version != null ? String(modeRes.version) : '');
+      proxyStale = commitsDiffer(localCommit, proxySt && proxySt.commit);
     } catch (e) {
       devicesCache = [];
       proxyDebug = false;
@@ -489,8 +549,23 @@ window.PreviewRemoteExplorer = (function () {
       html += '<div class="remote-dd-debug-sub">Verbose logs may be exposed. Do not use for production secrets.</div>';
       html += '</div>';
     }
+    if (proxyStale) {
+      html += '<div class="remote-dd-version-warn" role="status">';
+      html +=
+        '<div class="remote-dd-version-line"><strong>Proxy vs this app:</strong> different git commit. ' +
+        'Deploy the same repo version on the proxy and all devices, or expect odd remote bugs.</div>';
+      html += '</div>';
+    }
     html += '<button type="button" class="remote-dd-item" data-action="local">Use Local</button>';
     html += '<span class="remote-dd-desc">Files and tools on this machine</span>';
+    const localLine = formatBuildLine({ version: localVersion, commit: localCommit });
+    if (localLine) {
+      html +=
+        '<div class="remote-dd-desc remote-dd-version-mono" title="This Astro Code backend (semver · git short hash)">' +
+        'This build: ' +
+        escapeHtml(localLine) +
+        '</div>';
+    }
     if (loggedIn) {
       html += '<div class="remote-dd-section">This PC → proxy tunnel</div>';
       if (agentStatus && agentStatus.connected) {
@@ -525,12 +600,22 @@ window.PreviewRemoteExplorer = (function () {
           } else if (dev.online === false) {
             label += ' — offline';
           }
+          const devC = normCommit(dev.appCommit);
+          const deviceStale =
+            !!devC && !!localCommit && commitsDiffer(localCommit, devC);
+          if (deviceStale) {
+            label += ' — old build';
+          }
           let mainClass = 'remote-dd-item remote-dd-device remote-dd-device-main';
           if (dev.disabled) mainClass += ' remote-dd-device-disabled';
           else if (dev.online === false) mainClass += ' remote-dd-device-offline';
           const idEsc = String(id).replace(/"/g, '&quot;');
+          const rowClass =
+            'remote-dd-device-row' + (deviceStale ? ' remote-dd-device-stale' : '');
           html +=
-            '<div class="remote-dd-device-row" data-id="' +
+            '<div class="' +
+            rowClass +
+            '" data-id="' +
             idEsc +
             '" role="group" title="Hover for ⋯ menu · right-click for device actions">' +
             '<button type="button" class="' +

@@ -10,6 +10,7 @@ const https = require('https');
 const { URL } = require('url');
 const WebSocket = require('ws');
 const logger = require('./utils/logger');
+const { getBuildInfo } = require('./utils/buildInfo');
 const appConfig = require('./config');
 
 const streams = new Map();
@@ -401,6 +402,19 @@ function startRemoteAgent(opts) {
       logger.info('remote agent: connected to proxy (presence + reverse tunnel)', {
         proxyHost
       });
+      try {
+        const bi = getBuildInfo();
+        ws.send(
+          JSON.stringify({
+            type: 'agent_hello',
+            name: bi.name,
+            appVersion: bi.version,
+            commit: bi.commit
+          })
+        );
+      } catch (e) {
+        /* ignore */
+      }
     });
 
     ws.on('message', (data) => {

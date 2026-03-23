@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const dbg = require('./debug');
+const store = require('./store');
 
 /** deviceId -> agent WebSocket (Astro Code backend outbound connection) */
 const deviceSockets = new Map();
@@ -154,6 +155,21 @@ function onDeviceMessage(deviceId, data) {
   try {
     msg = JSON.parse(data.toString());
   } catch (e) {
+    return;
+  }
+
+  if (msg.type === 'agent_hello') {
+    const device = store.findDeviceById(deviceId);
+    if (device) {
+      if (msg.appVersion != null && String(msg.appVersion).trim()) {
+        device.appVersion = String(msg.appVersion).trim().slice(0, 48);
+      }
+      if (msg.commit != null && String(msg.commit).trim()) {
+        device.appCommit = String(msg.commit).trim().slice(0, 64);
+      }
+      device.buildReportedAt = Date.now();
+      store.updateDevice(device);
+    }
     return;
   }
 

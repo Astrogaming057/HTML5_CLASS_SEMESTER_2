@@ -116,6 +116,35 @@
   line-height: 1.4;
 }
 
+.remote-dd-version-warn {
+  margin: 0 8px 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(33, 150, 243, 0.45);
+  background: rgba(33, 150, 243, 0.1);
+  color: var(--text-primary);
+}
+
+.remote-dd-version-line {
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+
+.remote-dd-version-line:last-child {
+  margin-bottom: 0;
+}
+
+.remote-dd-version-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  word-break: break-all;
+}
+
+.remote-dd-device-stale .remote-dd-device-main {
+  color: #ffb74d;
+}
+
 .remote-auth-hint-warn {
   color: #ffb74d !important;
 }

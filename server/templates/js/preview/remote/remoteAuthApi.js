@@ -5,6 +5,46 @@ window.PreviewRemoteAuthApi = (function () {
   /** Default timeout for proxy HTTP (browser can hang ~30s when host is down). */
   const DEFAULT_PROXY_FETCH_MS = 8000;
 
+  let localBuildCache = null;
+  let localBuildPromise = null;
+
+  /**
+   * GET /__api__/version — semver + git hash for comparing devices and proxy.
+   * @returns {Promise<{ name?: string, version?: string, commit?: string }>}
+   */
+  async function fetchLocalBuildInfo() {
+    if (localBuildCache) {
+      return localBuildCache;
+    }
+    if (localBuildPromise) {
+      return localBuildPromise;
+    }
+    localBuildPromise = fetch('/__api__/version', { cache: 'no-cache' })
+      .then(function (r) {
+        return r.ok ? r.json() : {};
+      })
+      .then(function (data) {
+        const out = {
+          name: data.name,
+          version: data.version,
+          commit: data.commit
+        };
+        localBuildCache = out;
+        return out;
+      })
+      .catch(function () {
+        return {};
+      })
+      .finally(function () {
+        localBuildPromise = null;
+      });
+    return localBuildPromise;
+  }
+
+  function getCachedLocalBuild() {
+    return localBuildCache;
+  }
+
   /**
    * fetch() with AbortController timeout so Remote Explorer stays responsive when proxy is offline.
    * @param {number} [timeoutMs] - default DEFAULT_PROXY_FETCH_MS
@@ -155,13 +195,16 @@ window.PreviewRemoteAuthApi = (function () {
     if (!base && typeof window !== 'undefined' && window.location) {
       base = window.location.origin;
     }
+    const bi = await fetchLocalBuildInfo();
     const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.registerDevice), {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
         name: name,
         deviceKey: sess.deviceKey(),
-        baseUrl: base
+        baseUrl: base,
+        appVersion: bi.version || '',
+        appCommit: bi.commit || ''
       })
     });
     const data = await parseJson(res);
@@ -198,10 +241,15 @@ window.PreviewRemoteAuthApi = (function () {
   async function sendHeartbeat() {
     const t = sess.getToken();
     if (!t) return;
+    const bi = await fetchLocalBuildInfo();
     const res = await fetchWithTimeout(proxyUrl(cfg.PATHS.heartbeat), {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ deviceKey: sess.deviceKey() })
+      body: JSON.stringify({
+        deviceKey: sess.deviceKey(),
+        appVersion: bi.version || '',
+        appCommit: bi.commit || ''
+      })
     });
     if (!res.ok) {
       if (res.status === 404) return;
@@ -217,12 +265,18 @@ window.PreviewRemoteAuthApi = (function () {
         cache: 'no-cache'
       });
       if (!res.ok) {
-        return { proxyDebug: false };
+        return { proxyDebug: false, version: null, commit: null, name: null };
       }
       const data = await parseJson(res);
-      return { proxyDebug: !!data.proxyDebug };
+      return {
+        proxyDebug: !!data.proxyDebug,
+        version: data.version != null ? String(data.version) : null,
+        commit: data.commit != null ? String(data.commit) : null,
+        name: data.name != null ? String(data.name) : null,
+        component: data.component != null ? String(data.component) : null
+      };
     } catch (e) {
-      return { proxyDebug: false };
+      return { proxyDebug: false, version: null, commit: null, name: null };
     }
   }
 
@@ -269,6 +323,8 @@ window.PreviewRemoteAuthApi = (function () {
     fetchLocalAgentStatus,
     fetchWithTimeout,
     updateDevice,
-    deleteDevice
+    deleteDevice,
+    fetchLocalBuildInfo,
+    getCachedLocalBuild
   };
 })();

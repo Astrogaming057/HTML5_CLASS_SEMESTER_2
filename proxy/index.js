@@ -10,6 +10,15 @@ const agentConnection = require('./lib/agentConnection');
 const { pathnameOnly } = require('./lib/agentSocket');
 const proxyDbg = require('./lib/debug');
 
+let getBuildInfo;
+try {
+  getBuildInfo = require('../server/utils/buildInfo').getBuildInfo;
+} catch (e) {
+  getBuildInfo = function () {
+    return { name: 'astro-proxy', version: '0.0.0', commit: 'unknown' };
+  };
+}
+
 const PROXY_DEBUG =
   process.env.PROXY_DEBUG === '1' ||
   process.env.ASTRO_CODE_PROXY_DEBUG === 'true' ||
@@ -47,11 +56,25 @@ if (PROXY_DEBUG) {
   });
 }
 
-app.get('/api/remote/status', (req, res) => {
-  res.json({
+function proxyBuildPayload() {
+  const bi = getBuildInfo();
+  return {
     ok: true,
-    proxyDebug: PROXY_DEBUG
-  });
+    proxyDebug: PROXY_DEBUG,
+    name: bi.name,
+    version: bi.version,
+    commit: bi.commit,
+    component: 'proxy'
+  };
+}
+
+app.get('/api/remote/status', (req, res) => {
+  res.json(proxyBuildPayload());
+});
+
+/** Public build identity (no auth) — clients compare with local Astro backend. */
+app.get('/api/version', (req, res) => {
+  res.json(proxyBuildPayload());
 });
 
 function authMiddleware(req, res, next) {
@@ -197,6 +220,14 @@ app.post('/api/devices/heartbeat', authMiddleware, (req, res) => {
     return;
   }
   d.lastSeen = Date.now();
+  const body = req.body || {};
+  if (typeof body.appVersion === 'string' && body.appVersion.trim()) {
+    d.appVersion = body.appVersion.trim().slice(0, 48);
+  }
+  if (typeof body.appCommit === 'string' && body.appCommit.trim()) {
+    d.appCommit = body.appCommit.trim().slice(0, 64);
+  }
+  d.buildReportedAt = Date.now();
   store.updateDevice(d);
   res.json({ ok: true });
 });
@@ -211,11 +242,22 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
   }
   const baseUrl = tunnel.normalizeBaseUrl(baseUrlRaw || process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:3000');
   const now = Date.now();
+  const av =
+    req.body && typeof req.body.appVersion === 'string' && req.body.appVersion.trim()
+      ? req.body.appVersion.trim().slice(0, 48)
+      : '';
+  const ac =
+    req.body && typeof req.body.appCommit === 'string' && req.body.appCommit.trim()
+      ? req.body.appCommit.trim().slice(0, 64)
+      : '';
   const existing = store.findDeviceByUserAndKey(req.userId, deviceKey);
   if (existing) {
     existing.name = name;
     existing.baseUrl = baseUrl;
     existing.lastSeen = now;
+    if (av) existing.appVersion = av;
+    if (ac) existing.appCommit = ac;
+    existing.buildReportedAt = now;
     store.updateDevice(existing);
     res.json({ device: { id: existing.id, name: existing.name, deviceKey: existing.deviceKey, baseUrl: existing.baseUrl } });
     return;
@@ -227,7 +269,10 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     deviceKey,
     baseUrl,
     lastSeen: now,
-    disabled: false
+    disabled: false,
+    appVersion: av || undefined,
+    appCommit: ac || undefined,
+    buildReportedAt: av || ac ? now : undefined
   };
   store.addDevice(device);
   res.json({ device: { id: device.id, name: device.name, deviceKey: device.deviceKey, baseUrl: device.baseUrl } });

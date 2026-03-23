@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 const crypto = require('crypto');
 const { isPathSafe } = require('../utils/pathUtils');
 const logger = require('../utils/logger');
+const { getBuildInfo } = require('../utils/buildInfo');
 const appConfig = require('../config');
 const remoteAgentModule = require('../remoteAgent');
 const { Client: SshClient } = require('ssh2');
@@ -78,12 +79,28 @@ function setupAPI(baseDir) {
   
   router.get('/mode', (req, res) => {
     const mode = process.env.SERVER_MODE || global.__SERVER_MODE || 'browser';
-    res.json({ 
-      success: true, 
+    const bi = getBuildInfo();
+    res.json({
+      success: true,
       mode: mode,
       isAppMode: mode === 'app',
       isBrowserMode: mode === 'browser',
-      debug: !!appConfig.DEBUG
+      debug: !!appConfig.DEBUG,
+      version: bi.version,
+      commit: bi.commit,
+      name: bi.name
+    });
+  });
+
+  /** Astro Code backend build identity (compare with proxy + remote devices). */
+  router.get('/version', (req, res) => {
+    const bi = getBuildInfo();
+    res.json({
+      success: true,
+      name: bi.name,
+      version: bi.version,
+      commit: bi.commit,
+      component: 'server'
     });
   });
 

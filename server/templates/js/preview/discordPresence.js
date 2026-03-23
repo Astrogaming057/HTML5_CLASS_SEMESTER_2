@@ -9,9 +9,11 @@ window.PreviewDiscordPresence = (function () {
   let getCurrentDir = null;
   let getLanguageFn = null;
   let statusPollTimer = null;
-  let statusPollIntervalMs = 1000;
+  let statusPollIntervalMs = 5000;
   let moFile = null;
   let moWs = null;
+  /** True when the last idle timeout fired (Discord should show idle templates). Not reset by git/diagnostic refreshes. */
+  let userIsIdle = false;
 
   const THROTTLE_MS = 2000;
 
@@ -204,12 +206,12 @@ window.PreviewDiscordPresence = (function () {
     }
     idleTimer = setTimeout(function () {
       idleTimer = null;
+      userIsIdle = true;
       push(true);
     }, idleTimeoutMs);
   }
 
-  function onActivity() {
-    scheduleIdle();
+  function throttledPush(isIdleFlag) {
     const now = Date.now();
     if (now - lastThrottlePush < THROTTLE_MS) {
       if (throttleTimer) {
@@ -218,17 +220,41 @@ window.PreviewDiscordPresence = (function () {
       throttleTimer = setTimeout(function () {
         throttleTimer = null;
         lastThrottlePush = Date.now();
-        push(false);
+        push(isIdleFlag);
       }, THROTTLE_MS - (now - lastThrottlePush));
       return;
     }
     lastThrottlePush = now;
-    push(false);
+    push(isIdleFlag);
+  }
+
+  /** Real input / navigation: clears idle and restarts the AFK countdown. */
+  function onUserActivity() {
+    userIsIdle = false;
+    scheduleIdle();
+    throttledPush(false);
+  }
+
+  /**
+   * Git branch / problem markers changed — update presence but do not reset the AFK timer
+   * (otherwise git polling and diagnostics prevent idle from ever triggering).
+   */
+  function onPresenceRefresh() {
+    if (userIsIdle) {
+      throttledPush(true);
+    } else {
+      throttledPush(false);
+    }
   }
 
   function onGitMetadataUpdated() {
+    if (userIsIdle) {
+      lastThrottlePush = 0;
+      push(true);
+      return;
+    }
     lastThrottlePush = 0;
-    onActivity();
+    throttledPush(false);
   }
 
   function wireStatusBarClick() {
@@ -260,7 +286,7 @@ window.PreviewDiscordPresence = (function () {
     if (fileNameEl && typeof MutationObserver !== 'undefined' && !moFile) {
       moFile = new MutationObserver(function () {
         lastThrottlePush = 0;
-        onActivity();
+        onUserActivity();
       });
       moFile.observe(fileNameEl, { childList: true, characterData: true, subtree: true });
     }
@@ -268,7 +294,7 @@ window.PreviewDiscordPresence = (function () {
     if (wsEl && typeof MutationObserver !== 'undefined' && !moWs) {
       moWs = new MutationObserver(function () {
         lastThrottlePush = 0;
-        onActivity();
+        onUserActivity();
       });
       moWs.observe(wsEl, { childList: true, characterData: true, subtree: true, attributes: true });
     }
@@ -283,7 +309,9 @@ window.PreviewDiscordPresence = (function () {
       const n = parseInt(String(sec != null ? sec : 300), 10);
       idleTimeoutMs = Number.isFinite(n) ? Math.min(86400000, Math.max(30000, n * 1000)) : 300000;
       applyStatusToBar(res);
-      scheduleIdle();
+      if (!userIsIdle) {
+        scheduleIdle();
+      }
     });
   }
 
@@ -309,31 +337,31 @@ window.PreviewDiscordPresence = (function () {
     startStatusPolling();
 
     refreshConfig().then(function () {
-      onActivity();
+      onUserActivity();
     });
     refreshStatusBar();
 
     if (editorRef.onDidChangeCursorPosition) {
       editorRef.onDidChangeCursorPosition(function () {
-        onActivity();
+        onUserActivity();
       });
     }
     if (editorRef.onDidChangeModelContent) {
       editorRef.onDidChangeModelContent(function () {
-        onActivity();
+        onUserActivity();
       });
     }
     if (editorRef.onDidChangeModel) {
       editorRef.onDidChangeModel(function () {
         lastThrottlePush = 0;
-        onActivity();
+        onUserActivity();
       });
     }
 
     try {
       if (typeof monaco !== 'undefined' && monaco.editor && typeof monaco.editor.onDidChangeMarkers === 'function') {
         monaco.editor.onDidChangeMarkers(function () {
-          onActivity();
+          onPresenceRefresh();
         });
       }
     } catch (_e) {
@@ -341,7 +369,7 @@ window.PreviewDiscordPresence = (function () {
     }
 
     window.addEventListener('focus', function () {
-      onActivity();
+      onUserActivity();
     });
   }
 
