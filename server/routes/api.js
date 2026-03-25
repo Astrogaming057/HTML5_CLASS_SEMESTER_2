@@ -66,6 +66,32 @@ async function copyDirectory(src, dest) {
 
 const router = express.Router();
 
+/** Non-loopback IPv4 HTTP base URLs for this server (for proxy direct access). */
+function getLanHttpBaseCandidates(port) {
+  const p = Number(port);
+  const listenPort = Number.isFinite(p) && p > 0 ? p : appConfig.PORT;
+  const nets = os.networkInterfaces();
+  const urls = [];
+  const seen = new Set();
+  for (const name of Object.keys(nets || {})) {
+    for (const addr of nets[name] || []) {
+      if (!addr || addr.internal) continue;
+      const fam = addr.family;
+      if (fam !== 'IPv4' && fam !== 4) continue;
+      const ip = addr.address;
+      if (!ip || ip === '127.0.0.1') continue;
+      if (ip.startsWith('169.254.')) continue;
+      const u = `http://${ip}:${listenPort}`;
+      if (!seen.has(u)) {
+        seen.add(u);
+        urls.push(u);
+      }
+    }
+  }
+  urls.sort();
+  return { port: listenPort, urls };
+}
+
 function setupAPI(baseDir) {
   // Debug endpoint to check which BASE_DIR is being used
   router.get('/debug/base-dir', (req, res) => {
@@ -142,6 +168,16 @@ function setupAPI(baseDir) {
           ? remoteAgentModule.getRemoteTunnelViewerSessions()
           : [];
       res.json({ success: true, count, sessions });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || 'Server error' });
+    }
+  });
+
+  /** LAN IPv4 bases for device registration (proxy probes these for direct HTTP). */
+  router.get('/remote/lan-base-candidates', (req, res) => {
+    try {
+      const { port, urls } = getLanHttpBaseCandidates(appConfig.PORT);
+      res.json({ success: true, port, urls });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message || 'Server error' });
     }

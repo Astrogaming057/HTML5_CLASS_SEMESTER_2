@@ -442,7 +442,7 @@ require(['vs/editor/editor.main'], function() {
           const urlParams = new URLSearchParams(window.location.search);
           const file = urlParams.get('file');
           if (file) {
-            window.open(`http://localhost:3000/__preview__?file=${encodeURIComponent(file)}`, '_blank');
+            window.open(`${window.location.origin}/__preview__?file=${encodeURIComponent(file)}`, '_blank');
           }
         }
         break;

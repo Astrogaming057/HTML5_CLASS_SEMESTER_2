@@ -6,6 +6,7 @@ const auth = require('./lib/auth');
 const store = require('./lib/store');
 const tunnel = require('./lib/tunnel');
 const reverseTunnel = require('./lib/reverseTunnel');
+const reachability = require('./lib/reachability');
 const agentConnection = require('./lib/agentConnection');
 const { pathnameOnly } = require('./lib/agentSocket');
 const proxyDbg = require('./lib/debug');
@@ -184,6 +185,7 @@ app.patch('/api/devices/:id', authMiddleware, (req, res) => {
   }
   if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
     d.baseUrl = tunnel.normalizeBaseUrl(body.baseUrl.trim());
+    d.baseUrlAuto = false;
   }
   store.updateDevice(d);
   res.json({
@@ -230,7 +232,7 @@ app.post('/api/devices/heartbeat', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/devices/register', authMiddleware, (req, res) => {
+app.post('/api/devices/register', authMiddleware, async (req, res) => {
   const name = (req.body && req.body.name) ? String(req.body.name).trim() : '';
   const deviceKey = (req.body && req.body.deviceKey) ? String(req.body.deviceKey) : '';
   const baseUrlRaw = (req.body && req.body.baseUrl) ? String(req.body.baseUrl).trim() : '';
@@ -238,7 +240,20 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     res.status(400).json({ error: 'name and deviceKey required' });
     return;
   }
-  const baseUrl = tunnel.normalizeBaseUrl(baseUrlRaw || process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:3000');
+  const extraCandidates =
+    req.body && Array.isArray(req.body.baseUrlCandidates) ? req.body.baseUrlCandidates : [];
+  const probeMs =
+    Number(process.env.DEVICE_BASE_PROBE_MS) > 0 ? Number(process.env.DEVICE_BASE_PROBE_MS) : 2500;
+  let baseUrl;
+  try {
+    baseUrl = await reachability.pickReachableDeviceBase(baseUrlRaw, extraCandidates, {
+      timeoutMs: probeMs
+    });
+  } catch (e) {
+    baseUrl = tunnel.normalizeBaseUrl(
+      baseUrlRaw || process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:17456'
+    );
+  }
   const now = Date.now();
   const av =
     req.body && typeof req.body.appVersion === 'string' && req.body.appVersion.trim()
@@ -248,6 +263,7 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
   if (existing) {
     existing.name = name;
     existing.baseUrl = baseUrl;
+    existing.baseUrlAuto = true;
     existing.lastSeen = now;
     if (av) existing.appVersion = av;
     existing.buildReportedAt = now;
@@ -261,6 +277,7 @@ app.post('/api/devices/register', authMiddleware, (req, res) => {
     name,
     deviceKey,
     baseUrl,
+    baseUrlAuto: true,
     lastSeen: now,
     disabled: false,
     appVersion: av || undefined,

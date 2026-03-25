@@ -43,7 +43,7 @@ function setupAgentConnection(ws, req, deviceOnlineMs) {
       `/agent open device=${String(deviceId).slice(0, 8)}… key=${String(deviceKey).slice(-6)}`
     );
   }
-  reverseTunnel.registerDevice(deviceId, ws);
+  reverseTunnel.registerDevice(deviceId, ws, req);
   ws.on('message', (buf) => reverseTunnel.onDeviceMessage(deviceId, buf));
   ws.on('close', (code, reason) => {
     if (dbg.isProxyDebug()) {

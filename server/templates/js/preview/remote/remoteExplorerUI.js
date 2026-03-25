@@ -687,17 +687,16 @@ window.PreviewRemoteExplorer = (function () {
     if (!ok) return;
     const name = await window.PreviewUtils.customPrompt('Name for this PC', '');
     if (!name || !String(name).trim()) return;
-    const defaultUrl =
-      typeof window !== 'undefined' && window.location ? window.location.origin : 'http://127.0.0.1:3000';
-    const baseUrlRaw = await window.PreviewUtils.customPrompt(
-      'URL of this Astro Code backend as seen from the proxy (LAN IP if proxy is on another PC). If the proxy cannot reach you directly, use anything valid (e.g. http://127.0.0.1:3000) — traffic can still use the reverse tunnel once you are signed in.',
-      defaultUrl
-    );
-    if (baseUrlRaw === null) return;
-    const urlToUse =
-      baseUrlRaw && String(baseUrlRaw).trim() ? String(baseUrlRaw).trim() : defaultUrl;
     try {
-      await auth.registerDevice(String(name).trim(), urlToUse);
+      const dev = await auth.registerDevice(String(name).trim());
+      const picked = dev && dev.baseUrl ? String(dev.baseUrl) : '';
+      if (picked && window.PreviewUtils.customAlert) {
+        await window.PreviewUtils.customAlert(
+          'This PC is registered. The proxy will reach it at:\n' +
+            picked +
+            '\n\nAfter you connect (outbound /agent WebSocket), the proxy updates that URL from your real client IP and listen port when it can reach your HTTP server. Edit base URL in the device list to pin a value and stop auto-updates.'
+        );
+      }
       await refreshDevices();
     } catch (e) {
       if (window.PreviewUtils.customAlert) {

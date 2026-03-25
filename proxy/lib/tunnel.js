@@ -1,4 +1,5 @@
 const httpProxy = require('http-proxy');
+const { URL } = require('url');
 const store = require('./store');
 const auth = require('./auth');
 const reverseTunnel = require('./reverseTunnel');
@@ -10,6 +11,17 @@ function normalizeBaseUrl(url) {
     u = 'http://' + u;
   }
   return u.replace(/\/$/, '');
+}
+
+function isLoopbackBaseUrl(url) {
+  const t = normalizeBaseUrl(url);
+  if (!t) return true;
+  try {
+    const h = new URL(t).hostname.toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+  } catch (e) {
+    return true;
+  }
 }
 
 function verifyDeviceAccess(deviceId, userId) {
@@ -75,19 +87,43 @@ function attachTunnelHttp(app, proxy) {
     if (req.url) {
       req.url = stripTunnelTokenFromReqUrl(req.url);
     }
-    reverseTunnel.tryHttpForward(device.id, req, res).then((viaReverse) => {
-      if (viaReverse) return;
-      const target = normalizeBaseUrl(device.baseUrl);
-      if (!target) {
-        res.status(502).json({
-          error: 'Bad gateway',
-          detail:
-            'No reverse agent connected and device has no reachable baseUrl. Open the preview on this PC and sign in to Remote Explorer so the server can connect to the proxy.'
+    const target = normalizeBaseUrl(device.baseUrl);
+    const method = (req.method || 'GET').toUpperCase();
+    /** Direct LAN/proxy → device is usually faster than reverse tunnel; safe first for idempotent methods. */
+    const tryDirectFirst =
+      target && !isLoopbackBaseUrl(target) && (method === 'GET' || method === 'HEAD');
+
+    const reverseThenDirect = () => {
+      reverseTunnel.tryHttpForward(device.id, req, res).then((viaReverse) => {
+        if (viaReverse) return;
+        const t = normalizeBaseUrl(device.baseUrl);
+        if (!t) {
+          res.status(502).json({
+            error: 'Bad gateway',
+            detail:
+              'No reverse agent connected and device has no reachable baseUrl. Open the preview on this PC and sign in to Remote Explorer so the server can connect to the proxy.'
+          });
+          return;
+        }
+        proxy.web(req, res, { target: t }, (err) => {
+          if (err && !res.headersSent) {
+            res.status(502).json({
+              error: 'Bad gateway',
+              detail: err.message || String(err)
+            });
+          }
         });
-        return;
-      }
-      proxy.web(req, res, { target });
-    });
+      });
+    };
+
+    if (tryDirectFirst) {
+      proxy.web(req, res, { target }, (err) => {
+        if (!err) return;
+        reverseThenDirect();
+      });
+    } else {
+      reverseThenDirect();
+    }
   });
 }
 
@@ -150,6 +186,7 @@ function handleTunnelUpgrade(req, socket, head, proxy) {
 
 module.exports = {
   normalizeBaseUrl,
+  isLoopbackBaseUrl,
   attachTunnelHttp,
   handleTunnelUpgrade,
   createProxy

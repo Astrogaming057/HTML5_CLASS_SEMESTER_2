@@ -2,9 +2,12 @@ const crypto = require('crypto');
 const WebSocket = require('ws');
 const dbg = require('./debug');
 const store = require('./store');
+const reachability = require('./reachability');
 
 /** deviceId -> agent WebSocket (Astro Code backend outbound connection) */
 const deviceSockets = new Map();
+/** deviceId -> { clientIp } from the inbound /agent TCP peer (as seen by this proxy) */
+const agentWsClientMeta = new Map();
 /** http request id -> { res, timer } */
 const pendingHttp = new Map();
 /** streamId -> { clientWs, deviceId, ip, userAgent, account, connectedAt } */
@@ -117,13 +120,19 @@ function cleanupDeviceStreams(deviceId) {
   }
 }
 
-function registerDevice(deviceId, ws) {
+function registerDevice(deviceId, ws, req) {
   const old = deviceSockets.get(deviceId);
   if (old && old !== ws) {
     try {
       old.close();
     } catch (e) {
       /* ignore */
+    }
+  }
+  if (req) {
+    const clientIp = normalizeClientIp(req);
+    if (clientIp) {
+      agentWsClientMeta.set(deviceId, { clientIp });
     }
   }
   deviceSockets.set(deviceId, ws);
@@ -138,6 +147,39 @@ function unregisterDevice(deviceId, ws) {
   cleanupDeviceStreams(deviceId);
   deviceSockets.delete(deviceId);
   viewerCountByDevice.delete(deviceId);
+  agentWsClientMeta.delete(deviceId);
+}
+
+function isAutoDeviceBaseDisabled() {
+  const v = process.env.PROXY_AUTO_DEVICE_BASE;
+  return v === '0' || String(v).toLowerCase() === 'false';
+}
+
+function agentHelloProbeMs() {
+  const n = Number(process.env.DEVICE_BASE_PROBE_MS);
+  return n > 0 ? n : 2000;
+}
+
+/**
+ * After /agent WSS connects, align stored baseUrl with http://seen-ip:listenPort when the proxy can
+ * reach that HTTP endpoint (DHCP / NIC changes). Skips when baseUrlAuto === false (user pinned URL).
+ */
+async function refreshDeviceBaseUrlFromAgentHello(deviceId, msg) {
+  if (isAutoDeviceBaseDisabled()) return;
+  const device = store.findDeviceById(deviceId);
+  if (!device || device.baseUrlAuto === false) return;
+  const meta = agentWsClientMeta.get(deviceId);
+  const ip = meta && meta.clientIp ? meta.clientIp : '';
+  const port = Number(msg && (msg.listenPort != null ? msg.listenPort : msg.httpListenPort));
+  if (!ip || !Number.isFinite(port) || port <= 0) return;
+  const suggested = reachability.buildHttpBaseFromIpPort(ip, port);
+  if (!suggested) return;
+  const ok = await reachability.probeDeviceHttpBase(suggested, agentHelloProbeMs());
+  if (!ok) return;
+  const next = reachability.normalizeBaseUrl(suggested);
+  if (!next || device.baseUrl === next) return;
+  device.baseUrl = next;
+  store.updateDevice(device);
 }
 
 function hasAgentForDevice(deviceId) {
@@ -167,6 +209,9 @@ function onDeviceMessage(deviceId, data) {
       device.buildReportedAt = Date.now();
       store.updateDevice(device);
     }
+    refreshDeviceBaseUrlFromAgentHello(deviceId, msg).catch(function () {
+      /* ignore */
+    });
     return;
   }
 

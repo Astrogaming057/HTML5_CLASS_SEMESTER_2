@@ -18,7 +18,7 @@ function load() {
     if (!Array.isArray(data.users)) data.users = [];
     if (!Array.isArray(data.devices)) data.devices = [];
     const defaultBase =
-      process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:3000';
+      process.env.DEFAULT_DEVICE_BASE || 'http://127.0.0.1:17456';
     let fixedBaseUrl = false;
     for (const d of data.devices) {
       if (

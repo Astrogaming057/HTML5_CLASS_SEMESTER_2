@@ -297,10 +297,37 @@ window.PreviewRemoteAuthApi = (function () {
   }
 
   async function registerDevice(name, baseUrlOverride) {
-    let base =
+    const manual =
       typeof baseUrlOverride === 'string' && baseUrlOverride.trim()
-        ? baseUrlOverride.trim()
+        ? baseUrlOverride.trim().replace(/\/+$/, '')
         : '';
+    let lanUrls = [];
+    try {
+      const r = await fetch('/__api__/remote/lan-base-candidates', { cache: 'no-cache' });
+      const j = await r.json();
+      if (j && j.success && Array.isArray(j.urls)) {
+        lanUrls = j.urls;
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+    const baseUrlCandidates = [];
+    const seen = new Set();
+    function addCandidate(u) {
+      if (u == null || u === '') return;
+      const t = String(u).trim().replace(/\/+$/, '');
+      if (!t || seen.has(t)) return;
+      seen.add(t);
+      baseUrlCandidates.push(t);
+    }
+    if (manual) addCandidate(manual);
+    for (let i = 0; i < lanUrls.length; i++) {
+      addCandidate(lanUrls[i]);
+    }
+    if (typeof window !== 'undefined' && window.location) {
+      addCandidate(window.location.origin);
+    }
+    let base = manual;
     if (!base && typeof window !== 'undefined' && window.location) {
       base = window.location.origin;
     }
@@ -313,6 +340,7 @@ window.PreviewRemoteAuthApi = (function () {
         name: name,
         deviceKey: sess.deviceKey(),
         baseUrl: base,
+        baseUrlCandidates: baseUrlCandidates,
         appVersion: bi.version || ''
       })
     });

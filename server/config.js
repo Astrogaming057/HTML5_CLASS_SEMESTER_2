@@ -29,7 +29,7 @@ const REMOTE_DEVICE_KEY = process.env.REMOTE_DEVICE_KEY
 const REMOTE_PROXY_TLS_INSECURE = process.env.REMOTE_PROXY_TLS_INSECURE === '1';
 
 module.exports = {
-  PORT: process.env.PORT || 3000,
+  PORT: process.env.PORT || 17456,
   BASE_DIR: baseDir,
   DEBUG: debug,
   REMOTE_PROXY_URL,

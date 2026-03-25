@@ -4,6 +4,7 @@ const { spawn, exec } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const discordRichPresence = require('./discordRichPresence');
+const serverAppConfig = require('../server/config');
 
 // Get app data path - use Local AppData consistently for both packaged and dev
 function getAppDataPath() {
@@ -197,7 +198,7 @@ if (!useHardwareAcceleration) {
 
 let mainWindow = null;
 let serverProcess = null;
-const PORT = 3000;
+const PORT = serverAppConfig.PORT;
 const APP_NAME = "Astro Code";
 /** When launching from Explorer (Open in Astro Code), open this file in preview after load. */
 let pendingPreviewFile = null;
