@@ -88,6 +88,15 @@ window.PreviewGitPanel = (function () {
   const GRAPH_POPOVER_SHOW_MS = 120;
   const GRAPH_POPOVER_HIDE_MS = 400;
 
+  const LS_LOCAL_STASH = 'astroEditorLocalStashList';
+  const LS_STASH_H = 'astroGitStashHeightPx';
+  const LS_STASH_COLLAPSED = 'astroGitStashCollapsed';
+  let localStashPopoverEl = null;
+  let stashPopoverDismissBound = false;
+  let stashPopoverResizeBound = false;
+  /** @type {{ id: string, label: string, note: string, files: { path: string, name: string }[], savedAt: string }[]} */
+  let localStashEntries = [];
+
   const LS_GRAPH_H = 'astroGitGraphHeightPx';
   const LS_GRAPH_COLLAPSED = 'astroGitGraphCollapsed';
   const GRAPH_H_MIN = 80;
@@ -158,12 +167,16 @@ window.PreviewGitPanel = (function () {
       if (graphPopoverEl && (n === graphPopoverEl || graphPopoverEl.contains(n))) return true;
       if (n.classList && n.classList.contains('git-graph-panel')) return true;
       if (n.classList && n.classList.contains('git-graph-splitter')) return true;
+      if (n.classList && n.classList.contains('git-stash-stack-panel')) return true;
+      if (n.classList && n.classList.contains('git-stash-stack-splitter')) return true;
     }
     const el = pointerEventRetargetToElement(e.target);
     if (!el || !el.closest) return false;
     if (el.closest('.git-graph-popover')) return true;
     if (el.closest('.git-graph-panel')) return true;
     if (el.closest('.git-graph-splitter')) return true;
+    if (el.closest('.git-stash-stack-panel')) return true;
+    if (el.closest('.git-stash-stack-splitter')) return true;
     return false;
   }
 
@@ -625,9 +638,830 @@ window.PreviewGitPanel = (function () {
     });
   }
 
+  function loadLocalStashFromStorage() {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_LOCAL_STASH) : null;
+      if (!raw) {
+        localStashEntries = [];
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        localStashEntries = parsed.filter(
+          (e) =>
+            e &&
+            typeof e.id === 'string' &&
+            Array.isArray(e.files) &&
+            e.files.every((f) => f && typeof f.path === 'string')
+        );
+      } else {
+        localStashEntries = [];
+      }
+    } catch (_e) {
+      localStashEntries = [];
+    }
+  }
+
+  function persistLocalStash() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(LS_LOCAL_STASH, JSON.stringify(localStashEntries));
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }
+
+  function positionStashPopoverNearButton(anchor, popEl) {
+    if (!anchor || !popEl) return;
+    popEl.hidden = false;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        const r = anchor.getBoundingClientRect();
+        const pw = popEl.offsetWidth;
+        const ph = popEl.offsetHeight;
+        let left = r.left;
+        let top = r.bottom + 6;
+        if (left + pw > window.innerWidth - 8) {
+          left = Math.max(8, window.innerWidth - pw - 8);
+        }
+        if (left < 8) left = 8;
+        if (top + ph > window.innerHeight - 8) {
+          top = r.top - ph - 6;
+        }
+        if (top < 8) top = 8;
+        popEl.style.left = left + 'px';
+        popEl.style.top = top + 'px';
+      });
+    });
+  }
+
+  function hideLocalStashPopover() {
+    if (localStashPopoverEl) {
+      localStashPopoverEl.hidden = true;
+      localStashPopoverEl.dataset.open = '';
+    }
+  }
+
+  function hideAllStashPopovers() {
+    hideLocalStashPopover();
+  }
+
+  function ensureStashPopoverDismiss() {
+    if (stashPopoverDismissBound) return;
+    stashPopoverDismissBound = true;
+    document.addEventListener(
+      'pointerdown',
+      function (e) {
+        const t = e.target;
+        if (t && t.nodeType === 1) {
+          if (
+            t.closest &&
+            (t.closest('#gitLocalStashBtn') ||
+              t.closest('.git-stash-popover-local'))
+          ) {
+            return;
+          }
+        }
+        hideAllStashPopovers();
+      },
+      true
+    );
+    document.addEventListener(
+      'keydown',
+      function (e) {
+        if (e.key !== 'Escape') return;
+        hideAllStashPopovers();
+      },
+      true
+    );
+  }
+
+  function ensureLocalStashPopover() {
+    if (localStashPopoverEl) return localStashPopoverEl;
+    const wrap = document.createElement('div');
+    wrap.className = 'git-graph-popover git-stash-anchor-popover git-stash-popover-local';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-label', 'Editor cache stash');
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="git-stash-popover-inner">' +
+      '<div class="git-stash-popover-head">' +
+      '<span class="git-stash-popover-title">Editor cache stash</span>' +
+      '<button type="button" class="git-graph-popover-close git-stash-popover-close" aria-label="Close">\u2715</button>' +
+      '</div>' +
+      '<p class="git-stash-popover-desc">Save or restore the <strong>Staged for save</strong> file list in this browser (local only).</p>' +
+      '<div class="git-stash-popover-actions">' +
+      '<button type="button" class="git-btn git-btn-small git-local-stash-save">Save staging list</button>' +
+      '</div>' +
+      '<div class="git-stash-popover-list" id="localStashPopoverList"></div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    localStashPopoverEl = wrap;
+    wrap.querySelector('.git-stash-popover-close')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideLocalStashPopover();
+    });
+    wrap.querySelector('.git-local-stash-save')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      void localStashSaveCurrent();
+    });
+    ensureStashPopoverDismiss();
+    ensureStashPopoverResize();
+    return wrap;
+  }
+
+  function ensureStashPopoverResize() {
+    if (stashPopoverResizeBound) return;
+    stashPopoverResizeBound = true;
+    window.addEventListener('resize', function () {
+      const lBtn = document.getElementById('gitLocalStashBtn');
+      if (localStashPopoverEl && !localStashPopoverEl.hidden && lBtn) {
+        positionStashPopoverNearButton(lBtn, localStashPopoverEl);
+      }
+    });
+  }
+
+  /** @type {'notice'|'confirm'|'prompt'|null} */
+  let gitPanelModalKind = null;
+  let gitPanelModalEl = null;
+  let gitPanelModalResolve = null;
+  let gitPanelModalKeydownBound = false;
+
+  function closeGitPanelModal(result) {
+    const fn = gitPanelModalResolve;
+    gitPanelModalResolve = null;
+    gitPanelModalKind = null;
+    if (gitPanelModalEl) {
+      gitPanelModalEl.hidden = true;
+      gitPanelModalEl.setAttribute('aria-hidden', 'true');
+    }
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
+    if (fn) fn(result);
+  }
+
+  function dismissGitPanelModal() {
+    if (!gitPanelModalResolve) return;
+    const kind = gitPanelModalKind;
+    const fn = gitPanelModalResolve;
+    gitPanelModalResolve = null;
+    gitPanelModalKind = null;
+    if (gitPanelModalEl) {
+      gitPanelModalEl.hidden = true;
+      gitPanelModalEl.setAttribute('aria-hidden', 'true');
+    }
+    document.body.style.overflow = '';
+    if (fn) {
+      if (kind === 'confirm') fn(false);
+      else if (kind === 'prompt') fn(null);
+      else fn(undefined);
+    }
+  }
+
+  function ensureGitPanelGenericModal() {
+    if (gitPanelModalEl) return gitPanelModalEl;
+    const overlay = document.createElement('div');
+    overlay.className = 'git-stash-reason-overlay git-panel-generic-modal';
+    overlay.id = 'gitPanelGenericModal';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML =
+      '<div class="git-stash-reason-dialog git-panel-generic-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="gitPanelModalTitle">' +
+      '<div class="git-stash-reason-head">' +
+      '<h2 id="gitPanelModalTitle" class="git-stash-reason-title">Message</h2>' +
+      '<button type="button" class="git-stash-reason-close" id="gitPanelModalCloseBtn" aria-label="Close">\u2715</button>' +
+      '</div>' +
+      '<p id="gitPanelModalBody" class="git-stash-reason-lead git-panel-modal-body"></p>' +
+      '<input type="text" id="gitPanelModalInput" class="git-stash-reason-input git-panel-modal-input-single" hidden />' +
+      '<div id="gitPanelModalActions" class="git-stash-reason-actions"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        if (gitPanelModalKind === 'notice') closeGitPanelModal(undefined);
+        else if (gitPanelModalKind === 'confirm') closeGitPanelModal(false);
+        else if (gitPanelModalKind === 'prompt') closeGitPanelModal(null);
+      }
+    });
+    const box = overlay.querySelector('.git-panel-generic-modal-dialog');
+    if (box) {
+      box.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    }
+    document.getElementById('gitPanelModalCloseBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (gitPanelModalKind === 'notice') closeGitPanelModal(undefined);
+      else if (gitPanelModalKind === 'confirm') closeGitPanelModal(false);
+      else if (gitPanelModalKind === 'prompt') closeGitPanelModal(null);
+    });
+
+    if (!gitPanelModalKeydownBound) {
+      gitPanelModalKeydownBound = true;
+      document.addEventListener(
+        'keydown',
+        function (e) {
+          if (!gitPanelModalEl || gitPanelModalEl.hidden) return;
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            if (gitPanelModalKind === 'notice') closeGitPanelModal(undefined);
+            else if (gitPanelModalKind === 'confirm') closeGitPanelModal(false);
+            else if (gitPanelModalKind === 'prompt') closeGitPanelModal(null);
+          }
+        },
+        true
+      );
+    }
+
+    gitPanelModalEl = overlay;
+    return overlay;
+  }
+
+  /**
+   * @param {string} message
+   * @param {string} [title]
+   * @returns {Promise<void>}
+   */
+  function showGitPanelNotice(message, title) {
+    if (gitPanelModalResolve) {
+      return Promise.resolve();
+    }
+    gitPanelModalKind = 'notice';
+    const overlay = ensureGitPanelGenericModal();
+    const titleEl = document.getElementById('gitPanelModalTitle');
+    const bodyEl = document.getElementById('gitPanelModalBody');
+    const inputEl = document.getElementById('gitPanelModalInput');
+    const actionsEl = document.getElementById('gitPanelModalActions');
+    if (titleEl) titleEl.textContent = title || 'Message';
+    if (bodyEl) bodyEl.textContent = String(message || '');
+    if (inputEl) {
+      inputEl.hidden = true;
+      inputEl.value = '';
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = '';
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'git-btn git-btn-primary';
+      ok.textContent = 'OK';
+      ok.addEventListener('click', function (e) {
+        e.preventDefault();
+        closeGitPanelModal(undefined);
+      });
+      actionsEl.appendChild(ok);
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    return new Promise(function (resolve) {
+      gitPanelModalResolve = resolve;
+    });
+  }
+
+  /**
+   * @param {string} message
+   * @param {string} [title]
+   * @param {{ confirmLabel?: string, cancelLabel?: string, destructive?: boolean }} [opts]
+   * @returns {Promise<boolean>}
+   */
+  function showGitPanelConfirm(message, title, opts) {
+    opts = opts || {};
+    if (gitPanelModalResolve) {
+      return Promise.resolve(false);
+    }
+    gitPanelModalKind = 'confirm';
+    const overlay = ensureGitPanelGenericModal();
+    const titleEl = document.getElementById('gitPanelModalTitle');
+    const bodyEl = document.getElementById('gitPanelModalBody');
+    const inputEl = document.getElementById('gitPanelModalInput');
+    const actionsEl = document.getElementById('gitPanelModalActions');
+    if (titleEl) titleEl.textContent = title || 'Confirm';
+    if (bodyEl) bodyEl.textContent = String(message || '');
+    if (inputEl) {
+      inputEl.hidden = true;
+      inputEl.value = '';
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'git-btn git-btn-secondary';
+      cancel.textContent = opts.cancelLabel || 'Cancel';
+      cancel.addEventListener('click', function (e) {
+        e.preventDefault();
+        closeGitPanelModal(false);
+      });
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'git-btn git-btn-primary' + (opts.destructive ? ' git-panel-modal-btn-danger' : '');
+      ok.textContent = opts.confirmLabel || 'OK';
+      ok.addEventListener('click', function (e) {
+        e.preventDefault();
+        closeGitPanelModal(true);
+      });
+      actionsEl.appendChild(cancel);
+      actionsEl.appendChild(ok);
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    return new Promise(function (resolve) {
+      gitPanelModalResolve = resolve;
+    });
+  }
+
+  /**
+   * @param {string} message
+   * @param {string} [title]
+   * @param {{ defaultValue?: string, placeholder?: string, confirmLabel?: string, cancelLabel?: string }} [opts]
+   * @returns {Promise<string|null>}
+   */
+  function showGitPanelPrompt(message, title, opts) {
+    opts = opts || {};
+    if (gitPanelModalResolve) {
+      return Promise.resolve(null);
+    }
+    gitPanelModalKind = 'prompt';
+    const overlay = ensureGitPanelGenericModal();
+    const titleEl = document.getElementById('gitPanelModalTitle');
+    const bodyEl = document.getElementById('gitPanelModalBody');
+    const inputEl = document.getElementById('gitPanelModalInput');
+    const actionsEl = document.getElementById('gitPanelModalActions');
+    if (titleEl) titleEl.textContent = title || 'Input';
+    if (bodyEl) bodyEl.textContent = String(message || '');
+    if (inputEl) {
+      inputEl.hidden = false;
+      inputEl.value = opts.defaultValue != null ? String(opts.defaultValue) : '';
+      inputEl.placeholder = opts.placeholder || '';
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = '';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'git-btn git-btn-secondary';
+      cancel.textContent = opts.cancelLabel || 'Cancel';
+      cancel.addEventListener('click', function (e) {
+        e.preventDefault();
+        closeGitPanelModal(null);
+      });
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'git-btn git-btn-primary';
+      ok.textContent = opts.confirmLabel || 'OK';
+      ok.addEventListener('click', function (e) {
+        e.preventDefault();
+        const v = inputEl ? String(inputEl.value || '').trim() : '';
+        closeGitPanelModal(v);
+      });
+      actionsEl.appendChild(cancel);
+      actionsEl.appendChild(ok);
+    }
+    if (inputEl) {
+      inputEl.onkeydown = function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          closeGitPanelModal(String(inputEl.value || '').trim());
+        }
+      };
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    return new Promise(function (resolve) {
+      gitPanelModalResolve = resolve;
+      requestAnimationFrame(function () {
+        if (inputEl) inputEl.focus();
+      });
+    });
+  }
+
+  let stashReasonOverlayEl = null;
+  let stashReasonDialogResolve = null;
+
+  function closeStashReasonDialog(result) {
+    const fn = stashReasonDialogResolve;
+    stashReasonDialogResolve = null;
+    if (stashReasonOverlayEl) {
+      stashReasonOverlayEl.hidden = true;
+      stashReasonOverlayEl.setAttribute('aria-hidden', 'true');
+    }
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
+    if (fn) fn(result);
+  }
+
+  function ensureStashReasonDialog() {
+    if (stashReasonOverlayEl) return stashReasonOverlayEl;
+    const overlay = document.createElement('div');
+    overlay.className = 'git-stash-reason-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML =
+      '<div class="git-stash-reason-dialog" role="dialog" aria-modal="true" aria-labelledby="gitStashReasonTitle">' +
+      '<div class="git-stash-reason-head">' +
+      '<h2 id="gitStashReasonTitle" class="git-stash-reason-title">Stash</h2>' +
+      '<button type="button" class="git-stash-reason-close" data-stash-reason-action="cancel" aria-label="Close">\u2715</button>' +
+      '</div>' +
+      '<p class="git-stash-reason-lead">Add a reason for this stash, or stash without a message.</p>' +
+      '<p class="git-stash-reason-detail" id="gitStashReasonDetail" hidden></p>' +
+      '<label class="git-stash-reason-label" for="gitStashReasonInput">Reason (optional)</label>' +
+      '<textarea id="gitStashReasonInput" class="git-stash-reason-input" rows="3" placeholder="Why you are stashing\u2026"></textarea>' +
+      '<div class="git-stash-reason-actions">' +
+      '<button type="button" class="git-btn git-btn-primary" data-stash-reason-action="with-reason">Stash with reason</button>' +
+      '<button type="button" class="git-btn git-btn-secondary" data-stash-reason-action="without">Stash without message</button>' +
+      '<button type="button" class="git-btn git-btn-secondary" data-stash-reason-action="cancel">Cancel</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        e.preventDefault();
+        closeStashReasonDialog(null);
+      }
+    });
+    const dialogBox = overlay.querySelector('.git-stash-reason-dialog');
+    if (dialogBox) {
+      dialogBox.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    overlay.querySelectorAll('[data-stash-reason-action]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = btn.getAttribute('data-stash-reason-action');
+        const ta = document.getElementById('gitStashReasonInput');
+        const raw = ta && ta.value ? String(ta.value).trim() : '';
+        if (action === 'cancel') {
+          closeStashReasonDialog(null);
+          return;
+        }
+        if (action === 'without') {
+          closeStashReasonDialog('');
+          return;
+        }
+        if (action === 'with-reason') {
+          closeStashReasonDialog(raw);
+        }
+      });
+    });
+
+    document.addEventListener(
+      'keydown',
+      function onKey(e) {
+        if (!stashReasonOverlayEl || stashReasonOverlayEl.hidden) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeStashReasonDialog(null);
+        }
+      },
+      true
+    );
+
+    stashReasonOverlayEl = overlay;
+    return overlay;
+  }
+
+  /**
+   * @param {{ heading?: string, detailPath?: string }} opts
+   * @returns {Promise<string|null>} Resolved stash message, or null if cancelled.
+   */
+  function openStashReasonDialog(opts) {
+    opts = opts || {};
+    if (stashReasonDialogResolve) {
+      return Promise.resolve(null);
+    }
+    const overlay = ensureStashReasonDialog();
+    const titleEl = overlay.querySelector('.git-stash-reason-title');
+    const detailEl = document.getElementById('gitStashReasonDetail');
+    const ta = document.getElementById('gitStashReasonInput');
+    if (titleEl) {
+      titleEl.textContent = opts.heading || 'Stash';
+    }
+    if (detailEl) {
+      const dp = opts.detailPath ? String(opts.detailPath).trim() : '';
+      if (dp) {
+        detailEl.hidden = false;
+        detailEl.textContent = 'File: ' + dp;
+      } else {
+        detailEl.hidden = true;
+        detailEl.textContent = '';
+      }
+    }
+    if (ta) {
+      ta.value = '';
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = 'hidden';
+    }
+    return new Promise(function (resolve) {
+      stashReasonDialogResolve = resolve;
+      requestAnimationFrame(function () {
+        if (ta) {
+          ta.focus();
+        }
+      });
+    });
+  }
+
+  async function gitStashPush(includeUntracked, paths, fixedMessage) {
+    let messageStr = '';
+    if (fixedMessage !== undefined && fixedMessage !== null) {
+      messageStr = String(fixedMessage).trim();
+    } else {
+      const detailPath =
+        paths && paths.length === 1 ? paths[0] : paths && paths.length ? paths.join(', ') : '';
+      const asked = await openStashReasonDialog({
+        heading: 'Stash changes',
+        detailPath: detailPath,
+      });
+      if (asked === null) return;
+      messageStr = asked;
+    }
+    const body = {
+      message: messageStr,
+      includeUntracked: !!includeUntracked,
+    };
+    if (paths && paths.length) {
+      body.paths = paths;
+    }
+    try {
+      const data = await apiPostJson('/__api__/git/stash/push', body);
+      if (!data || !data.success) {
+        await showGitPanelNotice((data && data.error) || 'Stash failed', 'Stash');
+        return;
+      }
+      await refreshRepoTab();
+      await refreshStashStackList();
+      await refreshGraph();
+      if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.refresh === 'function') {
+        PreviewGitStatusBar.refresh();
+      }
+    } catch (err) {
+      console.error('git stash push', err);
+      await showGitPanelNotice(err && err.message ? err.message : 'Stash request failed', 'Stash');
+    }
+  }
+
+  function normalizeGitRepoPath(p) {
+    return String(p || '').replace(/\\/g, '/');
+  }
+
+  async function stashRepoPathSingleFile(filePath, untracked) {
+    await gitStashPush(!!untracked, [normalizeGitRepoPath(filePath)]);
+  }
+
+  async function refreshStashStackList() {
+    const list = document.getElementById('gitStashStackList');
+    if (!list) return;
+    list.innerHTML = '<div class="git-stash-popover-loading">Loading\u2026</div>';
+    try {
+      const r = await fetch('/__api__/git/stash');
+      const data = await r.json();
+      if (!data.success || !data.isRepo) {
+        list.innerHTML =
+          '<div class="git-stash-popover-empty">' +
+          (data.isRepo === false ? 'Not a Git repository.' : (data.error || 'Could not load stashes.')) +
+          '</div>';
+        return;
+      }
+      const stashes = data.stashes || [];
+      if (stashes.length === 0) {
+        list.innerHTML = '<div class="git-stash-popover-empty">No stashes yet.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      stashes.forEach(function (s) {
+        const row = document.createElement('div');
+        row.className = 'git-stash-popover-row';
+        const main = document.createElement('div');
+        main.className = 'git-stash-popover-row-main';
+        const refEl = document.createElement('code');
+        refEl.className = 'git-stash-popover-ref';
+        refEl.textContent = s.ref || '';
+        const msgEl = document.createElement('div');
+        msgEl.className = 'git-stash-popover-msg';
+        msgEl.textContent = s.message || '';
+        msgEl.title = s.message || '';
+        main.appendChild(refEl);
+        main.appendChild(msgEl);
+        const actions = document.createElement('div');
+        actions.className = 'git-stash-popover-row-actions';
+        function btn(label, fn) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'git-btn git-btn-small';
+          b.textContent = label;
+          b.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            void fn();
+          });
+          actions.appendChild(b);
+        }
+        btn('Apply', async function () {
+          const d = await apiPostJson('/__api__/git/stash/apply', { ref: s.ref });
+          if (!d.success) {
+            await showGitPanelNotice(d.error || 'Apply failed', 'Stash');
+            return;
+          }
+          await refreshRepoTab();
+          await refreshStashStackList();
+          if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.refresh === 'function') {
+            PreviewGitStatusBar.refresh();
+          }
+        });
+        btn('Pop', async function () {
+          const ok = await showGitPanelConfirm(
+            'Pop ' +
+              s.ref +
+              '? This applies the stash and removes it from the list.',
+            'Pop stash',
+            { confirmLabel: 'Pop' }
+          );
+          if (!ok) return;
+          const d = await apiPostJson('/__api__/git/stash/pop', { ref: s.ref });
+          if (!d.success) {
+            await showGitPanelNotice(d.error || 'Pop failed', 'Stash');
+            return;
+          }
+          await refreshRepoTab();
+          await refreshGraph();
+          await refreshStashStackList();
+          if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.refresh === 'function') {
+            PreviewGitStatusBar.refresh();
+          }
+        });
+        btn('Drop', async function () {
+          const ok = await showGitPanelConfirm(
+            'Drop ' + s.ref + '? This cannot be undone.',
+            'Drop stash',
+            { confirmLabel: 'Drop', destructive: true }
+          );
+          if (!ok) return;
+          const d = await apiPostJson('/__api__/git/stash/drop', { ref: s.ref });
+          if (!d.success) {
+            await showGitPanelNotice(d.error || 'Drop failed', 'Stash');
+            return;
+          }
+          await refreshStashStackList();
+        });
+        row.appendChild(main);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+    } catch (_e) {
+      list.innerHTML = '<div class="git-stash-popover-empty">Could not load stashes.</div>';
+    }
+  }
+
+  function renderLocalStashPopoverList() {
+    const list = document.getElementById('localStashPopoverList');
+    if (!list) return;
+    loadLocalStashFromStorage();
+    if (localStashEntries.length === 0) {
+      list.innerHTML = '<div class="git-stash-popover-empty">No saved staging lists.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    localStashEntries.forEach(function (entry) {
+      const row = document.createElement('div');
+      row.className = 'git-stash-popover-row';
+      const main = document.createElement('div');
+      main.className = 'git-stash-popover-row-main';
+      const title = document.createElement('div');
+      title.className = 'git-stash-popover-msg';
+      title.textContent = entry.label || entry.id;
+      const meta = document.createElement('div');
+      meta.className = 'git-stash-popover-meta';
+      const n = (entry.files && entry.files.length) || 0;
+      let when = '';
+      if (entry.savedAt) {
+        const d = new Date(entry.savedAt);
+        if (!isNaN(d.getTime())) {
+          when = formatRelativeTime(d) + ' — ' + formatAbsoluteDateTime(d);
+        }
+      }
+      meta.textContent = n + ' file' + (n === 1 ? '' : 's') + (when ? ' · ' + when : '');
+      main.appendChild(title);
+      main.appendChild(meta);
+      const actions = document.createElement('div');
+      actions.className = 'git-stash-popover-row-actions';
+      function btn(label, fn) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'git-btn git-btn-small';
+        b.textContent = label;
+        b.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          fn();
+        });
+        actions.appendChild(b);
+      }
+      btn('Apply', function () {
+        void localStashApply(entry.id, false);
+      });
+      btn('Pop', function () {
+        void localStashApply(entry.id, true);
+      });
+      btn('Drop', function () {
+        void (async function () {
+          const ok = await showGitPanelConfirm(
+            'Remove this saved staging list?',
+            'Editor cache stash',
+            { confirmLabel: 'Remove', destructive: true }
+          );
+          if (!ok) return;
+          localStashEntries = localStashEntries.filter((e) => e.id !== entry.id);
+          persistLocalStash();
+          renderLocalStashPopoverList();
+        })();
+      });
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  async function localStashSaveCurrent() {
+    loadLocalStashFromStorage();
+    if (localStagedFiles.length === 0) {
+      await showGitPanelNotice('Stage files in “Staged for save” first.', 'Editor cache stash');
+      return;
+    }
+    const labelIn = await showGitPanelPrompt(
+      'Label for this saved list (optional)',
+      'Editor cache stash',
+      { defaultValue: 'Stash ' + (localStashEntries.length + 1) }
+    );
+    if (labelIn === null) return;
+    const noteEl = document.getElementById('gitLocalNote');
+    const noteText = noteEl && noteEl.value ? String(noteEl.value).trim() : '';
+    const entry = {
+      id: 'ls_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
+      label: (labelIn && String(labelIn).trim()) || 'Stash',
+      note: noteText,
+      files: localStagedFiles.map((f) => ({ path: f.path, name: f.name })),
+      savedAt: new Date().toISOString(),
+    };
+    localStashEntries.unshift(entry);
+    persistLocalStash();
+    renderLocalStashPopoverList();
+  }
+
+  async function localStashApply(id, dropAfter) {
+    loadLocalStashFromStorage();
+    const entry = localStashEntries.find((e) => e.id === id);
+    if (!entry || !entry.files) {
+      await showGitPanelNotice('Saved list not found.', 'Editor cache stash');
+      return;
+    }
+    localStagedFiles = entry.files.map((f) => ({
+      path: f.path,
+      name: f.name || (f.path && f.path.split('/').pop()) || f.path,
+    }));
+    renderLocalStagedFiles();
+    void refreshLocalTab();
+    if (dropAfter) {
+      localStashEntries = localStashEntries.filter((e) => e.id !== id);
+      persistLocalStash();
+    }
+    renderLocalStashPopoverList();
+    if (entry.note && document.getElementById('gitLocalNote')) {
+      const n = document.getElementById('gitLocalNote');
+      if (n) n.value = entry.note;
+    }
+  }
+
+  function toggleLocalStashPopover() {
+    const btn = document.getElementById('gitLocalStashBtn');
+    const el = ensureLocalStashPopover();
+    if (!el.hidden && el.dataset.open === '1') {
+      hideLocalStashPopover();
+      return;
+    }
+    el.dataset.open = '1';
+    renderLocalStashPopoverList();
+    if (btn) positionStashPopoverNearButton(btn, el);
+    else el.hidden = false;
+  }
+
   function setExplorerSourceControlMode(on) {
     if (!on) {
       hideGraphPopover();
+      hideAllStashPopovers();
+      closeStashReasonDialog(null);
+      dismissGitPanelModal();
     }
     const filesPane = document.getElementById('explorerFilesPane');
     const stack = document.getElementById('gitExplorerStack');
@@ -799,7 +1633,21 @@ window.PreviewGitPanel = (function () {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {}),
     });
-    return response.json();
+    const text = await response.text();
+    if (!text) {
+      return {
+        success: response.ok,
+        error: response.ok ? undefined : 'Empty response (' + response.status + ')',
+      };
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_e) {
+      return {
+        success: false,
+        error: 'Bad response (' + response.status + '): ' + text.slice(0, 200),
+      };
+    }
   }
 
   async function refreshRepoTab() {
@@ -910,6 +1758,16 @@ window.PreviewGitPanel = (function () {
             stageRepoPath(p);
           });
           actions.appendChild(s);
+          const st = document.createElement('button');
+          st.type = 'button';
+          st.className = 'git-btn git-btn-small git-btn-gitrow';
+          st.textContent = 'Stash';
+          st.title = f.untracked ? 'Stash only this file (includes untracked)' : 'Stash only this file';
+          st.addEventListener('click', function (e) {
+            e.stopPropagation();
+            void stashRepoPathSingleFile(p, f.untracked);
+          });
+          actions.appendChild(st);
         }
         const v = document.createElement('button');
         v.type = 'button';
@@ -973,7 +1831,7 @@ window.PreviewGitPanel = (function () {
   async function stageRepoPath(filePath) {
     const data = await apiPostJson('/__api__/git/stage', { paths: [filePath] });
     if (!data.success) {
-      alert(data.error || 'Stage failed');
+      await showGitPanelNotice(data.error || 'Stage failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -982,7 +1840,7 @@ window.PreviewGitPanel = (function () {
   async function unstageRepoPath(filePath) {
     const data = await apiPostJson('/__api__/git/unstage', { paths: [filePath] });
     if (!data.success) {
-      alert(data.error || 'Unstage failed');
+      await showGitPanelNotice(data.error || 'Unstage failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -992,12 +1850,12 @@ window.PreviewGitPanel = (function () {
     const input = document.getElementById('gitRepoCommitMessage');
     const message = input && input.value ? input.value.trim() : '';
     if (!message) {
-      alert('Enter a commit message');
+      await showGitPanelNotice('Enter a commit message in the box below.', 'Commit');
       return;
     }
     const data = await apiPostJson('/__api__/git/commit', { message: message });
     if (!data.success) {
-      alert(data.error || 'Commit failed');
+      await showGitPanelNotice(data.error || 'Commit failed', 'Git');
       return;
     }
     if (input) input.value = '';
@@ -1008,7 +1866,7 @@ window.PreviewGitPanel = (function () {
   async function repoFetch() {
     const data = await apiPostJson('/__api__/git/fetch', {});
     if (!data.success) {
-      alert(data.error || 'Fetch failed');
+      await showGitPanelNotice(data.error || 'Fetch failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -1017,7 +1875,7 @@ window.PreviewGitPanel = (function () {
   async function repoPull() {
     const data = await apiPostJson('/__api__/git/pull', {});
     if (!data.success) {
-      alert(data.error || 'Pull failed');
+      await showGitPanelNotice(data.error || 'Pull failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -1026,7 +1884,7 @@ window.PreviewGitPanel = (function () {
   async function repoPush() {
     const data = await apiPostJson('/__api__/git/push', {});
     if (!data.success) {
-      alert(data.error || 'Push failed');
+      await showGitPanelNotice(data.error || 'Push failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -1035,7 +1893,7 @@ window.PreviewGitPanel = (function () {
   async function repoStageAll() {
     const data = await apiPostJson('/__api__/git/stage-all', {});
     if (!data.success) {
-      alert(data.error || 'Stage all failed');
+      await showGitPanelNotice(data.error || 'Stage all failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -1044,7 +1902,7 @@ window.PreviewGitPanel = (function () {
   async function repoUnstageAll() {
     const data = await apiPostJson('/__api__/git/unstage-all', {});
     if (!data.success) {
-      alert(data.error || 'Unstage all failed');
+      await showGitPanelNotice(data.error || 'Unstage all failed', 'Git');
       return;
     }
     await refreshRepoTab();
@@ -1070,7 +1928,10 @@ window.PreviewGitPanel = (function () {
       '<div class="git-section">' +
       '<div class="git-section-header">' +
       '<span class="git-section-title">Unsaved in editor cache</span>' +
+      '<div class="git-section-header-actions">' +
+      '<button type="button" class="git-btn git-btn-small" id="gitLocalStashBtn" title="Editor cache stash">Stash\u2026</button>' +
       '<button type="button" class="git-btn git-btn-small" id="gitLocalRefreshBtn">Refresh</button>' +
+      '</div>' +
       '</div>' +
       '<p class="git-panel-hint">Files that differ from disk because of the debounced editor cache (<code>ide_editor_cache</code>). Stage here to write them to the workspace before a Git commit.</p>' +
       '<div class="git-files-list" id="gitLocalModifiedFiles"><div class="git-loading">Loading\u2026</div></div>' +
@@ -1126,6 +1987,26 @@ window.PreviewGitPanel = (function () {
       '</div></div>' +
       '</div></div>';
 
+    const stashPanel = document.createElement('div');
+    stashPanel.id = 'gitStashStackPanel';
+    stashPanel.className = 'git-graph-panel git-stash-stack-panel';
+    stashPanel.innerHTML =
+      '<div class="git-graph-header">' +
+      '<div class="git-graph-header-left">' +
+      '<div class="git-graph-title-row">' +
+      '<button type="button" class="git-graph-collapse-btn" id="gitStashCollapseBtn" aria-expanded="true" aria-label="Collapse stash list" title="Collapse stash list">\u25bc</button>' +
+      '<span class="git-graph-title">STASH</span>' +
+      '</div>' +
+      '</div>' +
+      '<div class="git-graph-toolbar">' +
+      '<button type="button" class="git-btn git-btn-small" id="gitStashPushTrackedBtn" title="Stash tracked changes">Stash</button>' +
+      '<button type="button" class="git-btn git-btn-small" id="gitStashPushUntrackedBtn" title="Stash including untracked (-u)">+Untracked</button>' +
+      '<button type="button" class="git-btn git-btn-small" id="gitStashStackRefreshBtn" title="Refresh stash list">\u21bb</button>' +
+      '</div></div>' +
+      '<div class="git-graph-body">' +
+      '<div class="git-graph-list" id="gitStashStackList"></div>' +
+      '</div>';
+
     const graphPanel = document.createElement('div');
     graphPanel.id = 'gitGraphPanel';
     graphPanel.className = 'git-graph-panel';
@@ -1135,8 +2016,8 @@ window.PreviewGitPanel = (function () {
       '<div class="git-graph-title-row">' +
       '<button type="button" class="git-graph-collapse-btn" id="gitGraphCollapseBtn" aria-expanded="true" aria-label="Collapse graph" title="Collapse graph">\u25bc</button>' +
       '<span class="git-graph-title">GRAPH</span>' +
-      '</div>' +
       '<span class="git-graph-sync-hint" id="gitGraphSyncHint" hidden></span>' +
+      '</div>' +
       '</div>' +
       '<div class="git-graph-toolbar">' +
       '<button type="button" class="git-btn git-btn-small" id="gitGraphFetchBtn" title="Fetch">Fetch</button>' +
@@ -1155,11 +2036,20 @@ window.PreviewGitPanel = (function () {
     graphSplitter.setAttribute('aria-orientation', 'horizontal');
     graphSplitter.setAttribute('aria-label', 'Resize commit graph');
 
+    const stashSplitter = document.createElement('div');
+    stashSplitter.className = 'git-graph-splitter git-stash-stack-splitter';
+    stashSplitter.id = 'gitStashStackSplitter';
+    stashSplitter.setAttribute('role', 'separator');
+    stashSplitter.setAttribute('aria-orientation', 'horizontal');
+    stashSplitter.setAttribute('aria-label', 'Resize stash list');
+
     gitStackEl = document.createElement('div');
     gitStackEl.id = 'gitExplorerStack';
     gitStackEl.className = 'git-explorer-stack';
     gitStackEl.hidden = true;
     gitStackEl.appendChild(panel);
+    gitStackEl.appendChild(stashSplitter);
+    gitStackEl.appendChild(stashPanel);
     gitStackEl.appendChild(graphSplitter);
     gitStackEl.appendChild(graphPanel);
 
@@ -1178,11 +2068,22 @@ window.PreviewGitPanel = (function () {
       }
     }
 
+    applyStashStackLayoutFromStorage(stashPanel, stashSplitter);
     applyGitGraphLayoutFromStorage(graphPanel, graphSplitter);
 
     setupEventHandlers();
-    setupGitGraphResize(graphSplitter, graphPanel, gitStackEl);
+    setupStackPanelResize(stashSplitter, stashPanel, gitStackEl, LS_STASH_H);
+    setupStackPanelResize(graphSplitter, graphPanel, gitStackEl, LS_GRAPH_H);
     return panel;
+  }
+
+  function readStashHeightPx() {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_STASH_H) : null;
+    const n = raw ? parseInt(raw, 10) : NaN;
+    if (Number.isFinite(n) && n >= GRAPH_H_MIN && n <= GRAPH_H_MAX) {
+      return n;
+    }
+    return 160;
   }
 
   function readGraphHeightPx() {
@@ -1198,6 +2099,26 @@ window.PreviewGitPanel = (function () {
     const h = Math.min(GRAPH_H_MAX, Math.max(GRAPH_H_MIN, Math.round(px)));
     gp.style.flex = '0 0 ' + h + 'px';
     gp.style.height = h + 'px';
+  }
+
+  function applyStashStackLayoutFromStorage(stashPanel, splitter) {
+    if (!stashPanel) return;
+    setGraphPanelHeightPx(stashPanel, readStashHeightPx());
+    const collapsed =
+      typeof localStorage !== 'undefined' && localStorage.getItem(LS_STASH_COLLAPSED) === '1';
+    if (collapsed) {
+      stashPanel.classList.add('is-collapsed');
+      if (splitter) splitter.hidden = true;
+      const btn = document.getElementById('gitStashCollapseBtn');
+      if (btn) {
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = '\u25b6';
+        btn.title = 'Expand stash';
+        btn.setAttribute('aria-label', 'Expand stash');
+      }
+    } else if (splitter) {
+      splitter.hidden = false;
+    }
   }
 
   function applyGitGraphLayoutFromStorage(graphPanel, splitter) {
@@ -1220,26 +2141,27 @@ window.PreviewGitPanel = (function () {
     }
   }
 
-  function setupGitGraphResize(splitter, graphPanel, stackEl) {
-    if (!splitter || !graphPanel || !stackEl) return;
+  function setupStackPanelResize(splitter, panel, stackEl, lsKey) {
+    if (!splitter || !panel || !stackEl) return;
 
     function onPointerDown(e) {
-      if (graphPanel.classList.contains('is-collapsed')) return;
+      if (panel.classList.contains('is-collapsed')) return;
       if (e.button !== 0) return;
       e.preventDefault();
       graphResizeActive = true;
       const startY = e.clientY;
-      const startH = graphPanel.getBoundingClientRect().height;
+      const startH = panel.getBoundingClientRect().height;
       splitter.setPointerCapture(e.pointerId);
 
       function onMove(ev) {
         if (!graphResizeActive) return;
         const dy = ev.clientY - startY;
-        let next = startH + dy;
+        /* Invert: drag splitter down → shrink panel; drag up → grow (matches IDE splitters). */
+        let next = startH - dy;
         const stackH = stackEl.getBoundingClientRect().height;
         const maxG = Math.min(GRAPH_H_MAX, Math.max(GRAPH_H_MIN, stackH - 120));
         next = Math.min(Math.max(GRAPH_H_MIN, next), maxG);
-        setGraphPanelHeightPx(graphPanel, next);
+        setGraphPanelHeightPx(panel, next);
       }
 
       function onUp(ev) {
@@ -1252,9 +2174,9 @@ window.PreviewGitPanel = (function () {
         splitter.removeEventListener('pointermove', onMove);
         splitter.removeEventListener('pointerup', onUp);
         splitter.removeEventListener('pointercancel', onUp);
-        const h = graphPanel.getBoundingClientRect().height;
+        const h = panel.getBoundingClientRect().height;
         try {
-          localStorage.setItem(LS_GRAPH_H, String(Math.round(h)));
+          localStorage.setItem(lsKey, String(Math.round(h)));
         } catch (_e) {
           /* ignore */
         }
@@ -1269,6 +2191,7 @@ window.PreviewGitPanel = (function () {
   }
 
   function setActiveTab(tab) {
+    hideAllStashPopovers();
     activeTab = tab === 'repo' ? 'repo' : 'local';
     const tLocal = document.getElementById('gitTabLocal');
     const tRepo = document.getElementById('gitTabRepo');
@@ -1322,6 +2245,11 @@ window.PreviewGitPanel = (function () {
     document.getElementById('gitRepoFetchBtn')?.addEventListener('click', () => repoFetch());
     document.getElementById('gitRepoPullBtn')?.addEventListener('click', () => repoPull());
     document.getElementById('gitRepoPushBtn')?.addEventListener('click', () => repoPush());
+    document.getElementById('gitLocalStashBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleLocalStashPopover();
+    });
     document.getElementById('gitRepoCommitBtn')?.addEventListener('click', () => repoCommit());
     document.getElementById('gitRepoStageAllBtn')?.addEventListener('click', () => repoStageAll());
     document.getElementById('gitRepoUnstageAllBtn')?.addEventListener('click', () => repoUnstageAll());
@@ -1338,6 +2266,42 @@ window.PreviewGitPanel = (function () {
     document.getElementById('gitGraphPushBtn')?.addEventListener('click', async function () {
       await repoPush();
       await refreshGraph();
+    });
+
+    document.getElementById('gitStashStackRefreshBtn')?.addEventListener('click', () => refreshStashStackList());
+    document.getElementById('gitStashPushTrackedBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      void gitStashPush(false);
+    });
+    document.getElementById('gitStashPushUntrackedBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      void gitStashPush(true);
+    });
+
+    document.getElementById('gitStashCollapseBtn')?.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sp = document.getElementById('gitStashStackPanel');
+      const spl = document.getElementById('gitStashStackSplitter');
+      const btn = document.getElementById('gitStashCollapseBtn');
+      if (!sp || !btn) return;
+      const willCollapse = !sp.classList.contains('is-collapsed');
+      sp.classList.toggle('is-collapsed', willCollapse);
+      if (spl) spl.hidden = willCollapse;
+      btn.setAttribute('aria-expanded', willCollapse ? 'false' : 'true');
+      btn.textContent = willCollapse ? '\u25b6' : '\u25bc';
+      btn.title = willCollapse ? 'Expand stash' : 'Collapse stash list';
+      btn.setAttribute('aria-label', willCollapse ? 'Expand stash' : 'Collapse stash list');
+      try {
+        localStorage.setItem(LS_STASH_COLLAPSED, willCollapse ? '1' : '0');
+      } catch (_err) {
+        /* ignore */
+      }
+      if (!willCollapse) {
+        setGraphPanelHeightPx(sp, readStashHeightPx());
+      }
     });
 
     document.getElementById('gitGraphCollapseBtn')?.addEventListener('click', function (e) {
@@ -1365,6 +2329,13 @@ window.PreviewGitPanel = (function () {
     });
 
     document.getElementById('gitGraphList')?.addEventListener(
+      'scroll',
+      function () {
+        hideGraphPopover();
+      },
+      { passive: true }
+    );
+    document.getElementById('gitStashStackList')?.addEventListener(
       'scroll',
       function () {
         hideGraphPopover();
@@ -1460,7 +2431,7 @@ window.PreviewGitPanel = (function () {
     const noteText = note && note.value ? note.value.trim() : '';
 
     if (localStagedFiles.length === 0) {
-      alert('Stage files from the list above first');
+      await showGitPanelNotice('Stage files from the list above first.', 'Editor cache');
       return;
     }
 
@@ -1494,7 +2465,10 @@ window.PreviewGitPanel = (function () {
     renderLocalStagedFiles();
     if (note) note.value = '';
     await refreshLocalTab();
-    alert('Saved ' + n + ' file(s) to the workspace.' + (noteText ? ' Note: ' + noteText : ''));
+    await showGitPanelNotice(
+      'Saved ' + n + ' file(s) to the workspace.' + (noteText ? ' Note: ' + noteText : ''),
+      'Editor cache'
+    );
   }
 
   async function refreshLocalTab() {
@@ -1523,6 +2497,7 @@ window.PreviewGitPanel = (function () {
         setExplorerSourceControlMode(true);
         setActiveTab(activeTab);
         refreshGraph();
+        void refreshStashStackList();
         if (window.PreviewGitStatusBar && typeof PreviewGitStatusBar.refresh === 'function') {
           PreviewGitStatusBar.refresh();
         }
@@ -1537,6 +2512,7 @@ window.PreviewGitPanel = (function () {
       setExplorerSourceControlMode(true);
       setActiveTab(activeTab);
       refreshGraph();
+      void refreshStashStackList();
     },
 
     showRepoTab() {
@@ -1545,12 +2521,14 @@ window.PreviewGitPanel = (function () {
       setExplorerSourceControlMode(true);
       setActiveTab('repo');
       refreshGraph();
+      void refreshStashStackList();
     },
 
     hide: closePanel,
 
     refresh() {
       if (activeTab === 'repo') {
+        void refreshStashStackList();
         return refreshRepoTab();
       }
       return refreshLocalTab();

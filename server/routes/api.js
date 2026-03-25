@@ -2332,6 +2332,137 @@ function setupAPI(baseDir) {
     }
   });
 
+  function parseStashRefInput(ref) {
+    const s = typeof ref === 'string' ? ref.trim() : '';
+    if (!/^stash@\{[0-9]+\}$/.test(s)) {
+      return null;
+    }
+    return s;
+  }
+
+  router.get('/git/stash', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: true, isRepo: false, stashes: [] });
+    }
+    try {
+      const { stdout } = await runGitCmd(['stash', 'list']);
+      const lines = String(stdout || '')
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      const stashes = [];
+      for (const line of lines) {
+        const m = /^(stash@\{[0-9]+\}):\s*(.*)$/.exec(line);
+        if (m) {
+          stashes.push({ ref: m[1], message: m[2] });
+        }
+      }
+      res.json({ success: true, isRepo: true, stashes });
+    } catch (error) {
+      logger.error('API: git stash list', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, isRepo: true, stashes: [], error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stash/push', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a Git repository' });
+    }
+    try {
+      const message =
+        req.body && typeof req.body.message === 'string' ? req.body.message.trim() : '';
+      const includeUntracked = !!(req.body && req.body.includeUntracked);
+      const paths = req.body && Array.isArray(req.body.paths) ? req.body.paths : [];
+      for (const p of paths) {
+        const err = gitPathError(p);
+        if (err) {
+          return res.json({ success: false, error: err });
+        }
+      }
+      const args = ['stash', 'push'];
+      if (includeUntracked) {
+        args.push('-u');
+      }
+      if (message) {
+        args.push('-m', message);
+      }
+      if (paths.length > 0) {
+        args.push('--', ...paths);
+      }
+      await runGitCmd(args);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stash push', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stash/apply', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a Git repository' });
+    }
+    const ref = parseStashRefInput(req.body && req.body.ref);
+    if (!ref) {
+      return res.json({ success: false, error: 'Invalid stash ref' });
+    }
+    try {
+      await runGitCmd(['stash', 'apply', ref]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stash apply', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stash/pop', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a Git repository' });
+    }
+    const ref = parseStashRefInput(req.body && req.body.ref);
+    if (!ref) {
+      return res.json({ success: false, error: 'Invalid stash ref' });
+    }
+    try {
+      await runGitCmd(['stash', 'pop', ref]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stash pop', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
+  router.post('/git/stash/drop', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a Git repository' });
+    }
+    const ref = parseStashRefInput(req.body && req.body.ref);
+    if (!ref) {
+      return res.json({ success: false, error: 'Invalid stash ref' });
+    }
+    try {
+      await runGitCmd(['stash', 'drop', ref]);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('API: git stash drop', error);
+      const msg = (error.stderr && String(error.stderr)) || error.message || String(error);
+      res.json({ success: false, error: msg.trim() });
+    }
+  });
+
   router.get('/git/log', async (req, res) => {
     try {
       await runGitCmd(['rev-parse', '--is-inside-work-tree']);

@@ -86,6 +86,7 @@
             "createDesktopShortcut": true,
             "createStartMenuShortcut": true,
             "shortcutName": "Astro Code",
+            "deleteAppDataOnUninstall": false,
             "include": "build/installer.nsh"
         }
     }

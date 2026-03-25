@@ -5065,7 +5065,7 @@ body.resizing .resizer {
 
 .git-graph-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
@@ -5083,10 +5083,17 @@ body.resizing .resizer {
 }
 
 .git-graph-sync-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 2px;
   font-size: 10px;
   font-weight: 500;
   color: var(--text-tertiary);
-  line-height: 1.3;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .git-graph-sync-hint.has-unpushed {
@@ -5094,6 +5101,7 @@ body.resizing .resizer {
 }
 
 .git-graph-title {
+  flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -5588,6 +5596,255 @@ body.resizing .resizer {
   text-decoration: underline;
 }
 
+/* Stash menus (Git + Editor cache): same shell as commit popover, anchored to toolbar buttons */
+.git-stash-anchor-popover::before {
+  display: none;
+}
+
+.git-stash-popover-inner {
+  padding: 12px 14px 10px;
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: min(72vh, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.git-stash-popover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.git-stash-popover-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.git-stash-popover-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.git-stash-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.git-stash-popover-hint {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.35;
+}
+
+.git-stash-popover-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0 -4px 0 0;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.git-stash-popover-loading,
+.git-stash-popover-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.git-stash-popover-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+}
+
+.git-stash-popover-row-main {
+  min-width: 0;
+}
+
+.git-stash-popover-ref {
+  display: block;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.git-stash-popover-msg {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.git-stash-popover-meta {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.git-stash-popover-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* In-app stash reason dialog (replaces native prompt/confirm in Electron) */
+.git-stash-reason-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10045;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.git-stash-reason-overlay[hidden] {
+  display: none !important;
+}
+
+.git-stash-reason-dialog {
+  width: min(400px, 100%);
+  max-height: min(85vh, 520px);
+  overflow: auto;
+  padding: 16px 18px 14px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.git-stash-reason-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.git-stash-reason-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.git-stash-reason-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.git-stash-reason-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.git-stash-reason-lead {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.git-stash-reason-detail {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+
+.git-stash-reason-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.git-stash-reason-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 64px;
+}
+
+.git-stash-reason-input:focus {
+  outline: 2px solid var(--border-active);
+  outline-offset: 1px;
+}
+
+.git-stash-reason-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Generic Source control modal (replaces alert / confirm / prompt) */
+.git-panel-generic-modal {
+  z-index: 10052;
+}
+
+.git-panel-generic-modal-dialog {
+  max-width: min(420px, 100%);
+}
+
+.git-panel-modal-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.git-panel-modal-input-single {
+  min-height: 0;
+  margin-bottom: 12px;
+}
+
+.git-panel-modal-btn-danger {
+  border-color: var(--status-error, #c44) !important;
+  color: var(--status-error, #e05555) !important;
+}
+
+.git-panel-modal-btn-danger:hover:not(:disabled) {
+  background: rgba(200, 68, 68, 0.15) !important;
+}
+
 .git-panel-tabs {
   display: flex;
   gap: 0;
@@ -5765,9 +6022,12 @@ body.resizing .resizer {
   flex-shrink: 0;
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-start;
+  justify-content: flex-end;
   gap: 3px;
   padding-top: 1px;
+  max-width: 100%;
 }
 
 .git-btn-gitrow {
@@ -5840,6 +6100,13 @@ body.resizing .resizer {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.git-section-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
 }
 
 .git-btn {

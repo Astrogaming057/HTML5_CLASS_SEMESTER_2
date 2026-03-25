@@ -199,6 +199,68 @@ let mainWindow = null;
 let serverProcess = null;
 const PORT = 3000;
 const APP_NAME = "Astro Code";
+/** When launching from Explorer (Open in Astro Code), open this file in preview after load. */
+let pendingPreviewFile = null;
+
+function parseLaunchPaths(argv) {
+  if (!app.isPackaged) return [];
+  const paths = [];
+  const exeBase = path.basename(process.execPath || '').toLowerCase();
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a || a === '--') continue;
+    if (a.startsWith('-')) continue;
+    const base = path.basename(a).toLowerCase();
+    if (exeBase && base === exeBase) continue;
+    if (base === 'electron.exe') continue;
+    if (a.endsWith(path.join('app', 'main.js')) || /(^|[\\/])main\.js$/.test(a)) continue;
+    try {
+      const resolved = path.resolve(a);
+      if (fs.existsSync(resolved)) paths.push(resolved);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  return paths;
+}
+
+function applyLaunchPathFromExternal(paths) {
+  if (!paths || paths.length === 0) return;
+  const p = paths[0];
+  let stat;
+  try {
+    stat = fs.statSync(p);
+  } catch {
+    return;
+  }
+  let workspaceDir;
+  let fileToOpen = null;
+  if (stat.isDirectory()) {
+    workspaceDir = p;
+  } else {
+    workspaceDir = path.dirname(p);
+    fileToOpen = p;
+  }
+  saveAppConfig({ workingDirectory: workspaceDir });
+  pendingPreviewFile = fileToOpen;
+  console.log('[App] Launch from Explorer:', { workspaceDir, fileToOpen });
+}
+
+function getPreviewStartupUrl() {
+  const fallback = `http://localhost:${PORT}/__preview__?file=start.bat`;
+  const wd = getWorkingDirectory();
+  if (!wd || !pendingPreviewFile) return fallback;
+  try {
+    const rel = path.relative(wd, pendingPreviewFile);
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      const q = encodeURIComponent(rel.split(path.sep).join('/'));
+      return `http://localhost:${PORT}/__preview__?file=${q}`;
+    }
+  } catch (e) {
+    console.warn('[App] Could not build preview URL from launch path:', e);
+  }
+  return fallback;
+}
 
 /** When true, BrowserWindow `close` is allowed to proceed (no preventDefault). */
 let allowMainWindowClose = false;
@@ -649,7 +711,7 @@ function startServer() {
     loadURLAttempted = true;
     
     // Try to load the URL
-    const url = `http://localhost:${PORT}/__preview__?file=start.bat`;
+    const url = getPreviewStartupUrl();
     console.log(`[App] Attempting to load: ${url}`);
     
     // First, verify server is actually responding
@@ -665,7 +727,9 @@ function startServer() {
       console.error('[App] Server health check failed after max retries');
       // Load anyway - might work
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.loadURL(url).catch(err => {
+        mainWindow.loadURL(url).then(() => {
+          pendingPreviewFile = null;
+        }).catch(err => {
           console.error('[App] Failed to load URL:', err);
           // Retry loading after a delay
           setTimeout(() => {
@@ -686,7 +750,9 @@ function startServer() {
       if (res.statusCode === 200) {
         console.log('[App] Server is responding, loading window...');
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.loadURL(url).catch(err => {
+          mainWindow.loadURL(url).then(() => {
+            pendingPreviewFile = null;
+          }).catch(err => {
             console.error('[App] Failed to load URL:', err);
           });
         }
@@ -704,7 +770,9 @@ function startServer() {
         // Last attempt - try loading anyway
         console.warn('[App] Server health check failed, loading anyway...');
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.loadURL(url).catch(err => {
+          mainWindow.loadURL(url).then(() => {
+            pendingPreviewFile = null;
+          }).catch(err => {
             console.error('[App] Failed to load URL:', err);
           });
         }
@@ -936,12 +1004,16 @@ if (!gotTheLock) {
   // Kill existing processes before starting
   killExistingProcesses(() => {
     app.whenReady().then(async () => {
-      // If packaged and no working directory is set, prompt user
-      // Also allow setting in development mode for testing
-      if (app.isPackaged && !getWorkingDirectory()) {
+      if (process.platform === 'win32') {
+        app.setAppUserModelId('com.astrocode.editor');
+      }
+      const launchPaths = parseLaunchPaths(process.argv);
+      if (launchPaths.length > 0) {
+        applyLaunchPathFromExternal(launchPaths);
+      } else if (app.isPackaged && !getWorkingDirectory()) {
+        // If packaged and no working directory is set, prompt user
         const selectedPath = await selectWorkingDirectory();
         if (!selectedPath) {
-          // User cancelled, use default
           console.log('No working directory selected, using default');
         }
       }
@@ -954,11 +1026,23 @@ if (!gotTheLock) {
       });
     });
 
-    // Handle second instance - focus the existing window
-    app.on('second-instance', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
+    app.on('second-instance', (_event, commandLine) => {
+      const paths = parseLaunchPaths(commandLine);
+      if (paths.length === 0) {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.focus();
+        }
+        return;
+      }
+      applyLaunchPathFromExternal(paths);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        stopServer();
+        setTimeout(() => {
+          startServer();
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.focus();
+        }, 400);
       }
     });
   });
