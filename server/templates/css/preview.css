@@ -2450,6 +2450,32 @@ body.resizing .resizer {
   background: var(--bg-primary);
 }
 
+/* Commit diff (git graph) — same shell as in-editor browser */
+.git-diff-editor-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  margin-top: 75px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+}
+
+.git-diff-editor-view[hidden] {
+  display: none !important;
+}
+
+.git-diff-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+}
+
 .browser-tabs-container {
   display: flex;
   background: var(--bg-tertiary);
@@ -5298,6 +5324,17 @@ body.resizing .resizer {
   gap: 8px;
   padding: 3px 0;
   font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.git-graph-file-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.git-graph-file-row:focus-visible {
+  outline: 2px solid var(--status-info);
+  outline-offset: 1px;
 }
 
 .git-graph-file-stats {
@@ -5594,6 +5631,240 @@ body.resizing .resizer {
 
 .git-graph-popover-github:hover {
   text-decoration: underline;
+}
+
+.git-graph-popover-diff {
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--status-info);
+  font-weight: 500;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.git-graph-popover-diff:hover {
+  text-decoration: underline;
+}
+
+/* Full-screen commit file diff (side-by-side) */
+.git-commit-diff-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.git-commit-diff-overlay[hidden] {
+  display: none !important;
+}
+
+.git-commit-diff-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.git-commit-diff-panel {
+  position: relative;
+  z-index: 1;
+  width: min(1200px, 100%);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.git-commit-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+}
+
+.git-commit-diff-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  min-width: 0;
+}
+
+.git-commit-diff-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.git-commit-diff-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-commit-diff-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.git-commit-diff-loading,
+.git-commit-diff-error,
+.git-commit-diff-binary,
+.git-commit-diff-plain-note {
+  color: var(--text-secondary);
+  padding: 8px 0;
+}
+
+.git-commit-diff-error {
+  color: var(--status-error, #f85149);
+}
+
+.git-commit-diff-file {
+  margin-bottom: 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.git-commit-diff-file-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.git-commit-diff-file-head::before {
+  content: '\25bc';
+  font-size: 9px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.git-commit-diff-file.is-collapsed .git-commit-diff-file-head::before {
+  content: '\25b6';
+}
+
+.git-commit-diff-file-body {
+  padding: 8px;
+  max-height: 55vh;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.git-commit-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.git-commit-diff-ln {
+  width: 3.25em;
+  padding: 0 6px 0 4px;
+  vertical-align: top;
+  text-align: right;
+  color: var(--text-tertiary);
+  user-select: none;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-commit-diff-cell {
+  padding: 0 8px;
+  vertical-align: top;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-right: 1px solid var(--border-primary);
+}
+
+.git-commit-diff-cell-new {
+  border-right: none;
+}
+
+.git-commit-diff-row-eq .git-commit-diff-cell {
+  color: var(--text-primary);
+}
+
+.git-commit-diff-row-del .git-commit-diff-cell-old {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--text-primary);
+}
+
+.git-commit-diff-row-del .git-commit-diff-cell-new {
+  background: var(--bg-primary);
+}
+
+.git-commit-diff-row-ins .git-commit-diff-cell-new {
+  background: rgba(63, 185, 80, 0.18);
+  color: var(--text-primary);
+}
+
+.git-commit-diff-row-ins .git-commit-diff-cell-old {
+  background: var(--bg-primary);
+}
+
+.git-commit-diff-skip td {
+  text-align: center;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.git-commit-diff-plain-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.git-commit-diff-plain-grid pre {
+  margin: 0;
+  padding: 8px;
+  max-height: 50vh;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  white-space: pre;
 }
 
 /* Stash menus (Git + Editor cache): same shell as commit popover, anchored to toolbar buttons */

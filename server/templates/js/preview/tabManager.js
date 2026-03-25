@@ -14,6 +14,9 @@ window.PreviewTabManager = (function() {
   let tabData = {};
 
   function getFileIcon(filePath) {
+    if (filePath && filePath.startsWith('gitdiff://')) {
+      return '\u21C4';
+    }
     // Check if it's a browser tab
     if (filePath && filePath.startsWith('browser://')) {
       return '🌐';
@@ -41,6 +44,15 @@ window.PreviewTabManager = (function() {
   }
 
   function getFileName(filePath) {
+    if (filePath && filePath.startsWith('gitdiff://')) {
+      if (
+        window.PreviewCommitDiffViewer &&
+        typeof window.PreviewCommitDiffViewer.getTabTitle === 'function'
+      ) {
+        return window.PreviewCommitDiffViewer.getTabTitle(filePath);
+      }
+      return 'Git diff';
+    }
     // Check if it's a browser tab
     if (filePath && filePath.startsWith('browser://')) {
       return 'Browser';
@@ -201,7 +213,14 @@ window.PreviewTabManager = (function() {
     
     activeTabPath = filePath;
     renderTabs();
-    
+
+    if (filePath && filePath.startsWith('gitdiff://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
     // Check if it's a browser tab - don't try to load as file
     if (filePath && filePath.startsWith('browser://')) {
       if (switchToFileCallback) {
@@ -245,7 +264,14 @@ window.PreviewTabManager = (function() {
     openTabs.push(filePath);
     activeTabPath = filePath;
     renderTabs();
-    
+
+    if (filePath && filePath.startsWith('gitdiff://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
     if (switchToFileCallback) {
       await switchToFileCallback(filePath, false);
     }
@@ -273,7 +299,14 @@ window.PreviewTabManager = (function() {
     openTabs.push(filePath);
     activeTabPath = filePath;
     renderTabs();
-    
+
+    if (filePath && filePath.startsWith('gitdiff://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
     // Check if it's a browser tab - don't try to load as file
     if (filePath && filePath.startsWith('browser://')) {
       if (switchToFileCallback) {
@@ -322,6 +355,15 @@ window.PreviewTabManager = (function() {
     const index = openTabs.indexOf(filePath);
     openTabs.splice(index, 1);
     delete tabData[filePath];
+
+    if (
+      filePath &&
+      filePath.startsWith('gitdiff://') &&
+      window.PreviewCommitDiffViewer &&
+      typeof window.PreviewCommitDiffViewer.disposeTab === 'function'
+    ) {
+      window.PreviewCommitDiffViewer.disposeTab(filePath);
+    }
     
     if (isActive && openTabs.length > 0) {
       const newActiveIndex = Math.min(index, openTabs.length - 1);

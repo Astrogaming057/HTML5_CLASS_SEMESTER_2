@@ -488,6 +488,13 @@ window.PreviewBrowserManager = (function() {
 
   function showBrowserView() {
     if (!browserView || !editorElement) return;
+    const stack = document.getElementById('editorMonacoHexStack');
+    const gitDiff = document.getElementById('gitDiffView');
+    if (stack) stack.style.display = 'none';
+    if (gitDiff) {
+      gitDiff.style.display = 'none';
+      gitDiff.hidden = true;
+    }
     editorElement.style.display = 'none';
     browserView.style.display = 'flex';
   }
@@ -495,6 +502,8 @@ window.PreviewBrowserManager = (function() {
   function hideBrowserView() {
     if (!browserView || !editorElement) return;
     browserView.style.display = 'none';
+    const stack = document.getElementById('editorMonacoHexStack');
+    if (stack) stack.style.display = '';
     editorElement.style.display = 'block';
   }
 

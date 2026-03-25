@@ -1990,6 +1990,27 @@ function setupAPI(baseDir) {
     });
   }
 
+  function runGitCmdBuffer(args) {
+    return execFileAsync('git', args, {
+      cwd: baseDir,
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
+      encoding: 'buffer',
+    });
+  }
+
+  const GIT_EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+  const GIT_COMMIT_DIFF_MAX_BYTES = 2 * 1024 * 1024;
+
+  function gitBlobLooksBinary(buf) {
+    if (!buf || !buf.length) return false;
+    const n = Math.min(buf.length, 8192);
+    for (let i = 0; i < n; i++) {
+      if (buf[i] === 0) return true;
+    }
+    return false;
+  }
+
   function parseGitStatusPorcelain(stdout) {
     const lines = stdout.split(/\r?\n/).filter((l) => l.length > 0);
     const branch = { name: '', tracking: '', ahead: 0, behind: 0, detached: false, noCommits: false };
@@ -2783,6 +2804,80 @@ function setupAPI(baseDir) {
     }
     files = mergeFilesWithNumstat(files, numMap);
     res.json({ success: true, hash: fullHash, files });
+  });
+
+  router.get('/git/commit-file-diff', async (req, res) => {
+    const rawHash = req.query && req.query.hash != null ? String(req.query.hash) : '';
+    const hashInput = rawHash.trim();
+    const newPath = req.query && req.query.path != null ? String(req.query.path).trim() : '';
+    const oldPathOpt =
+      req.query && req.query.oldPath != null && String(req.query.oldPath).trim() !== ''
+        ? String(req.query.oldPath).trim()
+        : '';
+    if (!/^[0-9a-fA-F]{7,40}$/.test(hashInput)) {
+      return res.json({ success: false, error: 'Invalid hash' });
+    }
+    if (!newPath) {
+      return res.json({ success: false, error: 'Missing path' });
+    }
+    if (gitPathError(newPath) || (oldPathOpt && gitPathError(oldPathOpt))) {
+      return res.json({ success: false, error: 'Forbidden path' });
+    }
+    const oldSidePath = oldPathOpt || newPath;
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: false, error: 'Not a git repository' });
+    }
+    let fullHash = '';
+    try {
+      const { stdout } = await runGitCmd(['rev-parse', '--verify', `${hashInput}^{commit}`]);
+      fullHash = stdout.trim();
+    } catch (_e) {
+      return res.json({ success: false, error: 'Invalid commit' });
+    }
+    let parent = GIT_EMPTY_TREE;
+    try {
+      const { stdout } = await runGitCmd(['rev-parse', '--verify', `${fullHash}^`]);
+      parent = stdout.trim();
+    } catch (_e) {
+      parent = GIT_EMPTY_TREE;
+    }
+    async function readTreePath(ref, relPath) {
+      try {
+        const { stdout } = await runGitCmdBuffer(['-c', 'core.quotepath=false', 'show', `${ref}:${relPath}`]);
+        if (stdout.length > GIT_COMMIT_DIFF_MAX_BYTES) {
+          return { error: 'File too large to diff', tooLarge: true };
+        }
+        if (gitBlobLooksBinary(stdout)) {
+          return { text: '', binary: true, missing: false };
+        }
+        return { text: stdout.toString('utf8'), binary: false, missing: false };
+      } catch (_e) {
+        return { text: '', binary: false, missing: true };
+      }
+    }
+    const [oldBlob, newBlob] = await Promise.all([
+      readTreePath(parent, oldSidePath),
+      readTreePath(fullHash, newPath),
+    ]);
+    if (oldBlob.error || newBlob.error) {
+      return res.json({ success: false, error: (oldBlob.error || newBlob.error || '').toString() });
+    }
+    const binary = !!(oldBlob.binary || newBlob.binary);
+    res.json({
+      success: true,
+      hash: fullHash,
+      parent,
+      path: newPath,
+      oldPath: oldPathOpt || null,
+      oldSidePath,
+      binary,
+      oldMissing: !!oldBlob.missing,
+      newMissing: !!newBlob.missing,
+      oldText: binary ? '' : oldBlob.text,
+      newText: binary ? '' : newBlob.text,
+    });
   });
 
   router.get('/git/modified', async (req, res) => {

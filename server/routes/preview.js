@@ -185,6 +185,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'replaceInFiles.js'),
         'utf-8'
       );
+      const commitDiffViewerJs = await fs.readFile(
+        path.join(previewModulesDir, 'commitDiffViewer.js'),
+        'utf-8'
+      );
       const gitPanelJs = await fs.readFile(
         path.join(previewModulesDir, 'gitPanel.js'),
         'utf-8'
@@ -330,6 +334,8 @@ async function loadPreviewTemplates() {
         globalSearchJs,
         '// Replace in Files',
         replaceInFilesJs,
+        '// Git commit diff viewer (modal)',
+        commitDiffViewerJs,
         '// Git Panel',
         gitPanelJs,
         '// Help Menu',

@@ -1110,8 +1110,43 @@ require(['vs/editor/editor.main'], function() {
       }
     }
 
+    const editorMonacoHexStack = document.getElementById('editorMonacoHexStack');
+    const gitDiffViewEl = document.getElementById('gitDiffView');
+    const browserViewEl = document.getElementById('browserView');
+
+    if (
+      window.PreviewCommitDiffViewer &&
+      typeof PreviewCommitDiffViewer.isGitDiffTab === 'function' &&
+      PreviewCommitDiffViewer.isGitDiffTab(newPath)
+    ) {
+      if (editorMonacoHexStack) editorMonacoHexStack.style.display = 'none';
+      if (browserViewEl) browserViewEl.style.display = 'none';
+      if (gitDiffViewEl) {
+        gitDiffViewEl.style.display = 'flex';
+        gitDiffViewEl.hidden = false;
+      }
+      if (typeof PreviewCommitDiffViewer.activateTab === 'function') {
+        PreviewCommitDiffViewer.activateTab(newPath);
+      }
+      fileName.textContent =
+        typeof PreviewCommitDiffViewer.getTabTitle === 'function'
+          ? PreviewCommitDiffViewer.getTabTitle(newPath)
+          : 'Git diff';
+      filePathRef.current = newPath;
+      filePath = newPath;
+      PreviewTabManager.updateActiveTab(newPath);
+      saveState();
+      return;
+    }
+
+    if (gitDiffViewEl) {
+      gitDiffViewEl.style.display = 'none';
+      gitDiffViewEl.hidden = true;
+    }
+
     // Check if this is a browser tab
     if (PreviewBrowserManager && PreviewBrowserManager.isBrowserTab(newPath)) {
+      if (editorMonacoHexStack) editorMonacoHexStack.style.display = 'none';
       PreviewBrowserManager.showBrowserView();
       fileName.textContent = 'Browser';
       filePathRef.current = newPath;
@@ -1467,7 +1502,7 @@ require(['vs/editor/editor.main'], function() {
           window.__previewReloadFileExplorer();
         }
         const cur = filePathRef.current;
-        if (!cur || cur.indexOf('browser://') === 0) {
+        if (!cur || cur.indexOf('browser://') === 0 || cur.indexOf('gitdiff://') === 0) {
           return;
         }
         const norm = function (p) {
@@ -1722,7 +1757,7 @@ require(['vs/editor/editor.main'], function() {
           // Tab switches used to only editor.setValue(), leaving the wrong Monaco model/URI
           // (content from file B while model still pointed at file A). That broke cross-file
           // navigation after switching tabs. Align model URI with the active tab path.
-          if (!filePath.startsWith('browser://')) {
+          if (!filePath.startsWith('browser://') && !filePath.startsWith('gitdiff://')) {
             const normalizedPath = String(filePath)
               .replace(/\\/g, '/')
               .replace(/^\/+/, '')

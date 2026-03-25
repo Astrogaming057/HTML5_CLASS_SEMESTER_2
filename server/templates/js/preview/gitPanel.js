@@ -75,6 +75,23 @@ window.PreviewGitPanel = (function () {
   const commitInfoCache = new Map();
   /** @type {Map<string, { success: boolean, files?: object[] }>} */
   const commitFilesCache = new Map();
+  if (window.PreviewCommitDiffViewer && typeof PreviewCommitDiffViewer.setCommitFilesLookup === 'function') {
+    PreviewCommitDiffViewer.setCommitFilesLookup(async function (hash) {
+      let data = commitFilesCache.get(hash);
+      if (data && data.files) return data;
+      try {
+        const r = await fetch('/__api__/git/commit-files?hash=' + encodeURIComponent(hash));
+        data = await r.json();
+        if (data.success && data.hash) {
+          commitFilesCache.set(data.hash, data);
+          commitFilesCache.set(hash, data);
+        }
+        return data;
+      } catch (_e) {
+        return { success: false };
+      }
+    });
+  }
   let graphPopoverEl = null;
   let graphPopoverShowTimer = null;
   let graphPopoverHideTimer = null;
@@ -244,7 +261,9 @@ window.PreviewGitPanel = (function () {
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
       '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
       '</button>' +
-      '<span class="git-graph-popover-footer-sep" aria-hidden="true"></span>' +
+      '<span class="git-graph-popover-footer-sep git-graph-popover-sep-diff" aria-hidden="true"></span>' +
+      '<button type="button" class="git-graph-popover-diff">View changes</button>' +
+      '<span class="git-graph-popover-footer-sep git-graph-popover-sep-gh" aria-hidden="true"></span>' +
       '<a class="git-graph-popover-github" target="_blank" rel="noopener noreferrer">Open on GitHub</a>' +
       '</div></div>';
     document.body.appendChild(wrap);
@@ -269,6 +288,22 @@ window.PreviewGitPanel = (function () {
       }
       closeBtn.addEventListener('click', onClosePopover);
       closeBtn.addEventListener('pointerdown', onClosePopover);
+    }
+    const popDiffBtn = wrap.querySelector('.git-graph-popover-diff');
+    if (popDiffBtn && !popDiffBtn.dataset.boundCommitDiff) {
+      popDiffBtn.dataset.boundCommitDiff = '1';
+      popDiffBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const h = popDiffBtn.dataset.fullHash || '';
+        if (h) {
+          hideGraphPopover();
+          void window.PreviewCommitDiffViewer.openMultiFileDiff(h);
+        }
+      });
+      popDiffBtn.addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+      });
     }
     wrap.addEventListener('pointerenter', function () {
       graphPopoverPointerOverPopover = true;
@@ -329,7 +364,9 @@ window.PreviewGitPanel = (function () {
     const hashEl = el.querySelector('.git-graph-popover-hash');
     const copyBtn = el.querySelector('.git-graph-popover-copy');
     const ghEl = el.querySelector('.git-graph-popover-github');
-    const sepEl = el.querySelector('.git-graph-popover-footer-sep');
+    const sepGhEl = el.querySelector('.git-graph-popover-sep-gh');
+    const sepDiffEl = el.querySelector('.git-graph-popover-sep-diff');
+    const diffBtn = el.querySelector('.git-graph-popover-diff');
 
     const author = (data.author || '').trim() || '(unknown)';
     if (authorEl) {
@@ -397,15 +434,20 @@ window.PreviewGitPanel = (function () {
     if (copyBtn) {
       copyBtn.dataset.fullHash = data.hash || '';
     }
+    if (diffBtn) {
+      diffBtn.dataset.fullHash = data.hash || '';
+      diffBtn.hidden = false;
+    }
+    if (sepDiffEl) sepDiffEl.hidden = false;
     if (ghEl) {
       if (data.githubCommitUrl) {
         ghEl.href = data.githubCommitUrl;
         ghEl.hidden = false;
-        if (sepEl) sepEl.hidden = false;
+        if (sepGhEl) sepGhEl.hidden = false;
       } else {
         ghEl.removeAttribute('href');
         ghEl.hidden = true;
-        if (sepEl) sepEl.hidden = true;
+        if (sepGhEl) sepGhEl.hidden = true;
       }
     }
   }
@@ -419,11 +461,15 @@ window.PreviewGitPanel = (function () {
     const msgEl = el.querySelector('.git-graph-popover-message');
     const statsEl = el.querySelector('.git-graph-popover-stats');
     const pillsEl = el.querySelector('.git-graph-popover-pills');
+    const diffBtnLoad = el.querySelector('.git-graph-popover-diff');
+    const sepDiffLoad = el.querySelector('.git-graph-popover-sep-diff');
     if (authorEl) authorEl.textContent = 'Loading\u2026';
     if (timeEl) timeEl.textContent = '';
     if (msgEl) msgEl.textContent = '';
     if (statsEl) statsEl.textContent = '';
     if (pillsEl) pillsEl.textContent = '';
+    if (diffBtnLoad) diffBtnLoad.hidden = true;
+    if (sepDiffLoad) sepDiffLoad.hidden = true;
     positionGraphPopover(row);
 
     let data = commitInfoCache.get(hash);
@@ -442,6 +488,10 @@ window.PreviewGitPanel = (function () {
     if (!data || !data.success) {
       if (msgEl) msgEl.textContent = (data && data.error) || 'Could not load commit';
       if (authorEl) authorEl.textContent = '';
+      const diffBtnErr = el.querySelector('.git-graph-popover-diff');
+      const sepDiffErr = el.querySelector('.git-graph-popover-sep-diff');
+      if (diffBtnErr) diffBtnErr.hidden = true;
+      if (sepDiffErr) sepDiffErr.hidden = true;
       if (!isGraphPopoverActive(row)) {
         hideGraphPopover();
         return;
@@ -489,15 +539,22 @@ window.PreviewGitPanel = (function () {
     return '\u25a1';
   }
 
-  function renderGitGraphFileList(container, files) {
+  function renderGitGraphFileList(container, files, commitHash) {
     container.textContent = '';
     const list = Array.isArray(files) ? files : [];
+    const hFull = commitHash || '';
     list.forEach(function (f) {
       const p = f.path || '';
       const kind = gitGraphFileIconKind(p);
       const parts = splitCommitDisplayPath(p);
       const row = document.createElement('div');
       row.className = 'git-graph-file-row';
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
+      row.title = 'Click to view diff';
+      row.dataset.commitHash = hFull;
+      row.dataset.filePath = p;
+      if (f.oldPath) row.dataset.oldPath = f.oldPath;
       const icon = document.createElement('span');
       icon.className = 'git-graph-file-icon git-graph-file-icon-' + kind;
       icon.setAttribute('aria-hidden', 'true');
@@ -544,6 +601,23 @@ window.PreviewGitPanel = (function () {
       row.appendChild(mid);
       row.appendChild(statsWrap);
       row.appendChild(st);
+      row.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (e.button !== 0) return;
+        const hh = row.dataset.commitHash;
+        const fp = row.dataset.filePath;
+        if (!hh || !fp) return;
+        const oldP = row.dataset.oldPath || '';
+        hideGraphPopover();
+        void window.PreviewCommitDiffViewer.openFileDiff(hh, fp, oldP);
+      });
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          row.click();
+        }
+      });
       container.appendChild(row);
     });
   }
@@ -583,7 +657,7 @@ window.PreviewGitPanel = (function () {
           empty.textContent = 'No file changes in this commit.';
           fileList.appendChild(empty);
         } else {
-          renderGitGraphFileList(fileList, data.files);
+          renderGitGraphFileList(fileList, data.files, data.hash || hash);
         }
       } else {
         const err = document.createElement('div');
