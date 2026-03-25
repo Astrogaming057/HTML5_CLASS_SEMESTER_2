@@ -45,6 +45,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'remote', 'remoteConfig.js'),
         'utf-8'
       );
+      const remoteHandoffJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteHandoff.js'),
+        'utf-8'
+      );
       const remoteSessionJs = await fs.readFile(
         path.join(previewModulesDir, 'remote', 'remoteSession.js'),
         'utf-8'
@@ -278,6 +282,7 @@ async function loadPreviewTemplates() {
         utilsJs,
         '// Remote Explorer',
         remoteConfigJs,
+        remoteHandoffJs,
         remoteSessionJs,
         remoteAuthApiJs,
         remoteTransportJs,

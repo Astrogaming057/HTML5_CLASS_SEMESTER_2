@@ -671,6 +671,12 @@ require(['vs/editor/editor.main'], function() {
   const language = getLanguage(filePath);
   
   PreviewSettings.loadPreviewSettings();
+  if (
+    window.PreviewRemoteTunnelStatus &&
+    typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+  ) {
+    window.PreviewRemoteTunnelStatus.refresh();
+  }
   const previewSettings = PreviewSettings.getSettings();
   
   const receivedLogIds = new Set();

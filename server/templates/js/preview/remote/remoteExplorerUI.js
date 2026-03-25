@@ -724,6 +724,12 @@ window.PreviewRemoteExplorer = (function () {
   }
 
   function init() {
+    if (
+      window.PreviewRemoteHandoff &&
+      typeof window.PreviewRemoteHandoff.applyFromHash === 'function'
+    ) {
+      window.PreviewRemoteHandoff.applyFromHash();
+    }
     bindAuthModal();
     if (sess.getToken()) {
       auth.pushLocalAgentConfig();

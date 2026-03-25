@@ -11,7 +11,8 @@ window.PreviewSettings = (function() {
     editorTabSize: 4,
     defaultExplorerVisible: true,
     defaultTerminalVisible: false,
-    explorerTreeView: true
+    explorerTreeView: true,
+    autoRemoteP2pWhenAvailable: false
   };
 
   let originalTheme = null;
@@ -129,6 +130,7 @@ window.PreviewSettings = (function() {
         const explorerTreeView = document.getElementById('explorerTreeView');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
         const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
+        const autoRemoteP2pWhenAvailable = document.getElementById('autoRemoteP2pWhenAvailable');
         
         if (autoRefreshPreview) autoRefreshPreview.checked = previewSettings.autoRefreshPreview;
         if (pageTheme) {
@@ -147,6 +149,9 @@ window.PreviewSettings = (function() {
         if (defaultExplorerVisible) defaultExplorerVisible.checked = previewSettings.defaultExplorerVisible;
         if (defaultTerminalVisible) defaultTerminalVisible.checked = previewSettings.defaultTerminalVisible;
         if (explorerTreeView) explorerTreeView.checked = previewSettings.explorerTreeView === true;
+        if (autoRemoteP2pWhenAvailable) {
+          autoRemoteP2pWhenAvailable.checked = previewSettings.autoRemoteP2pWhenAvailable === true;
+        }
       }
       
       // Always apply theme to preview frame (not just when settings panel is open)
@@ -365,7 +370,8 @@ window.PreviewSettings = (function() {
         editorTabSize: 4,
         defaultExplorerVisible: true,
         defaultTerminalVisible: false,
-        explorerTreeView: true
+        explorerTreeView: true,
+        autoRemoteP2pWhenAvailable: false
       };
       this.savePreviewSettings();
     },

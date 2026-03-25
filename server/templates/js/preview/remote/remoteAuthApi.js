@@ -193,6 +193,12 @@ window.PreviewRemoteAuthApi = (function () {
 
   /** Tell the local Astro Code backend to connect outbound to the proxy (reverse tunnel + presence). */
   async function pushLocalAgentConfig() {
+    if (
+      window.PreviewRemoteHandoff &&
+      typeof window.PreviewRemoteHandoff.applyFromHash === 'function'
+    ) {
+      window.PreviewRemoteHandoff.applyFromHash();
+    }
     const t = sess.getToken();
     if (!t) return;
     await ensureProxyBase();

@@ -180,6 +180,7 @@ app.get('/api/devices/:id/transport-hints', authMiddleware, async (req, res) => 
   }
   res.json({
     deviceId: id,
+    deviceKey: d.deviceKey,
     deviceBaseUrl: base,
     listenPort,
     proxyCanReachDevice,

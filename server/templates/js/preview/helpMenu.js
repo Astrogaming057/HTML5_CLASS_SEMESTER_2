@@ -166,7 +166,7 @@ window.PreviewHelpMenu = (function() {
               </div>
               <div class="help-feature-item">
                 <strong>Remote Explorer</strong>
-                <p>Sign in via the configured proxy, register this PC, and open another machine’s project. The status bar shows how you’re connected (reverse tunnel vs proxy→HTTP). If your browser can reach the other PC on the LAN, click the remote chip for a direct (P2P) preview on that machine.</p>
+                <p>Sign in via the configured proxy, register this PC, and open another machine's project. Tunneled sessions show PRXY TUNNELED ~ host; after LAN handoff, P2P ~ host:port. When CLICK TO P2P appears, click the status bar or enable auto P2P in settings.</p>
               </div>
               <div class="help-feature-item">
                 <strong>Live Preview</strong>

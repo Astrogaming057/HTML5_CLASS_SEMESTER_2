@@ -40,6 +40,7 @@ window.PreviewSettingsUI = (function() {
           const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
           const explorerTreeView = document.getElementById('explorerTreeView');
           const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
+          const autoRemoteP2pWhenAvailable = document.getElementById('autoRemoteP2pWhenAvailable');
           const useHardwareAcceleration = document.getElementById('useHardwareAcceleration');
           
           // Check if hardware acceleration setting changed
@@ -157,7 +158,10 @@ window.PreviewSettingsUI = (function() {
             editorTabSize: editorTabSize ? parseInt(editorTabSize.value) : 4,
             defaultExplorerVisible: defaultExplorerVisible ? defaultExplorerVisible.checked : true,
             defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false,
-            explorerTreeView: explorerTreeView ? explorerTreeView.checked : true
+            explorerTreeView: explorerTreeView ? explorerTreeView.checked : true,
+            autoRemoteP2pWhenAvailable: autoRemoteP2pWhenAvailable
+              ? autoRemoteP2pWhenAvailable.checked
+              : false
           });
           
           const pageThemeEl = document.getElementById('pageTheme');
@@ -174,6 +178,12 @@ window.PreviewSettingsUI = (function() {
             if (typeof window.__previewReloadFileExplorer === 'function') {
               window.__previewReloadFileExplorer();
             }
+            if (
+              window.PreviewRemoteTunnelStatus &&
+              typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+            ) {
+              window.PreviewRemoteTunnelStatus.refresh();
+            }
             PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
             status.textContent = 'Settings saved';
@@ -187,6 +197,12 @@ window.PreviewSettingsUI = (function() {
             PreviewSettings.applyPreviewSettings(editor);
             if (typeof window.__previewReloadFileExplorer === 'function') {
               window.__previewReloadFileExplorer();
+            }
+            if (
+              window.PreviewRemoteTunnelStatus &&
+              typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+            ) {
+              window.PreviewRemoteTunnelStatus.refresh();
             }
             PreviewSettings.closeSettings(true); // Skip theme revert when saving
             
@@ -255,6 +271,22 @@ window.PreviewSettingsUI = (function() {
           settings.applyThemeToPreviewFrame = applyThemeToPreviewFrameCheck.checked;
           PreviewSettings.setSettings(settings);
           PreviewSettings.applyThemeToPreviewFrame();
+        });
+      }
+
+      const autoRemoteP2pCheck = document.getElementById('autoRemoteP2pWhenAvailable');
+      if (autoRemoteP2pCheck) {
+        autoRemoteP2pCheck.addEventListener('change', () => {
+          const settings = PreviewSettings.getSettings();
+          settings.autoRemoteP2pWhenAvailable = autoRemoteP2pCheck.checked;
+          PreviewSettings.setSettings(settings);
+          PreviewSettings.savePreviewSettings();
+          if (
+            window.PreviewRemoteTunnelStatus &&
+            typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+          ) {
+            window.PreviewRemoteTunnelStatus.refresh();
+          }
         });
       }
       
@@ -536,6 +568,7 @@ window.PreviewSettingsUI = (function() {
         const defaultTerminalVisible = document.getElementById('defaultTerminalVisible');
         const explorerTreeViewRestart = document.getElementById('explorerTreeView');
         const applyThemeToPreviewFrame = document.getElementById('applyThemeToPreviewFrame');
+        const autoRemoteP2pRestart = document.getElementById('autoRemoteP2pWhenAvailable');
         
         PreviewSettings.setSettings({
           autoRefreshPreview: autoRefreshPreview ? autoRefreshPreview.checked : true,
@@ -549,7 +582,8 @@ window.PreviewSettingsUI = (function() {
           editorTabSize: editorTabSize ? parseInt(editorTabSize.value) : 4,
           defaultExplorerVisible: defaultExplorerVisible ? defaultExplorerVisible.checked : true,
           defaultTerminalVisible: defaultTerminalVisible ? defaultTerminalVisible.checked : false,
-          explorerTreeView: explorerTreeViewRestart ? explorerTreeViewRestart.checked : true
+          explorerTreeView: explorerTreeViewRestart ? explorerTreeViewRestart.checked : true,
+          autoRemoteP2pWhenAvailable: autoRemoteP2pRestart ? autoRemoteP2pRestart.checked : false
         });
         
         PreviewSettings.savePreviewSettings();

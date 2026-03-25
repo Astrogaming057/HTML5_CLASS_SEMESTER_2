@@ -1,46 +1,104 @@
 /**
- * Status bar (remote-only): how traffic reaches the other PC (proxy tunnel vs HTTP vs P2P).
- * Polls proxy transport-hints; offers LAN handoff when this browser can reach the device.
+ * Status bar: P2P vs proxy-tunneled remote, optional auto/handoff to P2P.
  */
 window.PreviewRemoteTunnelStatus = (function () {
   const POLL_MS = 14000;
+  const SESSION_P2P = 'previewRemoteP2pHandoff';
   let btnEl;
   let sepEl;
   let pollId = null;
+  let lastHintsForP2p = null;
+  /** Set when PRXY chip should navigate to P2P on click (capture listener). */
+  let pendingP2pClick = null;
+
+  function autoP2pSettingOn() {
+    try {
+      const s = window.PreviewSettings && window.PreviewSettings.getSettings();
+      return !!(s && s.autoRemoteP2pWhenAvailable);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isP2pHandoffTab() {
+    try {
+      return sessionStorage.getItem(SESSION_P2P) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function formatHostPortFromBaseUrl(base) {
+    if (!base || typeof base !== 'string') return '—';
+    try {
+      const u = new URL(base.trim().startsWith('http') ? base.trim() : 'http://' + base.trim());
+      const p = u.port;
+      if (!p) {
+        return u.hostname;
+      }
+      return u.hostname + ':' + p;
+    } catch (e) {
+      return base.replace(/^https?:\/\//, '').replace(/\/+$/, '') || '—';
+    }
+  }
+
+  function p2pLocalHostPort() {
+    try {
+      if (window.location.port) {
+        return window.location.hostname + ':' + window.location.port;
+      }
+      return window.location.hostname;
+    } catch (e) {
+      return '—';
+    }
+  }
 
   function hide() {
+    lastHintsForP2p = null;
+    pendingP2pClick = null;
     if (btnEl) {
       btnEl.hidden = true;
       btnEl.textContent = 'Remote';
       btnEl.title = '';
-      btnEl.onclick = null;
       btnEl.style.cursor = 'default';
     }
     if (sepEl) sepEl.hidden = true;
   }
 
-  function buildHandoffUrl(deviceBase) {
-    const b = String(deviceBase || '').replace(/\/+$/, '');
-    if (!b) return '';
-    return b + '/__preview__' + window.location.search + window.location.hash;
-  }
-
-  function describeMode(hints) {
-    const agent = !!hints.agentConnected;
-    const direct = !!hints.proxyCanReachDevice;
-    if (!direct && agent) {
-      return 'Remote · reverse tunnel';
+  async function navigateP2PWithCredentials(base, hints, targetDeviceId) {
+    const pack = window.PreviewRemoteHandoff;
+    const sess = window.PreviewRemoteSession;
+    const auth = window.PreviewRemoteAuthApi;
+    if (!pack || typeof pack.encodePayload !== 'function' || !sess) return;
+    const token = sess.getToken();
+    let dk = hints && hints.deviceKey;
+    let hUse = hints;
+    if ((!dk || !String(dk).trim()) && auth && targetDeviceId) {
+      try {
+        hUse = await auth.fetchTransportHints(targetDeviceId);
+        dk = hUse && hUse.deviceKey;
+      } catch (e) {
+        /* ignore */
+      }
     }
-    if (direct && !agent) {
-      return 'Remote · proxy → device HTTP';
+    if (!token || !dk || !String(dk).trim() || !base || !targetDeviceId) {
+      const msg =
+        'Cannot open P2P: need proxy login and device registration. Re-open Remote Explorer or restart the proxy so transport-hints includes deviceKey.';
+      if (window.PreviewUtils && typeof window.PreviewUtils.customAlert === 'function') {
+        await window.PreviewUtils.customAlert(msg);
+      }
+      return;
     }
-    if (direct && agent) {
-      return 'Remote · proxy → HTTP + tunnel ready';
-    }
-    if (!direct && !agent) {
-      return 'Remote · proxy (device may be offline)';
-    }
-    return 'Remote · via proxy';
+    const enc = pack.encodePayload({
+      t: token,
+      dk: String(dk),
+      u: sess.getUser(),
+      rid: String(targetDeviceId)
+    });
+    const q = window.location.search || '';
+    const url =
+      String(base).replace(/\/+$/, '') + '/__preview__' + q + '#remoteHandoff=' + enc;
+    window.location.assign(url);
   }
 
   async function probeBrowserLan(deviceBaseUrl) {
@@ -58,6 +116,19 @@ window.PreviewRemoteTunnelStatus = (function () {
   async function tick() {
     const sess = window.PreviewRemoteSession;
     const auth = window.PreviewRemoteAuthApi;
+    if (!btnEl || !sepEl) return;
+
+    if (isP2pHandoffTab()) {
+      pendingP2pClick = null;
+      sepEl.hidden = false;
+      btnEl.hidden = false;
+      btnEl.textContent = 'P2P ~ ' + p2pLocalHostPort();
+      btnEl.title = 'Direct LAN session to this Astro Code server (not tunneled through the proxy).';
+      btnEl.style.cursor = 'default';
+      lastHintsForP2p = null;
+      return;
+    }
+
     if (!sess || !auth || typeof sess.isRemoteActive !== 'function' || !sess.isRemoteActive()) {
       hide();
       return;
@@ -67,7 +138,7 @@ window.PreviewRemoteTunnelStatus = (function () {
       hide();
       return;
     }
-    if (!btnEl || !sepEl) return;
+
     sepEl.hidden = false;
     btnEl.hidden = false;
 
@@ -75,44 +146,53 @@ window.PreviewRemoteTunnelStatus = (function () {
     try {
       hints = await auth.fetchTransportHints(deviceId);
     } catch (e) {
-      btnEl.textContent = 'Remote · proxy';
+      lastHintsForP2p = null;
+      btnEl.textContent = 'PRXY TUNNELED ~ —';
       btnEl.title = 'Could not load transport status from proxy.';
-      btnEl.onclick = null;
+      pendingP2pClick = null;
       btnEl.style.cursor = 'default';
       return;
     }
+    lastHintsForP2p = hints;
 
     const base = hints.deviceBaseUrl || '';
-    const portHint =
-      hints.listenPort != null && String(hints.listenPort) !== ''
-        ? ' · port ' + hints.listenPort
-        : '';
+    const remoteEp = formatHostPortFromBaseUrl(base);
     let browserOk = false;
     if (hints.proxyCanReachDevice && base && !hints.deviceBaseIsLoopback) {
       browserOk = await probeBrowserLan(base);
     }
-    let label = describeMode(hints) + portHint;
+
+    let label = 'PRXY TUNNELED ~ ' + remoteEp;
     if (browserOk) {
-      label += ' — P2P';
+      label += ' · CLICK TO P2P';
     }
+
     btnEl.textContent = label;
+
+    if (browserOk && autoP2pSettingOn()) {
+      btnEl.title = 'Auto-switching to direct LAN (settings).';
+      pendingP2pClick = null;
+      navigateP2PWithCredentials(base, hints, deviceId).catch(function () {});
+      return;
+    }
+
     if (browserOk) {
       btnEl.title =
-        'Your browser can reach this machine at ' +
-        base +
-        '. Click to open this preview there (direct LAN, bypass proxy).';
-      btnEl.onclick = function (ev) {
-        ev.preventDefault();
-        const url = buildHandoffUrl(base);
-        if (url) window.location.href = url;
+        'Proxy tunnel active. Your browser can reach ' +
+        remoteEp +
+        ' — click to open a direct LAN (P2P) session with credentials.';
+      const handoffBase = base;
+      pendingP2pClick = function () {
+        const sid = sess.getTargetDeviceId();
+        navigateP2PWithCredentials(handoffBase, lastHintsForP2p, sid).catch(function () {});
       };
       btnEl.style.cursor = 'pointer';
     } else {
+      pendingP2pClick = null;
       btnEl.title =
-        'Traffic goes through the proxy tunnel. P2P appears if your browser can reach ' +
-        (base || 'the device') +
-        ' on the LAN.';
-      btnEl.onclick = null;
+        'Traffic is tunneled through the proxy to ' +
+        remoteEp +
+        '. P2P is offered when your browser can reach that host on the LAN.';
       btnEl.style.cursor = 'default';
     }
   }
@@ -126,6 +206,18 @@ window.PreviewRemoteTunnelStatus = (function () {
     btnEl = document.getElementById('remoteTunnelStatus');
     sepEl = document.getElementById('remoteTunnelStatusSep');
     if (!btnEl) return;
+    btnEl.addEventListener(
+      'click',
+      function (ev) {
+        if (!pendingP2pClick) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const go = pendingP2pClick;
+        pendingP2pClick = null;
+        go();
+      },
+      true
+    );
     tick();
     startPolling();
   }
