@@ -61,6 +61,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'remote', 'remoteExplorerUI.js'),
         'utf-8'
       );
+      const remoteTunnelStatusJs = await fs.readFile(
+        path.join(previewModulesDir, 'remote', 'remoteTunnelStatus.js'),
+        'utf-8'
+      );
       const settingsJs = await fs.readFile(
         path.join(previewModulesDir, 'settings.js'),
         'utf-8'
@@ -278,6 +282,7 @@ async function loadPreviewTemplates() {
         remoteAuthApiJs,
         remoteTransportJs,
         remoteExplorerUIJs,
+        remoteTunnelStatusJs,
         '// Settings',
         settingsJs,
         '// Popouts',

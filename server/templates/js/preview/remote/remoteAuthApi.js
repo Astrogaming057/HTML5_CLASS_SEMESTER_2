@@ -421,6 +421,22 @@ window.PreviewRemoteAuthApi = (function () {
     return proxyUrl('/api/devices/' + encodeURIComponent(String(id)));
   }
 
+  async function fetchTransportHints(deviceId) {
+    await ensureProxyBase();
+    const res = await fetchWithTimeout(
+      proxyUrl('/api/devices/' + encodeURIComponent(String(deviceId)) + '/transport-hints'),
+      {
+        method: 'GET',
+        headers: authHeaders()
+      }
+    );
+    const data = await parseJson(res);
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Transport hints failed');
+    }
+    return data;
+  }
+
   async function updateDevice(id, patch) {
     await ensureProxyBase();
     const res = await fetchWithTimeout(deviceUrl(id), {
@@ -465,6 +481,7 @@ window.PreviewRemoteAuthApi = (function () {
     updateDevice,
     deleteDevice,
     fetchLocalBuildInfo,
-    getCachedLocalBuild
+    getCachedLocalBuild,
+    fetchTransportHints
   };
 })();

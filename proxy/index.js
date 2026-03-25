@@ -141,6 +141,53 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user: { id: user.id, username: user.username } });
 });
 
+/** deviceId -> { t, ok } short cache for HTTP reachability from this proxy */
+const transportProbeCache = new Map();
+const TRANSPORT_PROBE_TTL_MS = 12000;
+
+app.get('/api/devices/:id/transport-hints', authMiddleware, async (req, res) => {
+  const id = req.params && req.params.id ? String(req.params.id) : '';
+  const d = store.findDeviceById(id);
+  if (!d || d.userId !== req.userId) {
+    res.status(404).json({ error: 'Device not found' });
+    return;
+  }
+  const base = tunnel.normalizeBaseUrl(d.baseUrl);
+  const loopback = base ? tunnel.isLoopbackBaseUrl(base) : true;
+  let listenPort = null;
+  if (base) {
+    try {
+      const u = new URL(base.startsWith('http') ? base : `http://${base}`);
+      listenPort = u.port ? parseInt(u.port, 10) : u.protocol === 'https:' ? 443 : 80;
+    } catch (e) {
+      listenPort = null;
+    }
+  }
+  const now = Date.now();
+  let proxyCanReachDevice = false;
+  if (base) {
+    const hit = transportProbeCache.get(id);
+    if (hit && now - hit.t < TRANSPORT_PROBE_TTL_MS) {
+      proxyCanReachDevice = hit.ok;
+    } else {
+      try {
+        proxyCanReachDevice = await reachability.probeDeviceHttpBase(base, 2000);
+      } catch (e) {
+        proxyCanReachDevice = false;
+      }
+      transportProbeCache.set(id, { t: now, ok: proxyCanReachDevice });
+    }
+  }
+  res.json({
+    deviceId: id,
+    deviceBaseUrl: base,
+    listenPort,
+    proxyCanReachDevice,
+    agentConnected: reverseTunnel.hasAgentForDevice(id),
+    deviceBaseIsLoopback: loopback
+  });
+});
+
 app.get('/api/devices', authMiddleware, (req, res) => {
   const now = Date.now();
   const list = store.listDevicesForUser(req.userId).map((d) => {

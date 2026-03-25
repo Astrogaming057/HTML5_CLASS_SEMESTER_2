@@ -166,7 +166,7 @@ window.PreviewHelpMenu = (function() {
               </div>
               <div class="help-feature-item">
                 <strong>Remote Explorer</strong>
-                <p>Sign in via the configured proxy, register this PC, and open another machine’s project. While connected, APIs and preview use the proxy tunnel (🌐 next to Git).</p>
+                <p>Sign in via the configured proxy, register this PC, and open another machine’s project. The status bar shows how you’re connected (reverse tunnel vs proxy→HTTP). If your browser can reach the other PC on the LAN, click the remote chip for a direct (P2P) preview on that machine.</p>
               </div>
               <div class="help-feature-item">
                 <strong>Live Preview</strong>

@@ -183,6 +183,21 @@ function setupAPI(baseDir) {
     }
   });
 
+  /**
+   * Tiny CORS GET for browsers on another machine to test LAN reachability before P2P handoff.
+   * No auth; returns minimal JSON only.
+   */
+  router.options('/remote/handoff-probe', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.sendStatus(204);
+  });
+  router.get('/remote/handoff-probe', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({ ok: true, probe: 'handoff' });
+  });
+
   /** Editor WebSocket peers (browsers connected to this Astro Code backend for live sync). */
   router.get('/ws/clients', (req, res) => {
     try {
