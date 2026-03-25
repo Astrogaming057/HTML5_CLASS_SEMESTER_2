@@ -226,11 +226,21 @@ window.PreviewRemoteExplorer = (function () {
 
   const TERMINAL_ALERT = { terminal: true, title: '$ remote' };
 
+  function clearP2pBadgeIfAny() {
+    if (
+      window.PreviewRemoteHandoff &&
+      typeof window.PreviewRemoteHandoff.clearP2pTabMarker === 'function'
+    ) {
+      window.PreviewRemoteHandoff.clearP2pTabMarker();
+    }
+  }
+
   function syncSessionAfterDeviceRemoved(deviceId) {
     const sid = String(deviceId);
     if (sess.getTargetDeviceId() === sid) {
       sess.setMode('local');
       sess.setTargetDeviceId(null);
+      clearP2pBadgeIfAny();
     }
     if (sess.getRegisteredLocalDeviceId() === sid) {
       sess.setRegisteredLocalDeviceId(null);
@@ -647,11 +657,27 @@ window.PreviewRemoteExplorer = (function () {
     if (action === 'local') {
       sess.setMode('local');
       sess.setTargetDeviceId(null);
+      clearP2pBadgeIfAny();
+      if (
+        window.PreviewUtils &&
+        typeof window.PreviewUtils.redirectPreviewToLoopbackIfNeeded === 'function' &&
+        window.PreviewUtils.redirectPreviewToLoopbackIfNeeded()
+      ) {
+        return;
+      }
       window.location.reload();
       return;
     }
     if (action === 'logout') {
+      clearP2pBadgeIfAny();
       auth.logout();
+      if (
+        window.PreviewUtils &&
+        typeof window.PreviewUtils.redirectPreviewToLoopbackIfNeeded === 'function' &&
+        window.PreviewUtils.redirectPreviewToLoopbackIfNeeded()
+      ) {
+        return;
+      }
       window.location.reload();
       return;
     }
@@ -675,6 +701,14 @@ window.PreviewRemoteExplorer = (function () {
       sess.setTargetDeviceId(id);
       const nm = dev ? dev.name || dev.label || id : id;
       if (sess.setTargetDeviceLabel) sess.setTargetDeviceLabel(nm);
+      clearP2pBadgeIfAny();
+      if (
+        window.PreviewUtils &&
+        typeof window.PreviewUtils.redirectPreviewToLoopbackIfNeeded === 'function' &&
+        window.PreviewUtils.redirectPreviewToLoopbackIfNeeded()
+      ) {
+        return;
+      }
       window.location.reload();
     }
   }

@@ -281,5 +281,45 @@ window.PreviewUtils = {
 
   generateLogId(message, logType, timestamp) {
     return `${message}_${logType}_${timestamp}`;
+  },
+
+  isPreviewLoopbackHost() {
+    const h = String(window.location.hostname || '').toLowerCase();
+    return (
+      h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
+    );
+  },
+
+  /** Loopback base for this Astro Code server (injected as __ASTRO_PREVIEW_LOCAL_ORIGIN__). */
+  getPreviewLoopbackBase() {
+    let o = window.__ASTRO_PREVIEW_LOCAL_ORIGIN__;
+    if (o && typeof o === 'string') {
+      return o.replace(/\/+$/, '');
+    }
+    const p = window.location.port;
+    return 'http://127.0.0.1:' + (p || '17456');
+  },
+
+  /**
+   * After P2P/handoff the tab may be on a LAN host; local + remote-switch flows should use loopback.
+   * @returns {boolean} true if navigation was started (caller should not reload)
+   */
+  redirectPreviewToLoopbackIfNeeded() {
+    try {
+      if (this.isPreviewLoopbackHost()) {
+        return false;
+      }
+      const path = window.location.pathname || '';
+      if (path.indexOf('/__preview__') !== 0) {
+        return false;
+      }
+      const base = this.getPreviewLoopbackBase();
+      const url =
+        base + path + (window.location.search || '') + (window.location.hash || '');
+      window.location.assign(url);
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 };

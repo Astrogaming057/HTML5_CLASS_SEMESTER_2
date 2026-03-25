@@ -66,11 +66,24 @@ window.PreviewPingMonitor = (function() {
     });
 
     document.getElementById('remoteOfflineUseLocal').addEventListener('click', function () {
+      if (
+        window.PreviewRemoteHandoff &&
+        typeof window.PreviewRemoteHandoff.clearP2pTabMarker === 'function'
+      ) {
+        window.PreviewRemoteHandoff.clearP2pTabMarker();
+      }
       if (window.PreviewRemoteSession) {
         PreviewRemoteSession.setMode('local');
         PreviewRemoteSession.setTargetDeviceId(null);
       }
       hideRemoteOfflineDialog();
+      if (
+        window.PreviewUtils &&
+        typeof window.PreviewUtils.redirectPreviewToLoopbackIfNeeded === 'function' &&
+        window.PreviewUtils.redirectPreviewToLoopbackIfNeeded()
+      ) {
+        return;
+      }
       window.location.reload();
     });
 
@@ -139,10 +152,23 @@ window.PreviewPingMonitor = (function() {
           btn.textContent = (isCurrent ? '● ' : '') + name;
           btn.setAttribute('data-device-id', String(id));
           btn.addEventListener('click', function () {
+            if (
+              window.PreviewRemoteHandoff &&
+              typeof window.PreviewRemoteHandoff.clearP2pTabMarker === 'function'
+            ) {
+              window.PreviewRemoteHandoff.clearP2pTabMarker();
+            }
             sess.setMode('remote');
             sess.setTargetDeviceId(String(id));
             if (sess.setTargetDeviceLabel) sess.setTargetDeviceLabel(name);
             hideRemoteOfflineDialog();
+            if (
+              window.PreviewUtils &&
+              typeof window.PreviewUtils.redirectPreviewToLoopbackIfNeeded === 'function' &&
+              window.PreviewUtils.redirectPreviewToLoopbackIfNeeded()
+            ) {
+              return;
+            }
             window.location.reload();
           });
           container.appendChild(btn);

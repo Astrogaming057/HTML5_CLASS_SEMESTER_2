@@ -1,4 +1,27 @@
 window.PreviewRemoteSession = (function () {
+  function clearP2pHandoffMarker() {
+    try {
+      if (
+        window.PreviewRemoteHandoff &&
+        typeof window.PreviewRemoteHandoff.clearP2pTabMarker === 'function'
+      ) {
+        window.PreviewRemoteHandoff.clearP2pTabMarker();
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+    try {
+      if (
+        window.PreviewRemoteTunnelStatus &&
+        typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+      ) {
+        window.PreviewRemoteTunnelStatus.refresh();
+      }
+    } catch (_e2) {
+      /* ignore */
+    }
+  }
+
   function deviceKey() {
     let k = localStorage.getItem(window.PreviewRemoteConfig.STORAGE_DEVICE_KEY);
     if (!k) {
@@ -38,6 +61,7 @@ window.PreviewRemoteSession = (function () {
   function clearSession() {
     localStorage.removeItem(window.PreviewRemoteConfig.STORAGE_TOKEN);
     localStorage.removeItem(window.PreviewRemoteConfig.STORAGE_USER);
+    clearP2pHandoffMarker();
   }
 
   function getRegisteredLocalDeviceId() {
@@ -59,10 +83,16 @@ window.PreviewRemoteSession = (function () {
   }
 
   function setMode(mode) {
+    const prev = getMode();
+    const next = mode === 'remote' ? 'remote' : 'local';
     if (mode === 'remote') {
       localStorage.setItem(window.PreviewRemoteConfig.STORAGE_MODE, 'remote');
     } else {
       localStorage.setItem(window.PreviewRemoteConfig.STORAGE_MODE, 'local');
+    }
+    /* Any switch away from remote clears; “Use Local” on an already-local P2P handoff tab must clear too. */
+    if (prev !== next || next === 'local') {
+      clearP2pHandoffMarker();
     }
   }
 
@@ -83,6 +113,12 @@ window.PreviewRemoteSession = (function () {
   }
 
   function setTargetDeviceId(id) {
+    const prevRaw = localStorage.getItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_ID);
+    const prev = prevRaw ? String(prevRaw) : null;
+    const next = id ? String(id) : null;
+    if (prev !== next) {
+      clearP2pHandoffMarker();
+    }
     if (id) {
       localStorage.setItem(window.PreviewRemoteConfig.STORAGE_TARGET_DEVICE_ID, id);
     } else {

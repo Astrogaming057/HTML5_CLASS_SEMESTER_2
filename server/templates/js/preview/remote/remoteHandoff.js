@@ -74,9 +74,16 @@ window.PreviewRemoteHandoff = (function () {
     }
 
     try {
-      history.replaceState(null, '', location.pathname + location.search);
+      const u = new URL(window.location.href);
+      u.hash = '';
+      u.searchParams.delete('_p2p');
+      history.replaceState(null, '', u.pathname + u.search);
     } catch (e) {
-      /* ignore */
+      try {
+        history.replaceState(null, '', location.pathname + location.search);
+      } catch (e2) {
+        /* ignore */
+      }
     }
     try {
       sessionStorage.setItem('previewRemoteP2pHandoff', '1');
@@ -86,11 +93,57 @@ window.PreviewRemoteHandoff = (function () {
     return true;
   }
 
-  applyFromHash();
+  /** Drop the “P2P tab” badge when switching to proxy tunnel or Use Local / reload. */
+  function clearP2pTabMarker() {
+    try {
+      sessionStorage.removeItem('previewRemoteP2pHandoff');
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Session survives reload; without this, “P2P ~ …” stays until an explicit menu action.
+   * Fresh handoff sets the marker inside applyFromHash (returns true); otherwise clear stale flag.
+   */
+  if (!applyFromHash()) {
+    clearP2pTabMarker();
+  }
+
+  window.addEventListener(
+    'hashchange',
+    function () {
+      if (!applyFromHash()) {
+        return;
+      }
+      try {
+        if (
+          window.PreviewRemoteAuthApi &&
+          typeof window.PreviewRemoteAuthApi.pushLocalAgentConfig === 'function'
+        ) {
+          window.PreviewRemoteAuthApi.pushLocalAgentConfig().catch(function () {});
+        }
+      } catch (_e) {
+        /* ignore */
+      }
+      try {
+        if (
+          window.PreviewRemoteTunnelStatus &&
+          typeof window.PreviewRemoteTunnelStatus.refresh === 'function'
+        ) {
+          window.PreviewRemoteTunnelStatus.refresh();
+        }
+      } catch (_e2) {
+        /* ignore */
+      }
+    },
+    false
+  );
 
   return {
     encodePayload: encodePayload,
     decodePayload: decodePayload,
-    applyFromHash: applyFromHash
+    applyFromHash: applyFromHash,
+    clearP2pTabMarker: clearP2pTabMarker
   };
 })();

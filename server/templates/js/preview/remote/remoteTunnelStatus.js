@@ -95,9 +95,25 @@ window.PreviewRemoteTunnelStatus = (function () {
       u: sess.getUser(),
       rid: String(targetDeviceId)
     });
+    const baseNorm = String(base).replace(/\/+$/, '');
     const q = window.location.search || '';
-    const url =
-      String(base).replace(/\/+$/, '') + '/__preview__' + q + '#remoteHandoff=' + enc;
+    let pathAndQuery = '/__preview__' + q;
+    try {
+      const destNoHash = new URL(baseNorm + pathAndQuery, window.location.href);
+      const cur = new URL(window.location.href);
+      if (
+        destNoHash.origin === cur.origin &&
+        destNoHash.pathname === cur.pathname &&
+        destNoHash.search === cur.search
+      ) {
+        /* Otherwise the browser only swaps the hash — scripts don’t reload and handoff never runs. */
+        pathAndQuery =
+          '/__preview__' + (q ? q + '&_p2p=' : '?_p2p=') + Date.now();
+      }
+    } catch (_e) {
+      /* keep pathAndQuery */
+    }
+    const url = baseNorm + pathAndQuery + '#remoteHandoff=' + enc;
     window.location.assign(url);
   }
 
@@ -117,6 +133,15 @@ window.PreviewRemoteTunnelStatus = (function () {
     const sess = window.PreviewRemoteSession;
     const auth = window.PreviewRemoteAuthApi;
     if (!btnEl || !sepEl) return;
+
+    if (sess && typeof sess.isRemoteActive === 'function' && sess.isRemoteActive()) {
+      if (
+        window.PreviewRemoteHandoff &&
+        typeof window.PreviewRemoteHandoff.clearP2pTabMarker === 'function'
+      ) {
+        window.PreviewRemoteHandoff.clearP2pTabMarker();
+      }
+    }
 
     if (isP2pHandoffTab()) {
       pendingP2pClick = null;

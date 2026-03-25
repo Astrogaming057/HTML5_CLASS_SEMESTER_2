@@ -389,8 +389,13 @@ async function loadPreviewTemplates() {
   }
 }
 
-async function servePreview(baseDir, filePath) {
+async function servePreview(baseDir, filePath, listenPort) {
   await loadPreviewTemplates();
+  const port =
+    listenPort !== undefined && listenPort !== null && String(listenPort).trim() !== ''
+      ? Number(listenPort)
+      : 17456;
+  const previewPort = Number.isFinite(port) && port > 0 ? port : 17456;
   
   const fullPath = path.join(baseDir, filePath);
   const resolvedPath = path.resolve(fullPath);
@@ -423,6 +428,7 @@ async function servePreview(baseDir, filePath) {
   
   let html = htmlTemplate
     .replace('{{FILENAME}}', fileName)
+    .replace(/\{\{PREVIEW_PORT\}\}/g, String(previewPort))
     .replace('{{CSS_CONTENT}}', `<style>${cssContent}</style><style id="theme-style">${darkTheme}</style>`)
     .replace('{{JS_CONTENT}}', `<script>${jsContent}</script>`);
 
@@ -431,9 +437,13 @@ async function servePreview(baseDir, filePath) {
 
 const previewCache = new Map();
 
-function setupPreviewRoutes(baseDir) {
+function setupPreviewRoutes(baseDir, listenPort) {
   const router = express.Router();
-  
+  const previewPort =
+    listenPort !== undefined && listenPort !== null && String(listenPort).trim() !== ''
+      ? Number(listenPort)
+      : 17456;
+
   router.get('/', async (req, res) => {
     try {
       const filePath = req.query.file;
@@ -441,7 +451,7 @@ function setupPreviewRoutes(baseDir) {
         const statusPage = await getStatusPage(400);
         return res.status(400).send(statusPage || 'No file specified');
       }
-      const html = await servePreview(baseDir, filePath);
+      const html = await servePreview(baseDir, filePath, previewPort);
       res.send(html);
     } catch (error) {
       logger.error('Error serving preview', error);
