@@ -3,10 +3,24 @@ window.PreviewRemoteTransport = (function () {
   const cfg = window.PreviewRemoteConfig;
   let fetchPatched = false;
 
+  function normalizedProxyBase() {
+    let base = String(cfg.PROXY_BASE || '')
+      .trim()
+      .replace(/\/+$/, '');
+    if (base) return base;
+    const arr = cfg.PROXY_CANDIDATES;
+    if (Array.isArray(arr) && arr.length) {
+      base = String(arr[0] || '')
+        .trim()
+        .replace(/\/+$/, '');
+    }
+    return base;
+  }
+
   function tunnelBase() {
-    const base = (cfg.PROXY_BASE || '').replace(/\/$/, '');
+    const base = normalizedProxyBase();
     const id = sess.getTargetDeviceId();
-    if (!id) return null;
+    if (!id || !base) return null;
     return base + '/tunnel/' + encodeURIComponent(id);
   }
 

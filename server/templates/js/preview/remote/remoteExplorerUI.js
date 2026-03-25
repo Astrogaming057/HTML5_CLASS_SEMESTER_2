@@ -35,7 +35,7 @@ window.PreviewRemoteExplorer = (function () {
 
   let authModeLogin = true;
 
-  function showAuthModal(asRegister) {
+  async function showAuthModal(asRegister) {
     authModeLogin = !asRegister;
     const wrap = ensureAuthModal();
     const title = document.getElementById('remoteAuthTitle');
@@ -44,6 +44,7 @@ window.PreviewRemoteExplorer = (function () {
     const sw = document.getElementById('remoteAuthSwitch');
     const sub = document.getElementById('remoteAuthSubmit');
     if (title) title.textContent = authModeLogin ? 'Sign in' : 'Create account';
+    await auth.ensureProxyBase();
     if (hint) {
       hint.textContent = 'Connect to ' + (window.PreviewRemoteConfig.PROXY_BASE || 'proxy');
       hint.classList.remove('remote-auth-hint-warn');
@@ -118,7 +119,7 @@ window.PreviewRemoteExplorer = (function () {
     if (cancel) cancel.addEventListener('click', hideAuthModal);
     if (sw) {
       sw.addEventListener('click', function () {
-        showAuthModal(authModeLogin);
+        void showAuthModal(authModeLogin);
       });
     }
     if (submit) {
@@ -574,7 +575,7 @@ window.PreviewRemoteExplorer = (function () {
       } else if (agentStatus === null) {
         html += '<div class="remote-dd-desc">Outbound agent: status unavailable (restart the Astro Code backend).</div>';
       } else {
-        html += '<div class="remote-dd-desc">Outbound agent: waiting — ensure PROXY_BASE is set and sign in again.</div>';
+        html += '<div class="remote-dd-desc">Outbound agent: waiting — ensure proxy URLs are set in PreviewRemoteConfig and sign in again.</div>';
       }
       if (!registered) {
         html += '<button type="button" class="remote-dd-item" data-action="register-pc">Register This PC</button>';
@@ -732,7 +733,7 @@ window.PreviewRemoteExplorer = (function () {
     if (!btn) return;
     btn.addEventListener('click', async function () {
       if (!sess.getToken()) {
-        showAuthModal(false);
+        await showAuthModal(false);
         return;
       }
       if (dropdownEl && !dropdownEl.hasAttribute('hidden')) {
