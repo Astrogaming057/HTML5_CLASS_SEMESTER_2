@@ -189,6 +189,14 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'commitDiffViewer.js'),
         'utf-8'
       );
+      const gitPanelGraphJs = await fs.readFile(
+        path.join(previewModulesDir, 'gitPanelGraph.js'),
+        'utf-8'
+      );
+      const gitPanelStashJs = await fs.readFile(
+        path.join(previewModulesDir, 'gitPanelStash.js'),
+        'utf-8'
+      );
       const gitPanelJs = await fs.readFile(
         path.join(previewModulesDir, 'gitPanel.js'),
         'utf-8'
@@ -336,6 +344,10 @@ async function loadPreviewTemplates() {
         replaceInFilesJs,
         '// Git commit diff viewer (modal)',
         commitDiffViewerJs,
+        '// Git Panel — commit graph',
+        gitPanelGraphJs,
+        '// Git Panel — stash stack',
+        gitPanelStashJs,
         '// Git Panel',
         gitPanelJs,
         '// Help Menu',
