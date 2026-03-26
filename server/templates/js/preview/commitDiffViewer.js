@@ -221,14 +221,10 @@ window.PreviewCommitDiffViewer = (function () {
     body.appendChild(d);
   }
 
-  function renderCommitFileDiffInto(body, payload) {
+  function renderTextPairDiffInto(body, oldText, newText) {
     body.textContent = '';
-    if (payload.binary) {
-      renderBinaryNotice(body, payload.path || '');
-      return;
-    }
-    const oldT = payload.oldText != null ? String(payload.oldText) : '';
-    const newT = payload.newText != null ? String(payload.newText) : '';
+    const oldT = oldText != null ? String(oldText) : '';
+    const newT = newText != null ? String(newText) : '';
     const a = oldT.split(/\r?\n/);
     const b = newT.split(/\r?\n/);
     const useLcs =
@@ -247,6 +243,17 @@ window.PreviewCommitDiffViewer = (function () {
     renderSideBySideRows(rows, tbody);
     table.appendChild(tbody);
     body.appendChild(table);
+  }
+
+  function renderCommitFileDiffInto(body, payload) {
+    body.textContent = '';
+    if (payload.binary) {
+      renderBinaryNotice(body, payload.path || '');
+      return;
+    }
+    const oldT = payload.oldText != null ? String(payload.oldText) : '';
+    const newT = payload.newText != null ? String(payload.newText) : '';
+    renderTextPairDiffInto(body, oldT, newT);
   }
 
   async function fetchCommitFilesDefault(hash) {
@@ -402,10 +409,12 @@ window.PreviewCommitDiffViewer = (function () {
 
   return {
     GITDIFF_PREFIX: GITDIFF_PREFIX,
+    parseGitDiffTab: parseGitDiffTab,
     isGitDiffTab: isGitDiffTab,
     getTabTitle: getTabTitle,
     activateTab: activateTab,
     disposeTab: disposeTab,
+    renderTextPairDiffInto: renderTextPairDiffInto,
 
     setCommitFilesLookup(fn) {
       commitFilesLookup = typeof fn === 'function' ? fn : null;

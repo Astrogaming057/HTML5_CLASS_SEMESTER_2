@@ -1104,6 +1104,10 @@ require(['vs/editor/editor.main'], function() {
   }
 
   async function switchToFileInternal(newPath, skipCache = false) {
+    if (window.PreviewFileTimeline && typeof PreviewFileTimeline.refreshForPath === 'function') {
+      PreviewFileTimeline.refreshForPath(newPath);
+    }
+
     if (window.PreviewHexEditor && PreviewHexEditor.isActive()) {
       const hexPath = PreviewHexEditor.getPath();
       if (newPath !== hexPath) {
@@ -1128,8 +1132,12 @@ require(['vs/editor/editor.main'], function() {
       window.PreviewFileHistoryViewer &&
       typeof PreviewFileHistoryViewer.isHistoryTab === 'function' &&
       PreviewFileHistoryViewer.isHistoryTab(newPath);
+    const isFileTimelineDiffTab =
+      window.PreviewFileTimelineDiffViewer &&
+      typeof PreviewFileTimelineDiffViewer.isTimelineDiffTab === 'function' &&
+      PreviewFileTimelineDiffViewer.isTimelineDiffTab(newPath);
 
-    if (isGitDiffTab || isGitHistoryTab) {
+    if (isGitDiffTab || isGitHistoryTab || isFileTimelineDiffTab) {
       if (editorMonacoHexStack) editorMonacoHexStack.style.display = 'none';
       if (browserViewEl) browserViewEl.style.display = 'none';
       if (gitDiffViewEl) {
@@ -1148,6 +1156,12 @@ require(['vs/editor/editor.main'], function() {
           typeof PreviewFileHistoryViewer.getTabTitle === 'function'
             ? PreviewFileHistoryViewer.getTabTitle(newPath)
             : 'History';
+      } else if (isFileTimelineDiffTab && typeof PreviewFileTimelineDiffViewer.activateTab === 'function') {
+        PreviewFileTimelineDiffViewer.activateTab(newPath);
+        fileName.textContent =
+          typeof PreviewFileTimelineDiffViewer.getTabTitle === 'function'
+            ? PreviewFileTimelineDiffViewer.getTabTitle(newPath)
+            : 'Save diff';
       }
       filePathRef.current = newPath;
       filePath = newPath;
@@ -1378,6 +1392,9 @@ require(['vs/editor/editor.main'], function() {
           PreviewTabManager.updateTabDirtyState(currentPath, result.isDirty || false, result.originalContent || originalContent.current);
           PreviewTabManager.setTabContent(currentPath, editor.getValue(), result.originalContent || originalContent.current);
         }
+        if (window.PreviewFileTimeline && typeof PreviewFileTimeline.refreshForPath === 'function') {
+          PreviewFileTimeline.refreshForPath(filePathRef.current);
+        }
       }
     });
   }
@@ -1523,7 +1540,8 @@ require(['vs/editor/editor.main'], function() {
           !cur ||
           cur.indexOf('browser://') === 0 ||
           cur.indexOf('gitdiff://') === 0 ||
-          cur.indexOf('githistory://') === 0
+          cur.indexOf('githistory://') === 0 ||
+          cur.indexOf('filetimeline://') === 0
         ) {
           return;
         }
@@ -1753,7 +1771,7 @@ require(['vs/editor/editor.main'], function() {
       getLanguage: getLanguage
     });
   }
-  
+
   PreviewTabManager.initialize(
     editorTabsContainer,
     switchToFileInternal,
@@ -1782,7 +1800,8 @@ require(['vs/editor/editor.main'], function() {
           if (
             !filePath.startsWith('browser://') &&
             !filePath.startsWith('gitdiff://') &&
-            !filePath.startsWith('githistory://')
+            !filePath.startsWith('githistory://') &&
+            !filePath.startsWith('filetimeline://')
           ) {
             const normalizedPath = String(filePath)
               .replace(/\\/g, '/')
@@ -1890,6 +1909,11 @@ require(['vs/editor/editor.main'], function() {
   }
   
   window.__previewEditor = editor;
+
+  if (window.PreviewFileTimeline && typeof window.PreviewFileTimeline.init === 'function') {
+    window.PreviewFileTimeline.init();
+    window.PreviewFileTimeline.refreshForPath(filePathRef.current);
+  }
 
   function runMonacoAction(actionId) {
     if (!editor) return;

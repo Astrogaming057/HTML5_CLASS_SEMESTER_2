@@ -174,7 +174,8 @@ window.PreviewElectronClose = (function() {
             !p ||
             p.startsWith('browser://') ||
             p.startsWith('gitdiff://') ||
-            p.startsWith('githistory://')
+            p.startsWith('githistory://') ||
+            p.startsWith('filetimeline://')
           ) {
             continue;
           }

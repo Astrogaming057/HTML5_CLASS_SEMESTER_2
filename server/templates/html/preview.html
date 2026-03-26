@@ -303,10 +303,44 @@
           <button id="toggleExplorer" class="toggle-btn" title="Toggle Explorer">◀</button>
         </div>
       </div>
-      <div class="explorer-body" id="explorerBody">
+      <div class="explorer-body explorer-body-with-timeline" id="explorerBody">
         <div class="explorer-files-pane" id="explorerFilesPane">
           <div class="file-tree" id="fileTree">
             <div class="file-tree-loading">Loading...</div>
+          </div>
+        </div>
+        <div
+          class="git-graph-splitter"
+          id="explorerTimelineSplitter"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize file save timeline"
+        ></div>
+        <div class="git-graph-panel explorer-timeline-panel" id="explorerTimelineWrap" aria-label="File save timeline">
+          <div class="git-graph-header">
+            <div class="git-graph-header-left">
+              <div class="git-graph-title-row">
+                <button
+                  type="button"
+                  class="git-graph-collapse-btn"
+                  id="explorerTimelineCollapseBtn"
+                  aria-expanded="true"
+                  aria-label="Collapse timeline"
+                  title="Collapse timeline"
+                >
+                  &#9660;
+                </button>
+                <span class="git-graph-title">TIMELINE</span>
+              </div>
+            </div>
+            <div class="git-graph-toolbar">
+              <button type="button" class="git-btn git-btn-small" id="explorerTimelineRefresh" title="Refresh timeline">
+                &#8635;
+              </button>
+            </div>
+          </div>
+          <div class="git-graph-body">
+            <div class="git-graph-list explorer-timeline-list" id="explorerTimelineList" role="list"></div>
           </div>
         </div>
       </div>

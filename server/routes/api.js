@@ -477,6 +477,19 @@ function setupAPI(baseDir) {
         return res.json({ success: false, error: 'Forbidden' });
       }
 
+      let previousText = '';
+      let hadPreviousFile = false;
+      if (!req.body.isBinary && typeof content === 'string') {
+        try {
+          previousText = await fs.readFile(resolvedPath, 'utf-8');
+          hadPreviousFile = true;
+        } catch (readErr) {
+          if (readErr.code !== 'ENOENT') {
+            throw readErr;
+          }
+        }
+      }
+
       if (req.body.isBinary && typeof content === 'string') {
         const buffer = Buffer.from(content, 'base64');
         await fs.writeFile(resolvedPath, buffer);
@@ -484,6 +497,21 @@ function setupAPI(baseDir) {
       } else {
         await fs.writeFile(resolvedPath, content, 'utf-8');
         logger.info('API: File saved', { path: filePath, size: (content && content.length) || 0 });
+      }
+
+      if (!req.body.isBinary && typeof content === 'string') {
+        try {
+          // eslint-disable-next-line global-require
+          const fileTimeline = require('../lib/fileTimeline');
+          await fileTimeline.appendSaveEvent(
+            baseDir,
+            filePath,
+            hadPreviousFile ? previousText : '',
+            content
+          );
+        } catch (tlErr) {
+          logger.warn('API: file timeline append failed', { path: filePath, message: tlErr.message });
+        }
       }
       
       const editorDir = path.join(baseDir, 'ide_editor_cache');
@@ -504,6 +532,52 @@ function setupAPI(baseDir) {
       res.json({ success: true });
     } catch (error) {
       logger.error('API: Error updating file', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/files/timeline', async (req, res) => {
+    try {
+      const filePath = req.query && req.query.path != null ? String(req.query.path) : '';
+      if (!filePath.trim()) {
+        return res.json({ success: false, error: 'Missing path' });
+      }
+      const normalized = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const fullPath = path.join(baseDir, normalized);
+      if (!isPathSafe(path.resolve(fullPath), baseDir)) {
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+      // eslint-disable-next-line global-require
+      const fileTimeline = require('../lib/fileTimeline');
+      const { events } = await fileTimeline.listEvents(baseDir, normalized);
+      res.json({ success: true, events: events || [] });
+    } catch (error) {
+      logger.error('API: files/timeline list', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  router.get('/files/timeline/snapshot', async (req, res) => {
+    try {
+      const filePath = req.query && req.query.path != null ? String(req.query.path) : '';
+      const indexRaw = req.query && req.query.index != null ? req.query.index : '0';
+      if (!filePath.trim()) {
+        return res.json({ success: false, error: 'Missing path' });
+      }
+      const normalized = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+      const fullPath = path.join(baseDir, normalized);
+      if (!isPathSafe(path.resolve(fullPath), baseDir)) {
+        return res.json({ success: false, error: 'Forbidden' });
+      }
+      // eslint-disable-next-line global-require
+      const fileTimeline = require('../lib/fileTimeline');
+      const snap = await fileTimeline.reconstructAfterIndex(baseDir, normalized, indexRaw);
+      if (snap.error || snap.content == null) {
+        return res.json({ success: false, error: snap.error || 'No snapshot' });
+      }
+      res.json({ success: true, content: snap.content });
+    } catch (error) {
+      logger.error('API: files/timeline/snapshot', error);
       res.json({ success: false, error: error.message });
     }
   });
@@ -3011,6 +3085,7 @@ function setupAPI(baseDir) {
 
   router.get('/git/modified', async (req, res) => {
     try {
+      const fileTimelineLib = require('../lib/fileTimeline');
       const editorDir = path.join(baseDir, 'ide_editor_cache');
       const modifiedFiles = [];
       
@@ -3036,10 +3111,17 @@ function setupAPI(baseDir) {
             const cacheFilePath = path.join(dirPath, entry.name);
             
             if (entry.isDirectory()) {
+              const relDir = path.relative(editorDir, cacheFilePath).replace(/\\/g, '/');
+              if (fileTimelineLib.isInternalEditorCachePath(relDir)) {
+                continue;
+              }
               await walkCacheDir(cacheFilePath);
             } else {
               // Get relative path from ide_editor_cache
               const relativePath = path.relative(editorDir, cacheFilePath).replace(/\\/g, '/');
+              if (fileTimelineLib.isInternalEditorCachePath(relativePath)) {
+                continue;
+              }
               const savedFilePath = path.join(baseDir, relativePath);
               const resolvedSavedPath = path.resolve(savedFilePath);
               const resolvedCachePath = path.resolve(cacheFilePath);

@@ -20,6 +20,9 @@ window.PreviewTabManager = (function() {
     if (filePath && filePath.startsWith('githistory://')) {
       return '\u23F3';
     }
+    if (filePath && filePath.startsWith('filetimeline://')) {
+      return '\u2712';
+    }
     // Check if it's a browser tab
     if (filePath && filePath.startsWith('browser://')) {
       return '🌐';
@@ -64,6 +67,15 @@ window.PreviewTabManager = (function() {
         return window.PreviewFileHistoryViewer.getTabTitle(filePath);
       }
       return 'History';
+    }
+    if (filePath && filePath.startsWith('filetimeline://')) {
+      if (
+        window.PreviewFileTimelineDiffViewer &&
+        typeof window.PreviewFileTimelineDiffViewer.getTabTitle === 'function'
+      ) {
+        return window.PreviewFileTimelineDiffViewer.getTabTitle(filePath);
+      }
+      return 'Save diff';
     }
     // Check if it's a browser tab
     if (filePath && filePath.startsWith('browser://')) {
@@ -240,6 +252,13 @@ window.PreviewTabManager = (function() {
       return;
     }
 
+    if (filePath && filePath.startsWith('filetimeline://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
     // Check if it's a browser tab - don't try to load as file
     if (filePath && filePath.startsWith('browser://')) {
       if (switchToFileCallback) {
@@ -298,6 +317,20 @@ window.PreviewTabManager = (function() {
       return;
     }
 
+    if (filePath && filePath.startsWith('filetimeline://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
+    if (filePath && filePath.startsWith('browser://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
     if (switchToFileCallback) {
       await switchToFileCallback(filePath, false);
     }
@@ -334,6 +367,13 @@ window.PreviewTabManager = (function() {
     }
 
     if (filePath && filePath.startsWith('githistory://')) {
+      if (switchToFileCallback) {
+        await switchToFileCallback(filePath, false);
+      }
+      return;
+    }
+
+    if (filePath && filePath.startsWith('filetimeline://')) {
       if (switchToFileCallback) {
         await switchToFileCallback(filePath, false);
       }
@@ -405,6 +445,15 @@ window.PreviewTabManager = (function() {
       typeof window.PreviewFileHistoryViewer.disposeTab === 'function'
     ) {
       window.PreviewFileHistoryViewer.disposeTab(filePath);
+    }
+
+    if (
+      filePath &&
+      filePath.startsWith('filetimeline://') &&
+      window.PreviewFileTimelineDiffViewer &&
+      typeof window.PreviewFileTimelineDiffViewer.disposeTab === 'function'
+    ) {
+      window.PreviewFileTimelineDiffViewer.disposeTab(filePath);
     }
     
     if (isActive && openTabs.length > 0) {
