@@ -5,7 +5,7 @@ window.PreviewRemoteConfig = {
    * on LAN and public IP).
    * If empty, use PROXY_BASE as a single manual URL (legacy).
    */
-  PROXY_CANDIDATES: ['http://192.168.1.69:3030', 'http://75.17.59.80:3030'],
+  PROXY_CANDIDATES: [/* 'http://192.168.1.69:3030', /*removed local host server/* */ 'http://75.17.59.80:3030'],
   /** Filled by PreviewRemoteAuthApi.ensureProxyBase() — do not set manually when using PROXY_CANDIDATES. */
   PROXY_BASE: '',
   STORAGE_TOKEN: 'previewRemoteToken',
