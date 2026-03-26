@@ -1120,24 +1120,35 @@ require(['vs/editor/editor.main'], function() {
     const gitDiffViewEl = document.getElementById('gitDiffView');
     const browserViewEl = document.getElementById('browserView');
 
-    if (
+    const isGitDiffTab =
       window.PreviewCommitDiffViewer &&
       typeof PreviewCommitDiffViewer.isGitDiffTab === 'function' &&
-      PreviewCommitDiffViewer.isGitDiffTab(newPath)
-    ) {
+      PreviewCommitDiffViewer.isGitDiffTab(newPath);
+    const isGitHistoryTab =
+      window.PreviewFileHistoryViewer &&
+      typeof PreviewFileHistoryViewer.isHistoryTab === 'function' &&
+      PreviewFileHistoryViewer.isHistoryTab(newPath);
+
+    if (isGitDiffTab || isGitHistoryTab) {
       if (editorMonacoHexStack) editorMonacoHexStack.style.display = 'none';
       if (browserViewEl) browserViewEl.style.display = 'none';
       if (gitDiffViewEl) {
         gitDiffViewEl.style.display = 'flex';
         gitDiffViewEl.hidden = false;
       }
-      if (typeof PreviewCommitDiffViewer.activateTab === 'function') {
+      if (isGitDiffTab && typeof PreviewCommitDiffViewer.activateTab === 'function') {
         PreviewCommitDiffViewer.activateTab(newPath);
+        fileName.textContent =
+          typeof PreviewCommitDiffViewer.getTabTitle === 'function'
+            ? PreviewCommitDiffViewer.getTabTitle(newPath)
+            : 'Git diff';
+      } else if (isGitHistoryTab && typeof PreviewFileHistoryViewer.activateTab === 'function') {
+        PreviewFileHistoryViewer.activateTab(newPath);
+        fileName.textContent =
+          typeof PreviewFileHistoryViewer.getTabTitle === 'function'
+            ? PreviewFileHistoryViewer.getTabTitle(newPath)
+            : 'History';
       }
-      fileName.textContent =
-        typeof PreviewCommitDiffViewer.getTabTitle === 'function'
-          ? PreviewCommitDiffViewer.getTabTitle(newPath)
-          : 'Git diff';
       filePathRef.current = newPath;
       filePath = newPath;
       PreviewTabManager.updateActiveTab(newPath);
@@ -1508,7 +1519,12 @@ require(['vs/editor/editor.main'], function() {
           window.__previewReloadFileExplorer();
         }
         const cur = filePathRef.current;
-        if (!cur || cur.indexOf('browser://') === 0 || cur.indexOf('gitdiff://') === 0) {
+        if (
+          !cur ||
+          cur.indexOf('browser://') === 0 ||
+          cur.indexOf('gitdiff://') === 0 ||
+          cur.indexOf('githistory://') === 0
+        ) {
           return;
         }
         const norm = function (p) {
@@ -1763,7 +1779,11 @@ require(['vs/editor/editor.main'], function() {
           // Tab switches used to only editor.setValue(), leaving the wrong Monaco model/URI
           // (content from file B while model still pointed at file A). That broke cross-file
           // navigation after switching tabs. Align model URI with the active tab path.
-          if (!filePath.startsWith('browser://') && !filePath.startsWith('gitdiff://')) {
+          if (
+            !filePath.startsWith('browser://') &&
+            !filePath.startsWith('gitdiff://') &&
+            !filePath.startsWith('githistory://')
+          ) {
             const normalizedPath = String(filePath)
               .replace(/\\/g, '/')
               .replace(/^\/+/, '')
@@ -1806,6 +1826,18 @@ require(['vs/editor/editor.main'], function() {
       }
     }
   );
+
+  window.__previewWorkspaceIsGitRepo = false;
+  fetch('/__api__/git/is-repo')
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (d) {
+      window.__previewWorkspaceIsGitRepo = !!(d && d.success && d.isRepo);
+    })
+    .catch(function () {
+      window.__previewWorkspaceIsGitRepo = false;
+    });
   
   // Initialize Browser Manager
   const browserContainer = document.getElementById('browserContainer');

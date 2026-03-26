@@ -197,6 +197,10 @@ async function loadPreviewTemplates() {
         path.join(previewModulesDir, 'commitDiffViewer.js'),
         'utf-8'
       );
+      const fileHistoryViewerJs = await fs.readFile(
+        path.join(previewModulesDir, 'fileHistoryViewer.js'),
+        'utf-8'
+      );
       const gitPanelGraphJs = await fs.readFile(
         path.join(previewModulesDir, 'gitPanelGraph.js'),
         'utf-8'
@@ -354,6 +358,8 @@ async function loadPreviewTemplates() {
         replaceInFilesJs,
         '// Git commit diff viewer (modal)',
         commitDiffViewerJs,
+        '// Git file commit history tab',
+        fileHistoryViewerJs,
         '// Git Panel — commit graph',
         gitPanelGraphJs,
         '// Git Panel — stash stack',

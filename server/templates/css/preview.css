@@ -5867,6 +5867,66 @@ body.resizing .resizer {
   white-space: pre;
 }
 
+/* Per-file commit history tab (githistory://) */
+.git-file-history-view {
+  padding: 12px 16px;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.git-file-history-heading {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.git-file-history-empty {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+}
+
+.git-file-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.git-file-history-item {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.git-file-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.git-file-history-commit-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.git-file-history-commit-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.git-file-history-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
 /* Stash menus (Git + Editor cache): same shell as commit popover, anchored to toolbar buttons */
 .git-stash-anchor-popover::before {
   display: none;

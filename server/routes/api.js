@@ -2678,6 +2678,84 @@ function setupAPI(baseDir) {
     });
   });
 
+  router.get('/git/is-repo', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+      return res.json({ success: true, isRepo: true });
+    } catch (_e) {
+      return res.json({ success: true, isRepo: false });
+    }
+  });
+
+  router.get('/git/file-log', async (req, res) => {
+    try {
+      await runGitCmd(['rev-parse', '--is-inside-work-tree']);
+    } catch (_e) {
+      return res.json({ success: true, isRepo: false, commits: [] });
+    }
+    const relPath = req.query && req.query.path != null ? String(req.query.path).trim() : '';
+    if (!relPath) {
+      return res.json({ success: false, error: 'Missing path', isRepo: true });
+    }
+    const pathErr = gitPathError(relPath);
+    if (pathErr) {
+      return res.json({ success: false, error: pathErr, isRepo: true });
+    }
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 80, 1), 200);
+    const sep = '\x01';
+    const fmt = '%H' + sep + '%s' + sep + '%an' + sep + '%ai';
+    let headHash = '';
+    try {
+      const { stdout: hOut } = await runGitCmd(['rev-parse', 'HEAD']);
+      headHash = (hOut || '').trim();
+    } catch (_e) {
+      /* empty repo */
+    }
+    let stdout = '';
+    try {
+      const out = await runGitCmd([
+        '-c',
+        'core.quotepath=false',
+        'log',
+        '-n',
+        String(limit),
+        '--pretty=format:' + fmt,
+        '--',
+        relPath,
+      ]);
+      stdout = out.stdout || '';
+    } catch (error) {
+      logger.warn('API: git file-log', { message: error.message });
+      return res.json({
+        success: true,
+        isRepo: true,
+        commits: [],
+        error: (error.stderr && String(error.stderr)) || error.message,
+      });
+    }
+    const commits = [];
+    const lines = String(stdout || '')
+      .split(/\r?\n/)
+      .filter((l) => l.length > 0);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const p = line.split(sep);
+      if (p.length < 4) continue;
+      const hash = p[0];
+      const subject = p[1] || '';
+      const author = p[2] || '';
+      const date = p[3] || '';
+      commits.push({
+        hash,
+        subject,
+        author,
+        date,
+        isHead: !!(headHash && hash === headHash),
+      });
+    }
+    res.json({ success: true, isRepo: true, commits });
+  });
+
   router.get('/git/commit-info', async (req, res) => {
     const raw = req.query && req.query.hash != null ? String(req.query.hash) : '';
     const hashInput = raw.trim();

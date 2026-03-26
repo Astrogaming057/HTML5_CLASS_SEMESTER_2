@@ -15,6 +15,11 @@ window.PreviewFileExplorer = (function() {
   /** Last flat list render callbacks + dir for incremental merge. */
   let lastFlatHandlers = null;
 
+  const GIT_EXPLORER_POLL_MS = 15000;
+  /** Deduplicate concurrent /git/repo-status fetches (tree expand + poll). */
+  let sharedGitExplorerPromise = null;
+  let gitExplorerPollId = null;
+
   const module = {
     /** Same key for comparing explorer "current folder" (root '', '/', and trailing slashes). */
     normalizeExplorerDirForCompare(d) {
@@ -158,7 +163,21 @@ window.PreviewFileExplorer = (function() {
         fileM: new Set(),
         folderU: new Set(),
         folderM: new Set(),
+        untrackedDirs: new Set(),
       };
+    },
+
+    /** True if path equals or lies inside a path from git's ?? line with trailing / (untracked directory). */
+    pathIsInsideUntrackedDir(normPath, untrackedDirs) {
+      if (!untrackedDirs || untrackedDirs.size === 0) return false;
+      let cur = module.normalizeExplorerPath(normPath);
+      while (cur) {
+        if (untrackedDirs.has(cur)) return true;
+        const i = cur.lastIndexOf('/');
+        if (i === -1) break;
+        cur = cur.slice(0, i);
+      }
+      return false;
     },
 
     async getGitExplorerState() {
@@ -166,13 +185,22 @@ window.PreviewFileExplorer = (function() {
       try {
         const res = await fetch('/__api__/git/repo-status');
         const data = await res.json();
-        if (!data.success || !data.isRepo || !Array.isArray(data.files)) {
+        if (!data.success) {
+          return empty;
+        }
+        if (!data.isRepo) {
+          window.__previewWorkspaceIsGitRepo = false;
+          return empty;
+        }
+        window.__previewWorkspaceIsGitRepo = true;
+        if (!Array.isArray(data.files)) {
           return empty;
         }
         const fileU = new Set();
         const fileM = new Set();
         const folderU = new Set();
         const folderM = new Set();
+        const untrackedDirs = new Set();
         const addAncestors = (p, set) => {
           const norm = module.normalizeExplorerPath(p);
           if (!norm) return;
@@ -184,17 +212,26 @@ window.PreviewFileExplorer = (function() {
           }
         };
         for (const f of data.files) {
-          const p = module.normalizeExplorerPath(f.path);
+          const rawPath = String(f.path || '');
+          const p = module.normalizeExplorerPath(rawPath);
           if (!p) continue;
           if (f.untracked) {
-            fileU.add(p);
-            addAncestors(p, folderU);
+            /* Git uses a trailing slash on ?? lines for an untracked directory (not every file inside). */
+            const isDirLine = rawPath.replace(/\\/g, '/').endsWith('/');
+            if (isDirLine) {
+              untrackedDirs.add(p);
+              folderU.add(p);
+              addAncestors(p, folderU);
+            } else {
+              fileU.add(p);
+              addAncestors(p, folderU);
+            }
           } else {
             fileM.add(p);
             addAncestors(p, folderM);
           }
         }
-        return { isRepo: true, fileU, fileM, folderU, folderM };
+        return { isRepo: true, fileU, fileM, folderU, folderM, untrackedDirs };
       } catch (_e) {
         return empty;
       }
@@ -204,6 +241,7 @@ window.PreviewFileExplorer = (function() {
       if (!gitState || !gitState.isRepo) return null;
       const n = module.normalizeExplorerPath(normPath);
       if (gitState.fileU.has(n)) return 'U';
+      if (module.pathIsInsideUntrackedDir(n, gitState.untrackedDirs)) return 'U';
       if (gitState.fileM.has(n)) return 'M';
       return null;
     },
@@ -212,6 +250,7 @@ window.PreviewFileExplorer = (function() {
       if (!gitState || !gitState.isRepo) return null;
       const fn = module.normalizeExplorerPath(folderNorm);
       if (gitState.folderU.has(fn)) return 'U';
+      if (module.pathIsInsideUntrackedDir(fn, gitState.untrackedDirs)) return 'U';
       if (gitState.folderM.has(fn)) return 'M';
       return null;
     },
@@ -251,6 +290,143 @@ window.PreviewFileExplorer = (function() {
       else if (gitLetter === 'M') item.classList.add('file-tree-git-m');
     },
 
+    sharedGetGitExplorerState() {
+      if (!sharedGitExplorerPromise) {
+        sharedGitExplorerPromise = module.getGitExplorerState().finally(() => {
+          sharedGitExplorerPromise = null;
+        });
+      }
+      return sharedGitExplorerPromise;
+    },
+
+    /**
+     * Update L / Git badges and row tints without resetting the row's base classes
+     * (preserves dragging, file-tree-folder, chevrons, etc.).
+     */
+    patchRowGitLocalDecor(item, file, filePath, modifiedFiles, gitState) {
+      const normalizedCurrentPath = filePath ? filePath.replace(/\/+/g, '/') : '';
+      const normalizedFilepath = String(file.path || '').replace(/\/+/g, '/');
+      item.classList.toggle('active', normalizedFilepath === normalizedCurrentPath);
+
+      item.querySelectorAll('.file-tree-status-badges').forEach((n) => n.remove());
+
+      const localDirty = !file.isDirectory && modifiedFiles.has(file.path);
+      const norm = module.normalizeExplorerPath(file.path);
+      const gitLetter = file.isDirectory
+        ? module.gitFolderBadge(norm, gitState)
+        : module.gitFileBadge(norm, gitState);
+      module.appendExplorerBadges(item, localDirty, gitLetter);
+      module.applyExplorerRowTint(item, localDirty, gitLetter);
+    },
+
+    applyGitDecorToAllExplorerItems(fileTree, gitState, filePath, modifiedFiles) {
+      if (!fileTree) return;
+      for (const item of fileTree.querySelectorAll('.file-tree-item[data-path]')) {
+        const path = item.dataset.path;
+        if (!path || path === '__parent__') continue;
+        const isDir = item.dataset.isDirectory === 'true';
+        const name = item.dataset.name || path.split('/').pop() || '';
+        const file = { path, name, isDirectory: isDir };
+        module.patchRowGitLocalDecor(item, file, filePath, modifiedFiles, gitState);
+      }
+    },
+
+    refreshTreeGitDecoration(ctx, modifiedFiles) {
+      module.sharedGetGitExplorerState().then((gitState) => {
+        if (!ctx || !ctx.fileTree || !ctx.fileTree.isConnected) return;
+        ctx.gitState = gitState;
+        const fp = typeof ctx.getFilePath === 'function' ? ctx.getFilePath() : ctx.getFilePath;
+        module.applyGitDecorToAllExplorerItems(ctx.fileTree, gitState, fp, modifiedFiles);
+      }).catch(() => {});
+    },
+
+    refreshFlatGitDecorationAfterPaint(handlers, modifiedFiles) {
+      if (!handlers || !handlers.fileTree) return;
+      module.sharedGetGitExplorerState().then((gitState) => {
+        const ft = handlers.fileTree;
+        if (!ft || !ft.isConnected) return;
+        const fp = typeof handlers.getFilePath === 'function' ? handlers.getFilePath() : handlers.getFilePath;
+        for (const item of ft.querySelectorAll(':scope > .file-tree-item[data-path]')) {
+          const path = item.dataset.path;
+          if (!path || path === '__parent__') continue;
+          const isDir = item.dataset.isDirectory === 'true';
+          const name = item.dataset.name || path.split('/').pop() || '';
+          module.patchRowGitLocalDecor(item, { path, name, isDirectory: isDir }, fp, modifiedFiles, gitState);
+        }
+      }).catch(() => {});
+    },
+
+    collectModifiedFilesFromExplorerDom(fileTree, flatTopLevelOnly) {
+      const sel = flatTopLevelOnly
+        ? ':scope > .file-tree-item[data-is-directory="false"]'
+        : '.file-tree-item[data-is-directory="false"]';
+      const nodes = fileTree.querySelectorAll(sel);
+      const files = [];
+      for (const n of nodes) {
+        const p = n.dataset.path;
+        if (p && p !== '__parent__') {
+          files.push({ path: p, isDirectory: false });
+        }
+      }
+      return module.collectModifiedFiles(files);
+    },
+
+    pollExplorerGitDecoration() {
+      const treeOn =
+        typeof PreviewSettings !== 'undefined' && PreviewSettings.getSettings().explorerTreeView === true;
+      if (treeOn && lastTreeCtx && lastTreeCtx.fileTree) {
+        module
+          .collectModifiedFilesFromExplorerDom(lastTreeCtx.fileTree, false)
+          .then((modifiedFiles) =>
+            module.sharedGetGitExplorerState().then((gitState) => {
+              const ft = lastTreeCtx.fileTree;
+              if (!ft || !ft.isConnected) return;
+              lastTreeCtx.gitState = gitState;
+              const fp =
+                typeof lastTreeCtx.getFilePath === 'function'
+                  ? lastTreeCtx.getFilePath()
+                  : lastTreeCtx.getFilePath;
+              module.applyGitDecorToAllExplorerItems(ft, gitState, fp, modifiedFiles);
+            })
+          )
+          .catch(() => {});
+      } else if (!treeOn && lastFlatHandlers && lastFlatHandlers.fileTree) {
+        const ft = lastFlatHandlers.fileTree;
+        module
+          .collectModifiedFilesFromExplorerDom(ft, true)
+          .then((modifiedFiles) =>
+            module.sharedGetGitExplorerState().then((gitState) => {
+              if (!lastFlatHandlers.fileTree || !lastFlatHandlers.fileTree.isConnected) return;
+              const fp =
+                typeof lastFlatHandlers.getFilePath === 'function'
+                  ? lastFlatHandlers.getFilePath()
+                  : lastFlatHandlers.getFilePath;
+              for (const item of ft.querySelectorAll(':scope > .file-tree-item[data-path]')) {
+                const path = item.dataset.path;
+                if (!path || path === '__parent__') continue;
+                const isDir = item.dataset.isDirectory === 'true';
+                const name = item.dataset.name || path.split('/').pop() || '';
+                module.patchRowGitLocalDecor(
+                  item,
+                  { path, name, isDirectory: isDir },
+                  fp,
+                  modifiedFiles,
+                  gitState
+                );
+              }
+            })
+          )
+          .catch(() => {});
+      }
+    },
+
+    ensureGitExplorerPollRunning() {
+      if (gitExplorerPollId !== null) return;
+      gitExplorerPollId = setInterval(() => {
+        module.pollExplorerGitDecoration();
+      }, GIT_EXPLORER_POLL_MS);
+    },
+
     async loadTreeChildren(normPath, childrenWrap, ctx, opts) {
       const silent = opts && opts.silent === true;
       if (silent) {
@@ -278,16 +454,9 @@ window.PreviewFileExplorer = (function() {
     async renderTreeLevel(files, container, ctx) {
       const list = module.prepareFileList(files);
       if (list.length === 0) return;
-      /** One shared repo-status fetch for the whole tree (avoid serial wait before editor-cache checks). */
-      if (!ctx._gitExplorerPromise) {
-        ctx._gitExplorerPromise = module.getGitExplorerState();
-      }
       const filePath = typeof ctx.getFilePath === 'function' ? ctx.getFilePath() : ctx.getFilePath;
-      const [gitState, modifiedFiles] = await Promise.all([
-        ctx._gitExplorerPromise,
-        module.collectModifiedFiles(list)
-      ]);
-      ctx.gitState = gitState;
+      const modifiedFiles = await module.collectModifiedFiles(list);
+      ctx.gitState = module.emptyGitState();
       for (const file of list) {
         if (!file.isDirectory) {
           module.appendTreeFileRow(container, file, filePath, modifiedFiles, ctx);
@@ -295,6 +464,7 @@ window.PreviewFileExplorer = (function() {
           await module.appendTreeFolderBranch(container, file, filePath, modifiedFiles, ctx);
         }
       }
+      module.refreshTreeGitDecoration(ctx, modifiedFiles);
     },
 
     appendTreeFileRow(container, file, filePath, modifiedFiles, ctx) {
@@ -597,13 +767,13 @@ window.PreviewFileExplorer = (function() {
           showParentFolderDropZone,
           hideParentFolderDropZone,
           fileTree,
-          gitState: null,
-          _gitExplorerPromise: null
+          gitState: null
         };
         lastTreeCtx = ctx;
         fileTree.innerHTML = '';
         const list = module.prepareFileList(files);
         await module.renderTreeLevel(list, fileTree, ctx);
+        module.ensureGitExplorerPollRunning();
       } catch (error) {
         console.error('Error rendering file tree:', error);
         fileTree.innerHTML = '<div class="file-tree-loading">Error rendering files</div>';
@@ -856,11 +1026,8 @@ window.PreviewFileExplorer = (function() {
         return;
       }
 
-      const gitPromise = module.getGitExplorerState();
-      const [modifiedFiles, gitState] = await Promise.all([
-        module.collectModifiedFiles(files),
-        gitPromise
-      ]);
+      const modifiedFiles = await module.collectModifiedFiles(files);
+      const gitState = module.emptyGitState();
 
       const normPath = (p) => String(p || '').replace(/\/+/g, '/');
       const existingByPath = new Map();
@@ -896,6 +1063,10 @@ window.PreviewFileExplorer = (function() {
       const parentRow = fileTree.querySelector(':scope > .file-tree-item[data-path="__parent__"]');
       if (parentRow) {
         fileTree.insertBefore(parentRow, fileTree.firstChild);
+      }
+
+      if (lastFlatHandlers) {
+        module.refreshFlatGitDecorationAfterPaint(lastFlatHandlers, modifiedFiles);
       }
     },
 
@@ -1015,7 +1186,6 @@ window.PreviewFileExplorer = (function() {
       }
       fsBatchRequeueAttempts = 0;
       const { parents, needsRoot } = module.collectAffectedParents(batch);
-      ctx._gitExplorerPromise = null;
       try {
         if (needsRoot) {
           const res = await fetch('/__api__/files?path=' + encodeURIComponent('/') + '&list=true');
@@ -1139,8 +1309,8 @@ window.PreviewFileExplorer = (function() {
           }
         });
       
-      const gitPromise = module.getGitExplorerState();
-      const [, gitState] = await Promise.all([Promise.all(checkPromises), gitPromise]);
+      await Promise.all(checkPromises);
+      const gitState = module.emptyGitState();
 
       const rowHandlers = {
         loadFileTree,
@@ -1171,6 +1341,9 @@ window.PreviewFileExplorer = (function() {
         showParentFolderDropZone,
         hideParentFolderDropZone
       };
+
+      module.refreshFlatGitDecorationAfterPaint(lastFlatHandlers, modifiedFiles);
+      module.ensureGitExplorerPollRunning();
 
       isRendering = false;
       } catch (error) {
@@ -1587,6 +1760,22 @@ window.PreviewFileExplorer = (function() {
         contextMenu.style.display = 'none';
       });
 
+      const contextViewCommitHistory = document.getElementById('contextViewCommitHistory');
+      if (contextViewCommitHistory) {
+        contextViewCommitHistory.addEventListener('click', () => {
+          const path = contextMenu.dataset.path || '';
+          const isDir = contextMenu.dataset.isDirectory === 'true';
+          contextMenu.style.display = 'none';
+          if (!path || isDir) return;
+          if (
+            window.PreviewFileHistoryViewer &&
+            typeof window.PreviewFileHistoryViewer.openFileHistory === 'function'
+          ) {
+            PreviewFileHistoryViewer.openFileHistory(path);
+          }
+        });
+      }
+
       // Compress submenu handlers (zip / 7z / tar.gz)
       const compressMenu = document.getElementById('contextCompress');
       const compressSubmenu = document.getElementById('contextCompressSubmenu');
@@ -1884,6 +2073,14 @@ window.PreviewFileExplorer = (function() {
       if (openHexItem) {
         const isDir = contextMenu.dataset.isDirectory === 'true';
         openHexItem.style.display = hasTarget && !isDir ? 'block' : 'none';
+      }
+
+      const viewHistoryItem = document.getElementById('contextViewCommitHistory');
+      if (viewHistoryItem) {
+        const isDir = contextMenu.dataset.isDirectory === 'true';
+        const gitOk = window.__previewWorkspaceIsGitRepo === true;
+        viewHistoryItem.style.display =
+          hasTarget && !isDir && gitOk && !onlyCreate ? 'block' : 'none';
       }
 
       // Hide compress submenu every time menu opens so it isn't stuck open

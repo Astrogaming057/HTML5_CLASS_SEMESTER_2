@@ -170,7 +170,14 @@ window.PreviewElectronClose = (function() {
       if (tabs && tabs.length > 0) {
         for (let i = 0; i < tabs.length; i++) {
           const p = tabs[i];
-          if (!p || p.startsWith('browser://')) continue;
+          if (
+            !p ||
+            p.startsWith('browser://') ||
+            p.startsWith('gitdiff://') ||
+            p.startsWith('githistory://')
+          ) {
+            continue;
+          }
           const info = typeof tm.getTabInfo === 'function' ? tm.getTabInfo(p) : null;
           const isActive = p === active;
           const tabDirty = isActive ? !!(isDirtyRef && isDirtyRef.current) : !!(info && info.isDirty);
