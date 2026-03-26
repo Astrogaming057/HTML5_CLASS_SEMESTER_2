@@ -133,7 +133,7 @@ window.PreviewFileTimelineDiffViewer = (function () {
       const hint = document.createElement('div');
       hint.className = 'file-timeline-diff-caption';
       hint.textContent =
-        'At save (left) vs current editor buffer for this file, or disk if the file is not open in a tab (right). Red \u2212 / green + alignment like Git diffs.';
+        '';
       inner.appendChild(hint);
       const body = document.createElement('div');
       body.className = 'file-timeline-diff-body';
